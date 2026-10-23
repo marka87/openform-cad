@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, GROUND, isCut, isExtrude, ownerOf, polyFeature, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, endTangent, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'line';
@@ -10,7 +10,7 @@ const HINTS: Record<Tool, string> = {
   select: 'Fläche ziehen = extrudieren / Größe ändern · Kante ziehen = runden · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
-  line:   'Punkte setzen · Klick auf den ersten Punkt oder Enter = Form schließen · Esc = abbrechen',
+  line:   'Punkte klicken · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
 
 // ---------- Szene ----------
@@ -60,7 +60,7 @@ function shapeOf(f: Extrude) {
   if (f.type === 'rect') {
     s.moveTo(p.x, p.y); s.lineTo(p.x + p.w, p.y); s.lineTo(p.x + p.w, p.y + p.h); s.lineTo(p.x, p.y + p.h); s.closePath();
   } else if (f.type === 'circle') s.absarc(p.cx, p.cy, p.r, 0, Math.PI * 2, false);
-  else s.setFromPoints(f.pts!.map(([x, y]) => new THREE.Vector2(x, y)));
+  else s.setFromPoints(outline(f.pts!).map(([x, y]) => new THREE.Vector2(x, y)));
   return s;
 }
 
@@ -219,12 +219,19 @@ function polyPoint(e: PointerEvent) {
 function showPoly(pts: number[][]) {
   disposeGroup(preview);
   const { o, u, v } = poly!.pl;
-  const world = pts.map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
+  const world = outline(pts, false).map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(world), new THREE.LineBasicMaterial({ color: 0x4da3ff, depthTest: false }));
   const start = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: false }));
   start.position.copy(world[0]);
   preview.add(line, start);
 }
+// Bogen vom letzten Punkt nach q, tangential an das vorige Segment
+function arcPts(q: number[]) {
+  const pts = poly!.pts, a = pts.at(-2)!, b = pts.at(-1)!;
+  const bulge = tangentBulge(endTangent(a, b, a[2] ?? 0), b, q);
+  return [...pts.slice(0, -1), [b[0], b[1], bulge], q];
+}
+const nearPt = (q: number[] | null, p?: number[]) => !!q && !!p && Math.hypot(q[0] - p[0], q[1] - p[1]) < 8 * pxSize();
 function finishPoly() {
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace);
   cancelPoly();
@@ -238,11 +245,13 @@ function onDown(e: PointerEvent) {
   setRay(e);
   const { face: h, edge } = pick();
   if (tool === 'line') {
-    drag = { kind: 'line' }; // nur damit die Kamera beim Klicken nicht dreht
     if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h };
-    const q = polyPoint(e), last = poly.pts.at(-1), first = poly.pts[0];
-    if (q && poly.pts.length >= 3 && Math.hypot(q[0] - first[0], q[1] - first[1]) < 8 * pxSize()) finishPoly();
-    else if (q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
+    const q = polyPoint(e), last = poly.pts.at(-1);
+    // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
+    const arc = poly.pts.length >= 2 && nearPt(q, last);
+    drag = { kind: 'line', arc, sx: e.clientX, sy: e.clientY, started: false }; // drag hält auch die Kamera still
+    if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
+    else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
   } else if (tool === 'rect' || tool === 'circle') {
     const pl = planeFor(h); // auf Boden oder Fläche skizzieren
     const p = planeHit(pl);
@@ -280,7 +289,16 @@ function onMove(e: PointerEvent) {
     el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     return;
   }
-  if (drag.kind === 'line') return;
+  if (drag.kind === 'line') {
+    if (!drag.arc || !poly) return;
+    if (!drag.started && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+    drag.started = true;
+    const q = polyPoint(e);
+    if (!q) return;
+    const pts = arcPts(nearPt(q, poly.pts[0]) ? poly.pts[0] : q), b = pts.at(-2)!, L = Math.hypot(q[0] - b[0], q[1] - b[1]);
+    showPoly(pts);
+    return showHud(e, `Bogen R ${(L / 2 / Math.abs(Math.sin(2 * Math.atan(b[2])) || 1e-9)).toFixed(1)} mm`);
+  }
   if (drag.kind === 'sketch') {
     const p = planeHit(drag.pl);
     if (!p) return;
@@ -321,6 +339,11 @@ el.addEventListener('pointerup', e => {
     disposeGroup(preview);
     const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
+  }
+  if (drag.kind === 'line' && drag.arc && drag.started && poly) {
+    const q = polyPoint(e), first = poly.pts[0];
+    if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
+    else if (q) poly.pts = arcPts(q);
   }
   const wasLine = drag.kind === 'line';
   drag = null;

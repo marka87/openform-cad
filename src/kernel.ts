@@ -6,8 +6,18 @@ export function solidOf(f: Extrude): Shape3D {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
     : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
-    : f.pts!.slice(1).reduce((pen, q) => pen.lineTo(q as [number, number]), draw(f.pts![0] as [number, number])).close();
+    : polyDrawing(f.pts!);
   return (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
+}
+
+function polyDrawing(pts: number[][]) {
+  const pen = draw([pts[0][0], pts[0][1]]);
+  pts.forEach((q, i) => {
+    const next = pts[(i + 1) % pts.length], to: [number, number] = [next[0], next[1]];
+    if (q[2]) pen.bulgeArcTo(to, q[2]);
+    else if (i < pts.length - 1) pen.lineTo(to); // gerades Schlusssegment erledigt close()
+  });
+  return pen.close();
 }
 
 // Features der Reihe nach vereinigen, abziehen bzw. Kanten bearbeiten. Fehlgeschlagene Features werden übersprungen.

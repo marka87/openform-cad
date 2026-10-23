@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, GROUND, ownerOf, polyFeature, sketchFeature, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, endTangent, GROUND, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -87,4 +87,25 @@ test('Vieleck: L-Profil extrudieren, Seite verschieben, ungültige Formen ablehn
 
   expect(polyFeature(GROUND, [[0, 0], [10, 0]], 8, false)).toBeNull();   // zu wenige Punkte
   expect(polyFeature(GROUND, [[0, 0], [10, 0], [20, 0]], 8, false)).toBeNull(); // keine Fläche
+});
+
+test('Bögen: Halbkreis, tangentialer Anschluss, Profil mit Bogen im Kern', () => {
+  const r = (p: number[]) => p.map(v => Math.round(v * 1e6) / 1e6 + 0);
+  // bulge 1 = Halbkreis, liegt rechts der Sehne (gegen den Uhrzeigersinn um die Mitte)
+  const semi = arcPoints([0, 0], [10, 0], 1, 4);
+  expect(r(semi[1])).toEqual([5, -5]);
+  expect(r(semi[3])).toEqual([10, 0]);
+
+  // Nach einer Strecke nach oben schließt ein tangentialer Bogen nach links als Halbkreis an
+  const t = endTangent([10, 0], [10, 5]);
+  expect(tangentBulge(t, [10, 5], [0, 5])).toBeCloseTo(1);
+  expect(r(endTangent([10, 5], [0, 5], 1))).toEqual([0, -1]);        // Halbkreis endet nach unten zeigend
+  expect(outline([[0, 0], [10, 0], [10, 5, 1], [0, 5]]).length).toBe(3 + 24); // Ecken + aufgelöster Bogen
+
+  const D = { ...polyFeature(GROUND, [[0, 0], [10, 0], [10, 5, 1], [0, 5]], 9, false)!, d: 2 };
+  const body = buildBody([D]).body!;
+  expect(body.faces.length).toBe(6);                                   // 3 Wände + Bogenwand + Boden + Deckel
+  expect(r(body.boundingBox.bounds.flat())).toEqual([0, 0, -10, 10, 2, 0]);
+  expect(ownerOf([D], [5, 2, -5], [0, 1, 0])).toMatchObject({ part: 'end' }); // Deckel im Bogenbereich
+  expect(polyFeature(GROUND, [[0, 0, 1], [10, 0, 1]], 10, false)).not.toBeNull(); // Kreis aus zwei Bögen
 });

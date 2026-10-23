@@ -18,7 +18,8 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 
 ## M2 – Skizzieren richtig (läuft)
 - [x] Linien-Werkzeug: Vieleck Punkt für Punkt, Seitenflächen parallel verschiebbar
-- [ ] Bogen
+- [x] Bogen: im Linien-Werkzeug vom letzten Punkt aus ziehen = tangentialer Bogen
+- [ ] Bogenflächen ziehen (Radius ändern)
 - [ ] Geschlossene Bereiche automatisch erkennen (sich überschneidende Skizzen)
 - [ ] Spline, Versatz, Trimmen
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
