@@ -11,11 +11,14 @@ export interface Extrude extends Frame {
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
 export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number }
-export type Feature = Extrude | EdgeOp;
+// Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
+// shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
+export interface Import { id: number; type: 'import'; name: string; step: string }
+export type Feature = Extrude | EdgeOp | Import;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle';
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r';
-export type Grip = { f: Extrude; part: Part; k: number } | { f: EdgeOp; part: 'edge'; k: 0 };
+export type Grip = { f: Extrude; part: Part; k: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 };
 
 export const GROUND: Frame = { o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
 
@@ -39,13 +42,19 @@ export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: 
 // Findet das Feature, auf dessen Begrenzung der Punkt (mit Flächennormale N) liegt. Spätere Features gewinnen.
 // Rundungs-/Fasenflächen gehören zu keinem Extrude; sie werden danach über die Nähe zur Kante gefunden.
 export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps = 0.15): Grip | null {
-  return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps);
+  return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps) ?? importOwner(features);
+}
+
+// shortcut: Flächen ohne Besitzer gehören zum zuletzt importierten Körper; bei mehreren Importen ungenau → Flächen-IDs aus dem Kern
+function importOwner(features: Feature[]): Grip | null {
+  const f = [...features].reverse().find(f => f.type === 'import');
+  return f?.type === 'import' ? { f, part: 'import', k: 0 } : null;
 }
 
 function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number): Grip | null {
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
-    if (isExtrude(f)) continue;
+    if (f.type !== 'fillet' && f.type !== 'chamfer') continue;
     const q = sub(P, f.at), along = dot(q, f.dir);
     const toLine = Math.sqrt(Math.max(0, dot(q, q) - along * along));
     if (Math.min(toLine, Math.hypot(...q)) < f.r * 1.5 + eps) return { f, part: 'edge', k: 0 };

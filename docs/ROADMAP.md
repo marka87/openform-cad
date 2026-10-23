@@ -6,14 +6,14 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 ## M0 – Prototyp ✅
 - [x] Rechteck und Kreis skizzieren, Push/Pull, Maßfelder, Rückgängig, STL-Export
 
-## M1 – Echter Kern (läuft)
+## M1 – Echter Kern ✅
 - [x] Projekt auf Vite + TypeScript umstellen, Prototyp übernehmen
 - [x] OpenCascade (replicad, WASM) einbinden: Körper sind echte Volumenkörper
 - [x] Herausziehen vereinigt, Hineindrücken in eine Fläche schneidet (Bohrung, Tasche)
 - [x] STEP- und STL-Export aus dem Kern
 - [x] Kern in einen Web Worker verlegen (Oberfläche bleibt flüssig)
 - [x] Fasen und Rundungen an Kanten (Kante anfassen und ziehen, Art im Seitenfeld)
-- [ ] STEP-Import
+- [x] STEP-Import (Öffnen → .step/.stp; Körper lässt sich bohren und runden, aber nicht ziehen)
 - [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
 ## M2 – Skizzieren richtig

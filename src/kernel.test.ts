@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { setOC } from 'replicad';
-import { buildBody, forExport } from './kernel';
+import { buildBody, forExport, loadStep } from './kernel';
 import { applyPush, GROUND, ownerOf, sketchFeature, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -56,4 +56,15 @@ test('Rundung und Fase an einer Kante; fehlende Kante wird gemeldet', () => {
   const fs = [box(), edge('fillet', [20, 10, -5])];
   expect(ownerOf(fs, [19.4, 9.4, -8], [0.7, 0.7, 0])).toMatchObject({ part: 'edge', f: { id: 3 } });
   expect(ownerOf(fs, [5, 10, -5], [0, 1, 0])).toMatchObject({ part: 'end', f: { id: 1 } });
+});
+
+test('STEP-Import: exportierter Körper kommt an derselben Stelle zurück und lässt sich bearbeiten', async () => {
+  const step = await forExport(buildBody([box()]).body!).blobSTEP().text();
+  const imports = new Map([[5, await loadStep(step)]]);
+  const imp = { id: 5, type: 'import' as const, name: 'quader.step', step };
+  const back = buildBody([imp], imports).body!;
+  expect(back.boundingBox.bounds.flat().map(v => Math.round(v * 1e3) / 1e3)).toEqual([0, 0, -10, 20, 10, 0]);
+  expect(buildBody([imp, hole(-4)], imports).body!.faces.length).toBe(8);   // Bohrung in den Import
+  expect(buildBody([imp], new Map()).failed).toEqual([5]);                // nicht lesbare Datei wird gemeldet
+  expect(ownerOf([imp, box()], [5, 10, -5], [1, 0, 0])).toMatchObject({ part: 'import' }); // Fläche ohne Feature
 });

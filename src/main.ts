@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, GROUND, isCut, isExtrude, ownerOf, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Vec } from './model';
+import { applyPush, GROUND, isCut, isExtrude, ownerOf, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle';
@@ -45,7 +45,13 @@ function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
 function restore(s: string) { ({ features, nextId } = JSON.parse(s)); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
-function save() { try { localStorage.setItem('openform', snapshot()); } catch {} }
+// Fehlgeschlagenes automatisches Speichern (Speicher voll) bleibt im Hinweis sichtbar, sonst geht das Modell beim Neuladen verloren
+let saveWarning = '';
+function save() {
+  try { localStorage.setItem('openform', snapshot()); saveWarning = ''; }
+  catch { saveWarning = ' · ⚠ Automatisches Speichern fehlgeschlagen (Modell zu groß), bitte „Speichern“ benutzen'; }
+}
+function showHint(text: string) { $('hint').textContent = text + saveWarning; }
 const getSel = () => features.find(f => f.id === selId);
 
 function shapeOf(f: Extrude) {
@@ -125,7 +131,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     disposeGroup(bodyGroup);
     if (data.mesh) bodyGroup.add(bodyMesh(data.mesh));
     bodyGroup.updateMatrixWorld(true);
-    $('hint').textContent = data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool];
+    showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
     busy = false;
     if (pending) requestBuild();
   } else if (data.blob) download(`modell.${data.format}`, data.blob);
@@ -136,6 +142,7 @@ function rebuild() {
   requestBuild();
   disposeGroup(group);
   for (const f of features) {
+    if (f.type === 'import') continue;
     if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
     else if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
@@ -213,6 +220,7 @@ function onDown(e: PointerEvent) {
     if (!h?.grip) { if (selId !== null) { selId = null; refresh(); } return; } // Leere: Orbit
     const g = h.grip;
     selId = g.f.id; refresh();
+    if (g.part === 'import') return; // importierte Körper nur auswählen
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
       : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
@@ -280,7 +288,7 @@ el.addEventListener('pointerup', e => {
 function setTool(t: Tool) {
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  $('hint').textContent = HINTS[t];
+  showHint(HINTS[t]);
 }
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.onclick = () => setTool(b.dataset.tool as Tool));
 
@@ -289,6 +297,7 @@ function renderPanel() {
   const f = getSel();
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
+  if (f.type === 'import') return renderImportPanel(f);
   if (!isExtrude(f)) return renderEdgePanel(f);
   const fields = f.type === 'rect'
     ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
@@ -307,6 +316,11 @@ function renderPanel() {
     obj[key] = ['w', 'h', 'r'].includes(key) ? Math.max(0.5, v) : v;
     refresh();
   });
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
+function renderImportPanel(f: Import) {
+  panel.innerHTML = `<h3>Import #${f.id}</h3><p></p><button class="del">Löschen</button>`;
+  panel.querySelector('p')!.textContent = f.name; // Dateiname nicht als HTML einsetzen
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function renderEdgePanel(f: EdgeOp) {
@@ -340,7 +354,17 @@ $('bView').onclick = resetView;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
 const fileIn = $<HTMLInputElement>('fileIn');
 $('bOpen').onclick = () => fileIn.click();
-fileIn.onchange = async () => { const f = fileIn.files?.[0]; if (f) { pushHistory(); restore(await f.text()); } fileIn.value = ''; };
+// .json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren
+fileIn.onchange = async () => {
+  const file = fileIn.files?.[0];
+  fileIn.value = '';
+  if (!file) return;
+  const text = await file.text();
+  pushHistory();
+  if (!/\.(step|stp)$/i.test(file.name)) return restore(text);
+  const f: Import = { id: nextId++, type: 'import', name: file.name, step: text };
+  features.push(f); selId = f.id; refresh();
+};
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
 

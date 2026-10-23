@@ -2,7 +2,7 @@
 import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { setOC, type Shape3D } from 'replicad';
-import { buildBody, forExport } from './kernel';
+import { buildBody, forExport, loadStep } from './kernel';
 import type { Feature } from './model';
 
 export type ToWorker =
@@ -17,6 +17,7 @@ export type FromWorker =
 const post = (m: FromWorker, transfer: Transferable[] = []) => postMessage(m, { transfer });
 const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
 let body: Shape3D | null = null;
+const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit sie nicht bei jedem Ziehen neu geparst werden
 
 const ready = opencascade({ locateFile: () => wasmUrl }).then(oc => { setOC(oc); post({ type: 'ready' }); },
   e => post({ type: 'error', message: String(e) }));
@@ -24,8 +25,13 @@ const ready = opencascade({ locateFile: () => wasmUrl }).then(oc => { setOC(oc);
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
   if (data.type === 'build') {
+    for (const f of data.features) {
+      if (f.type !== 'import' || imports.has(f.id)) continue;
+      try { imports.set(f.id, await loadStep(f.step)); } catch (e) { console.warn('STEP-Import fehlgeschlagen', e); }
+    }
+    for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
     body?.delete();
-    const r = buildBody(data.features);
+    const r = buildBody(data.features, imports);
     body = r.body;
     if (!body) return post({ type: 'built', failed: r.failed, mesh: null });
     const m = body.mesh(MESH);
