@@ -5,7 +5,8 @@ export interface Extrude extends Frame {
   id: number;
   type: 'rect' | 'circle' | 'poly';
   p: Record<string, number>; // rect: x y w h · circle: cx cy r · poly: leer
-  pts?: number[][];          // poly: Eckpunkte in Skizzenkoordinaten, geschlossen gedacht
+  pts?: number[][];          // poly: Eckpunkte [x, y, bulge?] in Skizzenkoordinaten, geschlossen gedacht;
+                             // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
 }
@@ -41,9 +42,39 @@ export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: 
   return r < 0.5 ? null : { ...base, type, p: { cx: ax, cy: ay, r } };
 }
 
-// Vieleck aus mindestens 3 Punkten mit Fläche; sonst null
+// Bogen von a nach b als Punktfolge (ohne a), für Vorschau, Darstellung und Innen-Test
+export function arcPoints(a: number[], b: number[], bulge: number, n = 24): number[][] {
+  if (!bulge) return [[b[0], b[1]]];
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), th = 4 * Math.atan(bulge);
+  const off = L / 2 / Math.tan(th / 2), cx = (a[0] + b[0]) / 2 - dy / L * off, cy = (a[1] + b[1]) / 2 + dx / L * off;
+  const r = Math.hypot(a[0] - cx, a[1] - cy), a0 = Math.atan2(a[1] - cy, a[0] - cx);
+  return Array.from({ length: n }, (_, i) => { const t = a0 + th * (i + 1) / n; return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; });
+}
+
+// Umriss mit aufgelösten Bögen; closed = auch das Segment vom letzten zum ersten Punkt
+export function outline(pts: number[][], closed = true): number[][] {
+  const out = pts.length ? [[pts[0][0], pts[0][1]]] : [];
+  const n = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < n; i++) out.push(...arcPoints(pts[i], pts[(i + 1) % pts.length], pts[i][2] ?? 0));
+  if (closed) out.pop(); // letzter Punkt = erster Punkt
+  return out;
+}
+
+// Richtung am Ende des Segments a→b (bei Bögen um den halben Bogenwinkel gedreht)
+export function endTangent(a: number[], b: number[], bulge = 0): number[] {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), h = 2 * Math.atan(bulge);
+  return [(dx * Math.cos(h) - dy * Math.sin(h)) / L, (dx * Math.sin(h) + dy * Math.cos(h)) / L];
+}
+
+// Bulge eines Bogens von a nach e, der in Richtung t beginnt (tangentialer Anschluss)
+export function tangentBulge(t: number[], a: number[], e: number[]) {
+  const cx = e[0] - a[0], cy = e[1] - a[1];
+  return Math.tan(Math.atan2(t[0] * cy - t[1] * cx, t[0] * cx + t[1] * cy) / 2);
+}
+
+// Vieleck aus mindestens 3 Punkten (oder 2 mit Bogen) mit Fläche; sonst null
 export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: boolean): Extrude | null {
-  return pts.length >= 3 && Math.abs(area(pts)) > 0.25
+  return pts.length >= 2 && Math.abs(area(outline(pts))) > 0.25
     ? { id, d: 0, onFace, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts) } : null;
 }
 
@@ -65,7 +96,7 @@ function insidePoly(pts: number[][], x: number, y: number) {
 function segment(pts: number[][], i: number, x: number, y: number) {
   const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length], dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy);
   const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (l * l)));
-  const s = area(pts) > 0 ? 1 : -1;
+  const s = area(outline(pts)) > 0 ? 1 : -1;
   return { dist: Math.hypot(x - ax - t * dx, y - ay - t * dy), ox: s * dy / l, oy: -s * dx / l };
 }
 
@@ -101,7 +132,7 @@ function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<nu
     const pts = f.pts ?? [];
     const inside = f.type === 'rect' ? x > p.x - eps && x < p.x + p.w + eps && y > p.y - eps && y < p.y + p.h + eps
       : f.type === 'circle' ? Math.hypot(x - p.cx, y - p.cy) < p.r + eps
-      : insidePoly(pts, x, y) || pts.some((_, i) => segment(pts, i, x, y).dist < eps);
+      : insidePoly(outline(pts), x, y) || pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
     if (Math.abs(nn) > 0.9 && inside) {
       if (Math.abs(z - f.d) < eps) return { f, part: 'end', k: Math.sign(nn) };
       if (Math.abs(z) < eps) return { f, part: 'start', k: Math.sign(nn) };
@@ -111,6 +142,7 @@ function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<nu
     const nu = dot(N, f.u), nv = dot(N, f.v);
     if (f.type === 'poly') {
       for (let i = 0; i < pts.length; i++) {
+        if (pts[i][2]) continue; // shortcut: Bogenflächen lassen sich nicht verschieben → Radius ziehen (später)
         const sg = segment(pts, i, x, y), along = nu * sg.ox + nv * sg.oy;
         if (sg.dist < eps && Math.abs(along) > 0.9) return { f, part: 'seg', k: Math.sign(along), i };
       }
@@ -136,7 +168,7 @@ export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: num
   switch (part) {
     case 'seg': { // Kante parallel nach außen/innen verschieben
       const pts = f0.pts!, j = (i + 1) % pts.length, { ox, oy } = segment(pts, i, ...pts[i] as [number, number]);
-      f.pts = pts.map((q, n) => n === i || n === j ? [q[0] + m * ox, q[1] + m * oy] : [...q]);
+      f.pts = pts.map((q, n) => n === i || n === j ? [q[0] + m * ox, q[1] + m * oy, ...q.slice(2)] : [...q]);
       return ['Versatz', m];
     }
     case 'end': f.d = f0.d + m; return ['Höhe', f.d];

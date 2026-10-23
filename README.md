@@ -22,6 +22,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Auswählen / Fläche ziehen | `V`, Linksklick/-ziehen auf Körper |
 | Rechteck / Kreis skizzieren | `R` / `C`, auf Boden oder Fläche ziehen |
 | Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
+| Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
 | Rundung / Fase | Kante anfassen und vom Körper wegziehen; Art und Maß im Seitenfeld |
 | Export | STL (3D-Druck) oder STEP (CAD, Fertigung) |
