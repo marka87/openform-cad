@@ -1,16 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import opencascade from 'replicad-opencascadejs';
-import wasmUrl from 'replicad-opencascadejs/wasm?url';
-import { setOC, type Shape3D } from 'replicad';
-import { applyPush, GROUND, isCut, ownerOf, sketchFeature, type Feature, type Frame, type Grip, type Vec } from './model';
-import { buildBody, forExport } from './kernel';
+import { applyPush, GROUND, isCut, isExtrude, ownerOf, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Klicken = auswählen · Fläche ziehen = extrudieren / Größe ändern · Linksziehen ins Leere = drehen · Rechts = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante ziehen = runden · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
 };
@@ -27,7 +24,8 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(80, 150, 60); scene.add(sun);
 const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
-const group = new THREE.Group(); scene.add(group);
+const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
+const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
@@ -40,17 +38,23 @@ resetView();
 
 // ---------- Modell ----------
 let features: Feature[] = [], nextId = 1, selId: number | null = null, tool: Tool = 'select';
-let drag: any = null, body: Shape3D | null = null, failed: number[] = [], dirty = false, ready = false;
+let drag: any = null, ready = false;
 const undoStack: string[] = [], redoStack: string[] = [];
 const snapshot = () => JSON.stringify({ features, nextId });
 function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
 function restore(s: string) { ({ features, nextId } = JSON.parse(s)); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
-function save() { try { localStorage.setItem('openform', snapshot()); } catch {} }
+// Fehlgeschlagenes automatisches Speichern (Speicher voll) bleibt im Hinweis sichtbar, sonst geht das Modell beim Neuladen verloren
+let saveWarning = '';
+function save() {
+  try { localStorage.setItem('openform', snapshot()); saveWarning = ''; }
+  catch { saveWarning = ' · ⚠ Automatisches Speichern fehlgeschlagen (Modell zu groß), bitte „Speichern“ benutzen'; }
+}
+function showHint(text: string) { $('hint').textContent = text + saveWarning; }
 const getSel = () => features.find(f => f.id === selId);
 
-function shapeOf(f: Feature) {
+function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
   if (f.type === 'rect') {
     s.moveTo(p.x, p.y); s.lineTo(p.x + p.w, p.y); s.lineTo(p.x + p.w, p.y + p.h); s.lineTo(p.x, p.y + p.h); s.closePath();
@@ -59,7 +63,7 @@ function shapeOf(f: Feature) {
 }
 
 // Skizzen, Vorschau und Auswahlrahmen kommen aus Three.js; der eigentliche Körper aus dem Kern
-function buildMesh(f: Feature, kind: 'sketch' | 'preview' | 'outline') {
+function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline') {
   let g: THREE.BufferGeometry;
   if (Math.abs(f.d) < 1e-6) g = new THREE.ShapeGeometry(shapeOf(f), 64);
   else {
@@ -83,42 +87,67 @@ function buildMesh(f: Feature, kind: 'sketch' | 'preview' | 'outline') {
   return mesh;
 }
 
-function bodyMesh(b: Shape3D) {
-  const m = b.mesh({ tolerance: 0.05, angularTolerance: 0.2 }), e = b.meshEdges({ tolerance: 0.05, angularTolerance: 0.2 });
+function bodyMesh(m: NonNullable<Extract<FromWorker, { type: 'built' }>['mesh']>) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(m.vertices, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(m.normals, 3));
-  g.setIndex(m.triangles);
+  g.setAttribute('position', new THREE.BufferAttribute(m.vertices, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
+  g.setIndex(new THREE.BufferAttribute(m.triangles, 1));
   const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
     color: 0xc9ced6, roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   }));
   const eg = new THREE.BufferGeometry();
-  eg.setAttribute('position', new THREE.Float32BufferAttribute(e.lines, 3));
-  const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }));
-  edges.raycast = () => {};
-  mesh.add(edges);
+  eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
+  mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }))); // Kanten sind anklickbar
   return mesh;
+}
+
+// Ausgewählte Rundung/Fase: Punkt auf der ursprünglichen Kante
+function edgeMarker(f: EdgeOp) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 8), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+  m.position.fromArray(f.at);
+  m.raycast = () => {};
+  return m;
 }
 
 function disposeGroup(gr: THREE.Object3D) {
   gr.traverse((o: any) => { o.geometry?.dispose(); o.material?.dispose(); });
   gr.clear();
 }
-// Kern-Neuberechnung höchstens einmal pro Bild (Ziehen erzeugt viele Mausereignisse)
-function rebuild() { dirty = true; }
-function rebuildNow() {
-  dirty = false;
+// ---------- Kern (Web Worker) ----------
+// Höchstens eine Berechnung gleichzeitig; Änderungen während des Rechnens werden zur nächsten zusammengefasst
+const worker = new Worker(new URL('./kernel.worker.ts', import.meta.url), { type: 'module' });
+const send = (m: ToWorker) => worker.postMessage(m);
+let busy = false, pending = false;
+function requestBuild() {
+  if (!ready || busy) { pending = true; return; }
+  busy = true; pending = false;
+  send({ type: 'build', features });
+}
+worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
+  if (data.type === 'ready') { ready = true; setTool(tool); requestBuild(); }
+  else if (data.type === 'error') $('hint').textContent = 'CAD-Kern konnte nicht geladen werden: ' + data.message;
+  else if (data.type === 'built') {
+    disposeGroup(bodyGroup);
+    if (data.mesh) bodyGroup.add(bodyMesh(data.mesh));
+    bodyGroup.updateMatrixWorld(true);
+    showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
+    busy = false;
+    if (pending) requestBuild();
+  } else if (data.blob) download(`modell.${data.format}`, data.blob);
+  else alert('Noch kein Körper vorhanden.');
+};
+
+function rebuild() {
+  requestBuild();
   disposeGroup(group);
-  body?.delete();
-  ({ body, failed } = buildBody(features));
-  if (body) group.add(bodyMesh(body));
   for (const f of features) {
-    if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
+    if (f.type === 'import') continue;
+    if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
+    else if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
   }
   group.updateMatrixWorld(true);
-  $('hint').textContent = failed.length ? `Features ${failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool];
 }
 function refresh() { rebuild(); renderPanel(); save(); }
 
@@ -129,16 +158,30 @@ function setRay(e: PointerEvent) {
   ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   ray.setFromCamera(ndc, camera);
 }
-// Treffer auf Körper oder Skizze; flache Skizzen liegen auf Flächen und haben Vorrang
-function pick(): { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null } | null {
-  if (dirty) rebuildNow();
-  const hs = ray.intersectObjects(group.children, false);
-  if (!hs.length) return null;
-  const h = hs.find(h => h.object.userData.id && h.distance < hs[0].distance + 0.05) ?? hs[0];
-  const n = h.face!.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-  const id = h.object.userData.id, f = features.find(f => f.id === id);
-  const grip = f ? { f, part: 'end' as const, k: 1 } : ownerOf(features, h.point.toArray(), n.toArray());
-  return { point: h.point.clone(), n, grip };
+// Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
+// eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null };
+type EdgeHit = { at: Vec; dir: Vec };
+function pick(): { face: Hit | null; edge: EdgeHit | null } {
+  const px = 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
+  ray.params.Line.threshold = 6 * px;
+  const hs = ray.intersectObjects([...bodyGroup.children, ...group.children], true);
+  const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
+  const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
+  let face: Hit | null = null, edge: EdgeHit | null = null;
+  if (fh) {
+    const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
+    const id = fh.object.userData.id, f = features.find(f => f.id === id);
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : ownerOf(features, fh.point.toArray(), n.toArray());
+    face = { point: fh.point.clone(), n, grip };
+  }
+  if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
+    const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
+    const a = new THREE.Vector3().fromBufferAttribute(pos, eh.index!), b = new THREE.Vector3().fromBufferAttribute(pos, eh.index! + 1);
+    const at = new THREE.Line3(a, b).closestPointToPoint(eh.point, true, new THREE.Vector3()); // genau auf die Kante legen
+    edge = { at: at.toArray() as Vec, dir: b.sub(a).normalize().toArray() as Vec };
+  }
+  return { face, edge };
 }
 function planeHit(pl: Frame) {
   const P = new THREE.Plane().setFromNormalAndCoplanarPoint(V(pl.n), V(pl.o));
@@ -159,7 +202,7 @@ function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; h
 function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
-  const h = pick();
+  const { face: h, edge } = pick();
   if (tool === 'rect' || tool === 'circle') {
     let pl = GROUND;
     if (h) { // auf Fläche skizzieren
@@ -171,11 +214,16 @@ function onDown(e: PointerEvent) {
     if (!p) return;
     const a = toLocal(pl, p).map(x => snap(x, e));
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+  } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
+    drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
     if (!h?.grip) { if (selId !== null) { selId = null; refresh(); } return; } // Leere: Orbit
-    const { f, part, k } = h.grip;
-    selId = f.id; refresh();
-    drag = { kind: 'push', f, f0: structuredClone(f), part, k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
+    const g = h.grip;
+    selId = g.f.id; refresh();
+    if (g.part === 'import') return; // importierte Körper nur auswählen
+    drag = g.part === 'edge'
+      ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
+      : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
   }
   controls.enabled = false;
   el.setPointerCapture(e.pointerId);
@@ -186,14 +234,15 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   if (!drag) {
-    el.style.cursor = tool === 'select' ? (pick()?.grip ? 'grab' : 'default') : 'crosshair';
+    const h = tool === 'select' && pick();
+    el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     return;
   }
   if (drag.kind === 'sketch') {
     const p = planeHit(drag.pl);
     if (!p) return;
     drag.b = toLocal(drag.pl, p).map(x => snap(x, e));
-    const f = sketchFeature(tool as Feature['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
+    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     disposeGroup(preview);
     if (f) {
       preview.add(buildMesh(f, 'preview'));
@@ -203,6 +252,15 @@ function onMove(e: PointerEvent) {
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.started = true; pushHistory(); el.style.cursor = 'grabbing';
+    }
+    if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
+      if (!drag.f) {
+        drag.f = { id: nextId++, type: 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1 } satisfies EdgeOp;
+        features.push(drag.f); selId = drag.f.id;
+      }
+      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));
+      rebuild();
+      return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
@@ -218,7 +276,7 @@ el.addEventListener('pointerup', e => {
   hud.style.display = 'none';
   if (drag.kind === 'sketch') {
     disposeGroup(preview);
-    const f = sketchFeature(tool as Feature['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
+    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
   }
   drag = null;
@@ -230,7 +288,7 @@ el.addEventListener('pointerup', e => {
 function setTool(t: Tool) {
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  $('hint').textContent = HINTS[t];
+  showHint(HINTS[t]);
 }
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.onclick = () => setTool(b.dataset.tool as Tool));
 
@@ -238,6 +296,9 @@ const panel = $('panel');
 function renderPanel() {
   const f = getSel();
   if (!f) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  if (f.type === 'import') return renderImportPanel(f);
+  if (!isExtrude(f)) return renderEdgePanel(f);
   const fields = f.type === 'rect'
     ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
     : [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']];
@@ -246,7 +307,6 @@ function renderPanel() {
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     `<button class="del">Löschen</button>`;
-  panel.style.display = 'block';
   panel.querySelectorAll('input').forEach(inp => inp.onchange = () => {
     const v = parseFloat(inp.value);
     if (!isFinite(v)) return;
@@ -258,6 +318,26 @@ function renderPanel() {
   });
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
+function renderImportPanel(f: Import) {
+  panel.innerHTML = `<h3>Import #${f.id}</h3><p></p><button class="del">Löschen</button>`;
+  panel.querySelector('p')!.textContent = f.name; // Dateiname nicht als HTML einsetzen
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
+function renderEdgePanel(f: EdgeOp) {
+  panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}</h3>
+    <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
+    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" min="0.5" value="${+f.r.toFixed(2)}"></label>
+    <button class="del">Löschen</button>`;
+  const sel = panel.querySelector('select')!, inp = panel.querySelector('input')!;
+  sel.value = f.type;
+  sel.onchange = () => { pushHistory(); f.type = sel.value as EdgeOp['type']; refresh(); };
+  inp.onchange = () => {
+    const v = parseFloat(inp.value);
+    if (!isFinite(v)) return;
+    pushHistory(); f.r = Math.max(0.5, v); refresh();
+  };
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
 function deleteSel() {
   if (!getSel()) return;
   pushHistory(); features = features.filter(f => f.id !== selId); selId = null; refresh();
@@ -267,13 +347,6 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-function exportBody(name: string, toBlob: (s: Shape3D) => Blob) {
-  if (dirty) rebuildNow();
-  if (!body) return alert('Noch kein Körper vorhanden.');
-  const s = forExport(body);
-  download(name, toBlob(s));
-  s.delete();
-}
 $('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; selId = null; refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
@@ -281,9 +354,19 @@ $('bView').onclick = resetView;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
 const fileIn = $<HTMLInputElement>('fileIn');
 $('bOpen').onclick = () => fileIn.click();
-fileIn.onchange = async () => { const f = fileIn.files?.[0]; if (f) { pushHistory(); restore(await f.text()); } fileIn.value = ''; };
-$('bStl').onclick = () => exportBody('modell.stl', s => s.blobSTL({ binary: true, tolerance: 0.01, angularTolerance: 0.1 }));
-$('bStep').onclick = () => exportBody('modell.step', s => s.blobSTEP());
+// .json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren
+fileIn.onchange = async () => {
+  const file = fileIn.files?.[0];
+  fileIn.value = '';
+  if (!file) return;
+  const text = await file.text();
+  pushHistory();
+  if (!/\.(step|stp)$/i.test(file.name)) return restore(text);
+  const f: Import = { id: nextId++, type: 'import', name: file.name, step: text };
+  features.push(f); selId = f.id; refresh();
+};
+$('bStl').onclick = () => send({ type: 'export', format: 'stl' });
+$('bStep').onclick = () => send({ type: 'export', format: 'step' });
 
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -300,13 +383,8 @@ addEventListener('keydown', e => {
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => {
-  if (dirty && ready) rebuildNow();
   controls.update(); renderer.render(scene, camera);
 });
 
-// ---------- Kern laden ----------
-// shortcut: Kern läuft im Hauptthread; bei großen Modellen ruckelt das Ziehen → Web Worker (siehe ROADMAP M1)
-setOC(await opencascade({ locateFile: () => wasmUrl }));
-ready = true;
 try { const s = localStorage.getItem('openform'); if (s) ({ features, nextId } = JSON.parse(s)); } catch {}
-setTool('select'); refresh();
+refresh();

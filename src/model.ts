@@ -1,16 +1,24 @@
 // Datenmodell und Geometrie-Logik ohne Three.js/OpenCascade, damit sie testbar bleibt.
 export type Vec = [number, number, number];
 export interface Frame { o: Vec; n: Vec; u: Vec; v: Vec } // Ursprung, Normale, Skizzenachsen (v = n × u)
-export interface Feature extends Frame {
+export interface Extrude extends Frame {
   id: number;
   type: 'rect' | 'circle';
   p: Record<string, number>; // rect: x y w h · circle: cx cy r
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
 }
+// Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
+// shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
+export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number }
+// Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
+// shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
+export interface Import { id: number; type: 'import'; name: string; step: string }
+export type Feature = Extrude | EdgeOp | Import;
+export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle';
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r';
-export interface Grip { f: Feature; part: Part; k: number }
+export type Grip = { f: Extrude; part: Part; k: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 };
 
 export const GROUND: Frame = { o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
 
@@ -18,9 +26,9 @@ const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] *
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 // In eine Fläche hineingedrückt = Schnitt (Bohrung, Tasche), sonst Vereinigung
-export const isCut = (f: Feature) => !!f.onFace && f.d < 0;
+export const isCut = (f: Feature) => isExtrude(f) && !!f.onFace && f.d < 0;
 
-export function sketchFeature(type: Feature['type'], pl: Frame, a: number[], b: number[], id: number, onFace: boolean): Feature | null {
+export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: number[], id: number, onFace: boolean): Extrude | null {
   const [ax, ay] = a, [bx, by] = b, base = { id, d: 0, onFace, ...structuredClone(pl) };
   if (type === 'rect') {
     const w = Math.abs(bx - ax), h = Math.abs(by - ay);
@@ -32,10 +40,32 @@ export function sketchFeature(type: Feature['type'], pl: Frame, a: number[], b: 
 }
 
 // Findet das Feature, auf dessen Begrenzung der Punkt (mit Flächennormale N) liegt. Spätere Features gewinnen.
+// Rundungs-/Fasenflächen gehören zu keinem Extrude; sie werden danach über die Nähe zur Kante gefunden.
 export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps = 0.15): Grip | null {
+  return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps) ?? importOwner(features);
+}
+
+// shortcut: Flächen ohne Besitzer gehören zum zuletzt importierten Körper; bei mehreren Importen ungenau → Flächen-IDs aus dem Kern
+function importOwner(features: Feature[]): Grip | null {
+  const f = [...features].reverse().find(f => f.type === 'import');
+  return f?.type === 'import' ? { f, part: 'import', k: 0 } : null;
+}
+
+function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number): Grip | null {
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
-    if (Math.abs(f.d) < 1e-6) continue;
+    if (f.type !== 'fillet' && f.type !== 'chamfer') continue;
+    const q = sub(P, f.at), along = dot(q, f.dir);
+    const toLine = Math.sqrt(Math.max(0, dot(q, q) - along * along));
+    if (Math.min(toLine, Math.hypot(...q)) < f.r * 1.5 + eps) return { f, part: 'edge', k: 0 };
+  }
+  return null;
+}
+
+function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps: number): Grip | null {
+  for (let i = features.length - 1; i >= 0; i--) {
+    const f = features[i];
+    if (!isExtrude(f) || Math.abs(f.d) < 1e-6) continue;
     const q = sub(P, f.o), x = dot(q, f.u), y = dot(q, f.v), z = dot(q, f.n);
     const nn = dot(N, f.n), p = f.p;
     const inside = f.type === 'rect'
@@ -63,7 +93,7 @@ export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<
 }
 
 // Verschiebt den angefassten Teil um t entlang der Flächennormale. Gibt [Beschriftung, Wert] fürs HUD zurück.
-export function applyPush(f: Feature, f0: Feature, part: Part, k: number, t: number): [string, number] {
+export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: number): [string, number] {
   const m = t * k, p = f.p, p0 = f0.p;
   switch (part) {
     case 'end': f.d = f0.d + m; return ['Höhe', f.d];
