@@ -84,6 +84,4 @@ Rechteck- und Kreis-Skizzen, Push/Pull, Größe über Seitenflächen ändern, Ma
 | KI-Ergebnisse sind ungenau | Die KI erzeugt Features statt Meshes, man kann sie also immer nachbearbeiten |
 
 ## Nächste Schritte
-1. ~~Projektordner und Git-Repo anlegen~~
-2. Den Prototyp nach TypeScript + Vite überführen
-3. M1 starten: OpenCascade einbinden und die erste Boolesche Operation umsetzen
+Siehe [ROADMAP.md](ROADMAP.md).

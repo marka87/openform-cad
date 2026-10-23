@@ -2,17 +2,18 @@
 
 Ein 3D-CAD-Programm, so intuitiv wie Shapr3D und so frei wie FreeCAD — mit optionaler KI-Unterstützung.
 
-**Status:** Prototyp (M0). Siehe [docs/PLAN.md](docs/PLAN.md) für Ziele und Meilensteine.
+**Status:** M1 läuft: echter CAD-Kern (OpenCascade über replicad). Ziele in [docs/PLAN.md](docs/PLAN.md), Aufgaben in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Prototyp starten
+## Starten
 
-Der Prototyp ist eine einzelne HTML-Datei und braucht einen lokalen Webserver (ES-Module):
+Braucht Node.js 20 oder neuer.
 
 ```bash
-python -m http.server 8123 --directory prototype
+npm install
+npm run dev
 ```
 
-Dann <http://localhost:8123> öffnen.
+Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erzeugt `npm run build`.
 
 ## Bedienung
 
@@ -20,6 +21,8 @@ Dann <http://localhost:8123> öffnen.
 |---|---|
 | Auswählen / Fläche ziehen | `V`, Linksklick/-ziehen auf Körper |
 | Rechteck / Kreis skizzieren | `R` / `C`, auf Boden oder Fläche ziehen |
+| Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
+| Export | STL (3D-Druck) oder STEP (CAD, Fertigung) |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |
 | Löschen | `Entf` |
