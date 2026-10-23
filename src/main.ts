@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, GROUND, isCut, ownerOf, sketchFeature, type Feature, type Frame, type Grip, type Vec } from './model';
+import { applyPush, GROUND, isCut, isExtrude, ownerOf, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Klicken = auswählen · Fläche ziehen = extrudieren / Größe ändern · Linksziehen ins Leere = drehen · Rechts = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante ziehen = runden · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
 };
@@ -48,7 +48,7 @@ function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(re
 function save() { try { localStorage.setItem('openform', snapshot()); } catch {} }
 const getSel = () => features.find(f => f.id === selId);
 
-function shapeOf(f: Feature) {
+function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
   if (f.type === 'rect') {
     s.moveTo(p.x, p.y); s.lineTo(p.x + p.w, p.y); s.lineTo(p.x + p.w, p.y + p.h); s.lineTo(p.x, p.y + p.h); s.closePath();
@@ -57,7 +57,7 @@ function shapeOf(f: Feature) {
 }
 
 // Skizzen, Vorschau und Auswahlrahmen kommen aus Three.js; der eigentliche Körper aus dem Kern
-function buildMesh(f: Feature, kind: 'sketch' | 'preview' | 'outline') {
+function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline') {
   let g: THREE.BufferGeometry;
   if (Math.abs(f.d) < 1e-6) g = new THREE.ShapeGeometry(shapeOf(f), 64);
   else {
@@ -92,10 +92,16 @@ function bodyMesh(m: NonNullable<Extract<FromWorker, { type: 'built' }>['mesh']>
   }));
   const eg = new THREE.BufferGeometry();
   eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
-  const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }));
-  edges.raycast = () => {};
-  mesh.add(edges);
+  mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }))); // Kanten sind anklickbar
   return mesh;
+}
+
+// Ausgewählte Rundung/Fase: Punkt auf der ursprünglichen Kante
+function edgeMarker(f: EdgeOp) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 8), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+  m.position.fromArray(f.at);
+  m.raycast = () => {};
+  return m;
 }
 
 function disposeGroup(gr: THREE.Object3D) {
@@ -130,7 +136,8 @@ function rebuild() {
   requestBuild();
   disposeGroup(group);
   for (const f of features) {
-    if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
+    if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
+    else if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
   }
   group.updateMatrixWorld(true);
@@ -144,15 +151,30 @@ function setRay(e: PointerEvent) {
   ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   ray.setFromCamera(ndc, camera);
 }
-// Treffer auf Körper oder Skizze; flache Skizzen liegen auf Flächen und haben Vorrang
-function pick(): { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null } | null {
-  const hs = ray.intersectObjects([...bodyGroup.children, ...group.children], false);
-  if (!hs.length) return null;
-  const h = hs.find(h => h.object.userData.id && h.distance < hs[0].distance + 0.05) ?? hs[0];
-  const n = h.face!.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-  const id = h.object.userData.id, f = features.find(f => f.id === id);
-  const grip = f ? { f, part: 'end' as const, k: 1 } : ownerOf(features, h.point.toArray(), n.toArray());
-  return { point: h.point.clone(), n, grip };
+// Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
+// eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null };
+type EdgeHit = { at: Vec; dir: Vec };
+function pick(): { face: Hit | null; edge: EdgeHit | null } {
+  const px = 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
+  ray.params.Line.threshold = 6 * px;
+  const hs = ray.intersectObjects([...bodyGroup.children, ...group.children], true);
+  const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
+  const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
+  let face: Hit | null = null, edge: EdgeHit | null = null;
+  if (fh) {
+    const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
+    const id = fh.object.userData.id, f = features.find(f => f.id === id);
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : ownerOf(features, fh.point.toArray(), n.toArray());
+    face = { point: fh.point.clone(), n, grip };
+  }
+  if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
+    const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
+    const a = new THREE.Vector3().fromBufferAttribute(pos, eh.index!), b = new THREE.Vector3().fromBufferAttribute(pos, eh.index! + 1);
+    const at = new THREE.Line3(a, b).closestPointToPoint(eh.point, true, new THREE.Vector3()); // genau auf die Kante legen
+    edge = { at: at.toArray() as Vec, dir: b.sub(a).normalize().toArray() as Vec };
+  }
+  return { face, edge };
 }
 function planeHit(pl: Frame) {
   const P = new THREE.Plane().setFromNormalAndCoplanarPoint(V(pl.n), V(pl.o));
@@ -173,7 +195,7 @@ function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; h
 function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
-  const h = pick();
+  const { face: h, edge } = pick();
   if (tool === 'rect' || tool === 'circle') {
     let pl = GROUND;
     if (h) { // auf Fläche skizzieren
@@ -185,11 +207,15 @@ function onDown(e: PointerEvent) {
     if (!p) return;
     const a = toLocal(pl, p).map(x => snap(x, e));
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+  } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
+    drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
     if (!h?.grip) { if (selId !== null) { selId = null; refresh(); } return; } // Leere: Orbit
-    const { f, part, k } = h.grip;
-    selId = f.id; refresh();
-    drag = { kind: 'push', f, f0: structuredClone(f), part, k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
+    const g = h.grip;
+    selId = g.f.id; refresh();
+    drag = g.part === 'edge'
+      ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
+      : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
   }
   controls.enabled = false;
   el.setPointerCapture(e.pointerId);
@@ -200,14 +226,15 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   if (!drag) {
-    el.style.cursor = tool === 'select' ? (pick()?.grip ? 'grab' : 'default') : 'crosshair';
+    const h = tool === 'select' && pick();
+    el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     return;
   }
   if (drag.kind === 'sketch') {
     const p = planeHit(drag.pl);
     if (!p) return;
     drag.b = toLocal(drag.pl, p).map(x => snap(x, e));
-    const f = sketchFeature(tool as Feature['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
+    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     disposeGroup(preview);
     if (f) {
       preview.add(buildMesh(f, 'preview'));
@@ -217,6 +244,15 @@ function onMove(e: PointerEvent) {
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.started = true; pushHistory(); el.style.cursor = 'grabbing';
+    }
+    if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
+      if (!drag.f) {
+        drag.f = { id: nextId++, type: 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1 } satisfies EdgeOp;
+        features.push(drag.f); selId = drag.f.id;
+      }
+      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));
+      rebuild();
+      return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
@@ -232,7 +268,7 @@ el.addEventListener('pointerup', e => {
   hud.style.display = 'none';
   if (drag.kind === 'sketch') {
     disposeGroup(preview);
-    const f = sketchFeature(tool as Feature['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
+    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
   }
   drag = null;
@@ -252,6 +288,8 @@ const panel = $('panel');
 function renderPanel() {
   const f = getSel();
   if (!f) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  if (!isExtrude(f)) return renderEdgePanel(f);
   const fields = f.type === 'rect'
     ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
     : [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']];
@@ -260,7 +298,6 @@ function renderPanel() {
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     `<button class="del">Löschen</button>`;
-  panel.style.display = 'block';
   panel.querySelectorAll('input').forEach(inp => inp.onchange = () => {
     const v = parseFloat(inp.value);
     if (!isFinite(v)) return;
@@ -270,6 +307,21 @@ function renderPanel() {
     obj[key] = ['w', 'h', 'r'].includes(key) ? Math.max(0.5, v) : v;
     refresh();
   });
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
+function renderEdgePanel(f: EdgeOp) {
+  panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}</h3>
+    <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
+    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" min="0.5" value="${+f.r.toFixed(2)}"></label>
+    <button class="del">Löschen</button>`;
+  const sel = panel.querySelector('select')!, inp = panel.querySelector('input')!;
+  sel.value = f.type;
+  sel.onchange = () => { pushHistory(); f.type = sel.value as EdgeOp['type']; refresh(); };
+  inp.onchange = () => {
+    const v = parseFloat(inp.value);
+    if (!isFinite(v)) return;
+    pushHistory(); f.r = Math.max(0.5, v); refresh();
+  };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function deleteSel() {

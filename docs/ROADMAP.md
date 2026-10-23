@@ -12,7 +12,7 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Herausziehen vereinigt, Hineindrücken in eine Fläche schneidet (Bohrung, Tasche)
 - [x] STEP- und STL-Export aus dem Kern
 - [x] Kern in einen Web Worker verlegen (Oberfläche bleibt flüssig)
-- [ ] Fasen und Rundungen an Kanten (Kante anklicken, ziehen)
+- [x] Fasen und Rundungen an Kanten (Kante anfassen und ziehen, Art im Seitenfeld)
 - [ ] STEP-Import
 - [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
