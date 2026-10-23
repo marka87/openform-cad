@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, GROUND, ownerOf, sketchFeature, type Extrude, type Feature } from './model';
+import { applyPush, GROUND, ownerOf, polyFeature, sketchFeature, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -67,4 +67,24 @@ test('STEP-Import: exportierter Körper kommt an derselben Stelle zurück und l�
   expect(buildBody([imp, hole(-4)], imports).body!.faces.length).toBe(8);   // Bohrung in den Import
   expect(buildBody([imp], new Map()).failed).toEqual([5]);                // nicht lesbare Datei wird gemeldet
   expect(ownerOf([imp, box()], [5, 10, -5], [1, 0, 0])).toMatchObject({ part: 'import' }); // Fläche ohne Feature
+});
+
+test('Vieleck: L-Profil extrudieren, Seite verschieben, ungültige Formen ablehnen', () => {
+  // L-Form auf dem Boden (Skizzen-y zeigt in Welt -z), 10 hoch
+  const L = { ...polyFeature(GROUND, [[0, 0], [20, 0], [20, 5], [5, 5], [5, 15], [0, 15]], 7, false)!, d: 10 };
+  const body = buildBody([L]).body!;
+  expect(body.faces.length).toBe(8);                                   // 6 Seiten + Boden + Deckel
+  expect(body.boundingBox.bounds).toEqual([[0, 0, -15], [20, 10, 0]]);
+
+  // Innenkante x = 5 (zwischen [5,5] und [5,15]); Normale zeigt nach +x
+  const g = ownerOf([L], [5, 5, -10], [1, 0, 0]);
+  expect(g).toMatchObject({ part: 'seg', i: 3, k: 1 });
+  const L0 = structuredClone(L);
+  applyPush(L, L0, 'seg', g!.k, 3, (g as any).i);                      // 3 mm nach außen
+  expect(L.pts![3]).toEqual([8, 5]);
+  expect(L.pts![4]).toEqual([8, 15]);
+  expect(buildBody([L]).failed).toEqual([]);
+
+  expect(polyFeature(GROUND, [[0, 0], [10, 0]], 8, false)).toBeNull();   // zu wenige Punkte
+  expect(polyFeature(GROUND, [[0, 0], [10, 0], [20, 0]], 8, false)).toBeNull(); // keine Fläche
 });
