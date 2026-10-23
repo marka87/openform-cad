@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, GROUND, isCut, isExtrude, ownerOf, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, GROUND, isCut, isExtrude, ownerOf, polyFeature, sketchFeature, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
-type Tool = 'select' | 'rect' | 'circle';
+type Tool = 'select' | 'rect' | 'circle' | 'line';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
   select: 'Fläche ziehen = extrudieren / Größe ändern · Kante ziehen = runden · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
+  line:   'Punkte setzen · Klick auf den ersten Punkt oder Enter = Form schließen · Esc = abbrechen',
 };
 
 // ---------- Szene ----------
@@ -58,7 +59,8 @@ function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
   if (f.type === 'rect') {
     s.moveTo(p.x, p.y); s.lineTo(p.x + p.w, p.y); s.lineTo(p.x + p.w, p.y + p.h); s.lineTo(p.x, p.y + p.h); s.closePath();
-  } else s.absarc(p.cx, p.cy, p.r, 0, Math.PI * 2, false);
+  } else if (f.type === 'circle') s.absarc(p.cx, p.cy, p.r, 0, Math.PI * 2, false);
+  else s.setFromPoints(f.pts!.map(([x, y]) => new THREE.Vector2(x, y)));
   return s;
 }
 
@@ -163,7 +165,7 @@ function setRay(e: PointerEvent) {
 type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null };
 type EdgeHit = { at: Vec; dir: Vec };
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
-  const px = 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
+  const px = pxSize();
   ray.params.Line.threshold = 6 * px;
   const hs = ray.intersectObjects([...bodyGroup.children, ...group.children], true);
   const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
@@ -198,18 +200,51 @@ function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
 const hud = $('hud');
 function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; hud.style.left = e.clientX + 16 + 'px'; hud.style.top = e.clientY + 16 + 'px'; hud.textContent = text; }
 
+// Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
+const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
+// Skizzenebene: Boden oder die angeklickte Fläche
+function planeFor(h: Hit | null): Frame {
+  if (!h) return GROUND;
+  const n = h.n, helper = Math.abs(n.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const u = helper.clone().cross(n).normalize(), v = n.clone().cross(u);
+  return { o: h.point.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
+}
+
+// ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
+let poly: { pl: Frame; pts: number[][]; onFace: boolean } | null = null;
+function polyPoint(e: PointerEvent) {
+  const p = poly && planeHit(poly.pl);
+  return p ? toLocal(poly!.pl, p).map(x => snap(x, e)) : null;
+}
+function showPoly(pts: number[][]) {
+  disposeGroup(preview);
+  const { o, u, v } = poly!.pl;
+  const world = pts.map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(world), new THREE.LineBasicMaterial({ color: 0x4da3ff, depthTest: false }));
+  const start = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: false }));
+  start.position.copy(world[0]);
+  preview.add(line, start);
+}
+function finishPoly() {
+  const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace);
+  cancelPoly();
+  if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); refresh(); }
+}
+function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 'none'; }
+
 // ---------- Werkzeuge ----------
 function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
   const { face: h, edge } = pick();
-  if (tool === 'rect' || tool === 'circle') {
-    let pl = GROUND;
-    if (h) { // auf Fläche skizzieren
-      const n = h.n, helper = Math.abs(n.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-      const u = helper.clone().cross(n).normalize(), v = n.clone().cross(u);
-      pl = { o: h.point.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
-    }
+  if (tool === 'line') {
+    drag = { kind: 'line' }; // nur damit die Kamera beim Klicken nicht dreht
+    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h };
+    const q = polyPoint(e), last = poly.pts.at(-1), first = poly.pts[0];
+    if (q && poly.pts.length >= 3 && Math.hypot(q[0] - first[0], q[1] - first[1]) < 8 * pxSize()) finishPoly();
+    else if (q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
+  } else if (tool === 'rect' || tool === 'circle') {
+    const pl = planeFor(h); // auf Boden oder Fläche skizzieren
     const p = planeHit(pl);
     if (!p) return;
     const a = toLocal(pl, p).map(x => snap(x, e));
@@ -223,7 +258,7 @@ function onDown(e: PointerEvent) {
     if (g.part === 'import') return; // importierte Körper nur auswählen
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
-      : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
+      : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, i: g.i, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
   }
   controls.enabled = false;
   el.setPointerCapture(e.pointerId);
@@ -233,11 +268,19 @@ el.addEventListener('pointermove', onMove);
 function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
+  if (poly && !drag) {
+    const q = polyPoint(e);
+    if (!q || !poly.pts.length) return;
+    const last = poly.pts.at(-1)!;
+    showPoly([...poly.pts, q]);
+    return showHud(e, `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm`);
+  }
   if (!drag) {
     const h = tool === 'select' && pick();
     el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     return;
   }
+  if (drag.kind === 'line') return;
   if (drag.kind === 'sketch') {
     const p = planeHit(drag.pl);
     if (!p) return;
@@ -264,7 +307,7 @@ function onMove(e: PointerEvent) {
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
-    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, 0.5));
+    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, 0.5), drag.i);
     rebuild();
     showHud(e, `${label}: ${val.toFixed(1)} mm${isCut(drag.f) ? ' (Schnitt)' : ''}`);
   }
@@ -279,13 +322,15 @@ el.addEventListener('pointerup', e => {
     const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
   }
+  const wasLine = drag.kind === 'line';
   drag = null;
   controls.enabled = true;
-  refresh();
+  if (!wasLine) refresh();
 });
 
 // ---------- UI ----------
 function setTool(t: Tool) {
+  if (t !== tool) cancelPoly();
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   showHint(HINTS[t]);
@@ -299,11 +344,11 @@ function renderPanel() {
   panel.style.display = 'block';
   if (f.type === 'import') return renderImportPanel(f);
   if (!isExtrude(f)) return renderEdgePanel(f);
-  const fields = f.type === 'rect'
-    ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
-    : [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']];
+  const fields = f.type === 'rect' ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
+    : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
+    : [['Höhe', 'd']];
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
-  const name = isCut(f) ? (f.type === 'rect' ? 'Tasche' : 'Bohrung') : f.type === 'rect' ? 'Rechteck' : 'Kreis';
+  const name = isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     `<button class="del">Löschen</button>`;
@@ -376,8 +421,10 @@ addEventListener('keydown', e => {
   else if (k === 'v') setTool('select');
   else if (k === 'r') setTool('rect');
   else if (k === 'c') setTool('circle');
+  else if (k === 'l') setTool('line');
+  else if (k === 'enter' && poly) finishPoly();
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }

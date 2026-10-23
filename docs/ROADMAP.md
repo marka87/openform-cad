@@ -16,8 +16,10 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] STEP-Import (Öffnen → .step/.stp; Körper lässt sich bohren und runden, aber nicht ziehen)
 - [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
-## M2 – Skizzieren richtig
-- [ ] Linie, Polylinie, Bogen; geschlossene Bereiche automatisch erkennen
+## M2 – Skizzieren richtig (läuft)
+- [x] Linien-Werkzeug: Vieleck Punkt für Punkt, Seitenflächen parallel verschiebbar
+- [ ] Bogen
+- [ ] Geschlossene Bereiche automatisch erkennen (sich überschneidende Skizzen)
 - [ ] Spline, Versatz, Trimmen
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [ ] Skizzen nachträglich bearbeiten

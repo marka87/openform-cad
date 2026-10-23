@@ -1,12 +1,12 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { drawCircle, drawRectangle, importSTEP, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
+import { draw, drawCircle, drawRectangle, importSTEP, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
 import { isCut, isExtrude, type Extrude, type Feature } from './model';
 
 export function solidOf(f: Extrude): Shape3D {
   const p = f.p;
-  const drawing = f.type === 'rect'
-    ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
-    : drawCircle(p.r).translate(p.cx, p.cy);
+  const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
+    : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
+    : f.pts!.slice(1).reduce((pen, q) => pen.lineTo(q as [number, number]), draw(f.pts![0] as [number, number])).close();
   return (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
 }
 
