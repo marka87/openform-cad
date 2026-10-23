@@ -11,10 +11,10 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] OpenCascade (replicad, WASM) einbinden: Körper sind echte Volumenkörper
 - [x] Herausziehen vereinigt, Hineindrücken in eine Fläche schneidet (Bohrung, Tasche)
 - [x] STEP- und STL-Export aus dem Kern
-- [ ] Kern in einen Web Worker verlegen (Oberfläche bleibt flüssig)
+- [x] Kern in einen Web Worker verlegen (Oberfläche bleibt flüssig)
 - [ ] Fasen und Rundungen an Kanten (Kante anklicken, ziehen)
 - [ ] STEP-Import
-- [ ] Ladeanzeige, solange der Kern (ca. 10 MB) lädt
+- [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
 ## M2 – Skizzieren richtig
 - [ ] Linie, Polylinie, Bogen; geschlossene Bereiche automatisch erkennen
