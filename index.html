@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>OpenForm CAD</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { --bg:#1e2126; --panel:#2a2e35; --line:#3a3f48; --text:#e6e8eb; --muted:#9aa1ab; --accent:#ff9a3c; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
+  canvas { display:block; }
+  #toolbar { position:fixed; left:12px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px;
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
+  #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
+    padding:8px 10px; cursor:pointer; font:inherit; text-align:left; }
+  #toolbar button:hover, #top button:hover { background:#353a42; }
+  #toolbar button.on { border-color:var(--accent); color:var(--accent); }
+  #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
+  #top { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:4px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:4px; }
+  #panel { position:fixed; right:12px; top:12px; width:220px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:12px; display:none; }
+  #panel h3 { margin:0 0 10px; font-size:13px; }
+  #panel label { display:flex; justify-content:space-between; align-items:center; margin:6px 0; color:var(--muted); }
+  #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
+  #panel .del { margin-top:10px; width:100%; background:#4a2a2a; color:#ffb4b4; border:0; border-radius:8px; padding:7px; cursor:pointer; }
+  #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; }
+  #hud { position:fixed; pointer-events:none; background:var(--accent); color:#1e2126; font-weight:600; border-radius:6px;
+    padding:2px 6px; display:none; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <button data-tool="select">Auswählen / Ziehen <kbd>V</kbd></button>
+  <button data-tool="rect">Rechteck <kbd>R</kbd></button>
+  <button data-tool="circle">Kreis <kbd>C</kbd></button>
+</div>
+<div id="top">
+  <button id="bNew">Neu</button>
+  <button id="bUndo">↶ Rückgängig</button>
+  <button id="bRedo">↷ Wiederholen</button>
+  <button id="bSave">Speichern</button>
+  <button id="bOpen">Öffnen</button>
+  <button id="bStl">STL-Export</button>
+  <button id="bStep">STEP-Export</button>
+  <button id="bView">Ansicht</button>
+  <input id="fileIn" type="file" accept=".json" hidden>
+</div>
+<div id="panel"></div>
+<div id="hud"></div>
+<div id="hint">CAD-Kern wird geladen …</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
