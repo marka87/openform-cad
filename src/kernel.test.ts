@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, endTangent, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, contour, endTangent, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -155,4 +155,17 @@ test('Versatz um Rechteck, Kreis und Vieleck mit Bogen', () => {
   const D = polyFeature(GROUND, [[0, 0, 1], [20, 0]], 1, false)!, o = offsetFeature(D, 2, 2)!;
   expect(o.pts![0][2]).toBe(1);
   expect(Math.hypot(o.pts![1][0] - o.pts![0][0], o.pts![1][1] - o.pts![0][1]) / 2).toBeCloseTo(12);
+});
+
+test('Spline: geschlossene glatte Kurve durch die Punkte, im Kern als Bézier-Stücke', () => {
+  const pts = [[10, 0], [0, 10], [-10, 0], [0, -10]], f = polyFeature(GROUND, pts, 1, false, true)!;
+  expect(f.smooth).toBe(true);
+  const c = contour(pts, true);
+  expect(c).toContainEqual([0, 10]);                                   // läuft durch die Punkte
+  c.forEach(([x, y]) => expect(Math.hypot(x, y)).toBeGreaterThan(8.5)); // nach außen gewölbt, weit über der Raute (7,07)
+  f.d = 5;
+  const v = measureVolume(buildBody([f]).body!);
+  expect(v).toBeGreaterThan(200 * 5);                                  // mehr als die Raute
+  expect(v).toBeLessThan(Math.PI * 100 * 5);                           // weniger als der Kreis
+  expect(polyFeature(GROUND, [[0, 0], [10, 0]], 1, false, true)).toBeNull();
 });

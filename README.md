@@ -23,6 +23,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Rechteck / Kreis skizzieren | `R` / `C`, auf Boden oder Fläche ziehen |
 | Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
 | Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) |
+| Spline | `S`, Punkte klicken – die Kurve läuft glatt hindurch; Klick auf den ersten Punkt oder `Enter` schließt |
 | Bereiche | Überschneiden sich flache Skizzen, zieht man nur den angeklickten Bereich (z. B. die Schnittmenge) |
 | Versatz | Flache Skizze anklicken, im Seitenfeld Abstand eingeben (minus = nach innen) → „Versatz anlegen“ |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |

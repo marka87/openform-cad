@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, endTangent, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, contour, endTangent, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
-type Tool = 'select' | 'rect' | 'circle' | 'line';
+type Tool = 'select' | 'rect' | 'circle' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -11,6 +11,7 @@ const HINTS: Record<Tool, string> = {
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
   line:   'Punkte klicken · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
+  spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
 
 // ---------- Szene ----------
@@ -60,7 +61,7 @@ function shapeOf(f: Extrude) {
   if (f.type === 'rect') {
     s.moveTo(p.x, p.y); s.lineTo(p.x + p.w, p.y); s.lineTo(p.x + p.w, p.y + p.h); s.lineTo(p.x, p.y + p.h); s.closePath();
   } else if (f.type === 'circle') s.absarc(p.cx, p.cy, p.r, 0, Math.PI * 2, false);
-  else s.setFromPoints(outline(f.pts!).map(([x, y]) => new THREE.Vector2(x, y)));
+  else s.setFromPoints(contour(f.pts!, f.smooth).map(([x, y]) => new THREE.Vector2(x, y)));
   return s;
 }
 
@@ -226,7 +227,7 @@ function planeFor(h: Hit | null): Frame {
 }
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
-let poly: { pl: Frame; pts: number[][]; onFace: boolean } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean } | null = null;
 function polyPoint(e: PointerEvent) {
   const p = poly && planeHit(poly.pl);
   return p ? toLocal(poly!.pl, p).map(x => snap(x, e)) : null;
@@ -234,7 +235,7 @@ function polyPoint(e: PointerEvent) {
 function showPoly(pts: number[][]) {
   disposeGroup(preview);
   const { o, u, v } = poly!.pl;
-  const world = outline(pts, false).map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
+  const world = contour(pts, poly!.smooth, false).map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(world), new THREE.LineBasicMaterial({ color: 0x4da3ff, depthTest: false }));
   const start = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: false }));
   start.position.copy(world[0]);
@@ -248,7 +249,7 @@ function arcPts(q: number[]) {
 }
 const nearPt = (q: number[] | null, p?: number[]) => !!q && !!p && Math.hypot(q[0] - p[0], q[1] - p[1]) < 8 * pxSize();
 function finishPoly() {
-  const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace);
+  const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
   cancelPoly();
   if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); refresh(); }
 }
@@ -259,11 +260,11 @@ function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
   const { face: h, edge } = pick();
-  if (tool === 'line') {
-    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h };
+  if (tool === 'line' || tool === 'spline') {
+    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h, smooth: tool === 'spline' };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
-    const arc = poly.pts.length >= 2 && nearPt(q, last);
+    const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
     drag = { kind: 'line', arc, sx: e.clientX, sy: e.clientY, started: false }; // drag hält auch die Kamera still
     if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
     else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
@@ -392,10 +393,10 @@ function renderPanel() {
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
     : [['Höhe', 'd']];
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
-  const name = isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
+  const name = isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : (f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type]);
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
-    (Math.abs(f.d) < 1e-6 && !f.and ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
+    (Math.abs(f.d) < 1e-6 && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     `<button class="del">Löschen</button>`;
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
@@ -473,6 +474,7 @@ addEventListener('keydown', e => {
   else if (k === 'r') setTool('rect');
   else if (k === 'c') setTool('circle');
   else if (k === 'l') setTool('line');
+  else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') { cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }

@@ -1,12 +1,12 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawRectangle, importSTEP, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
-import { isCut, isExtrude, type Extrude, type Feature, type Vec } from './model';
+import { isCut, isExtrude, splineBeziers, type Extrude, type Feature, type Vec } from './model';
 
 export function solidOf(f: Extrude): Shape3D {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
     : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
-    : polyDrawing(f.pts!);
+    : polyDrawing(f.pts!, f.smooth);
   let s = (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
   // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
   for (const c of [...f.and ?? [], ...f.not ?? []]) {
@@ -18,8 +18,12 @@ export function solidOf(f: Extrude): Shape3D {
   return s;
 }
 
-function polyDrawing(pts: number[][]) {
+function polyDrawing(pts: number[][], smooth?: boolean) {
   const pen = draw([pts[0][0], pts[0][1]]);
+  if (smooth) {
+    for (const [, c1, c2, e] of splineBeziers(pts)) pen.cubicBezierCurveTo(e as [number, number], c1 as [number, number], c2 as [number, number]);
+    return pen.close();
+  }
   pts.forEach((q, i) => {
     const next = pts[(i + 1) % pts.length], to: [number, number] = [next[0], next[1]];
     if (q[2]) pen.bulgeArcTo(to, q[2]);

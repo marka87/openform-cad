@@ -22,7 +22,8 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Bogenflächen ziehen (Radius ändern, Endpunkte bleiben)
 - [x] Überschneidende Skizzen zerfallen in Bereiche; Ziehen nimmt nur den angeklickten Bereich
 - [x] Versatz: neue Skizze im Abstand um eine flache Skizze (Seitenfeld)
-- [ ] Spline, Trimmen
+- [x] Spline-Werkzeug (S): geschlossene glatte Kurve durch geklickte Punkte
+- [ ] Trimmen (vorerst durch die Bereiche überschneidender Skizzen abgedeckt)
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [ ] Skizzen nachträglich bearbeiten
 

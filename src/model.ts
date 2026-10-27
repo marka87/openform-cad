@@ -9,6 +9,7 @@ export interface Extrude extends Frame {
                              // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
+  smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
@@ -68,6 +69,28 @@ export function outline(pts: number[][], closed = true): number[][] {
   return out;
 }
 
+// Spline durch die Punkte als kubische Bézier-Stücke [Start, Kontrollpunkt 1, Kontrollpunkt 2, Ende] (Catmull-Rom)
+export function splineBeziers(pts: number[][], closed = true): number[][][] {
+  const n = pts.length, at = (i: number) => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+  return Array.from({ length: closed ? n : n - 1 }, (_, i) => {
+    const [a, b, c, d] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    return [b, [b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6], [c[0] - (d[0] - b[0]) / 6, c[1] - (d[1] - b[1]) / 6], c].map(p => [p[0], p[1]]);
+  });
+}
+
+// Umriss einer Skizze als Punktfolge, Spline (smooth) oder Strecken und Bögen
+export function contour(pts: number[][], smooth?: boolean, closed = true): number[][] {
+  if (!smooth) return outline(pts, closed);
+  const out = pts.length ? [[pts[0][0], pts[0][1]]] : [];
+  for (const [p0, c1, c2, p3] of splineBeziers(pts, closed))
+    for (let k = 1; k <= 16; k++) {
+      const t = k / 16, s = 1 - t;
+      out.push([0, 1].map(j => s * s * s * p0[j] + 3 * s * s * t * c1[j] + 3 * s * t * t * c2[j] + t * t * t * p3[j]));
+    }
+  if (closed) out.pop();
+  return out;
+}
+
 // Richtung am Ende des Segments a→b (bei Bögen um den halben Bogenwinkel gedreht)
 export function endTangent(a: number[], b: number[], bulge = 0): number[] {
   const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), h = 2 * Math.atan(bulge);
@@ -80,10 +103,10 @@ export function tangentBulge(t: number[], a: number[], e: number[]) {
   return Math.tan(Math.atan2(t[0] * cy - t[1] * cx, t[0] * cx + t[1] * cy) / 2);
 }
 
-// Vieleck aus mindestens 3 Punkten (oder 2 mit Bogen) mit Fläche; sonst null
-export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: boolean): Extrude | null {
-  return pts.length >= 2 && Math.abs(area(outline(pts))) > 0.25
-    ? { id, d: 0, onFace, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts) } : null;
+// Vieleck bzw. Spline aus mindestens 3 Punkten (oder 2 mit Bogen) mit Fläche; sonst null
+export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: boolean, smooth = false): Extrude | null {
+  return pts.length >= 2 && Math.abs(area(contour(pts, smooth))) > 0.25
+    ? { id, d: 0, onFace, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts), ...smooth && { smooth } } : null;
 }
 
 // Neue Skizze im Abstand d um f herum (d < 0 = nach innen); null, wenn nichts übrig bleibt
@@ -92,6 +115,7 @@ export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null
   const p = f.p, base = { ...structuredClone(f), id, d: 0 };
   if (f.type === 'rect') return p.w + 2 * d < 0.5 || p.h + 2 * d < 0.5 ? null : { ...base, p: { x: p.x - d, y: p.y - d, w: p.w + 2 * d, h: p.h + 2 * d } };
   if (f.type === 'circle') return p.r + d < 0.5 ? null : { ...base, p: { ...p, r: p.r + d } };
+  if (f.smooth) return null; // shortcut: kein Versatz für Splines → Kern-Offset (replicad)
   const pts = f.pts!, n = pts.length, s = Math.sign(area(outline(pts)));
   const normal = (t: number[]) => [s * t[1], -s * t[0]];
   const out = pts.map((q, i) => {
@@ -114,13 +138,13 @@ function insideShape(f: Extrude, x: number, y: number, eps: number) {
   const p = f.p, pts = f.pts ?? [];
   return f.type === 'rect' ? x > p.x - eps && x < p.x + p.w + eps && y > p.y - eps && y < p.y + p.h + eps
     : f.type === 'circle' ? Math.hypot(x - p.cx, y - p.cy) < p.r + eps
-    : insidePoly(outline(pts), x, y) || pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
+    : insidePoly(contour(pts, f.smooth), x, y) || !f.smooth && pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
 }
 
 // Achsenparalleler Quader um die Skizze in Weltkoordinaten
 function bounds(f: Extrude) {
   const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - p.r, p.cx + p.r, p.cy + p.r];
-  const pts = f.type === 'poly' ? outline(f.pts!) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const pts = f.type === 'poly' ? contour(f.pts!, f.smooth) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   const w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]));
   return [0, 1, 2].map(k => [Math.min(...w.map(q => q[k])), Math.max(...w.map(q => q[k]))]);
 }
@@ -192,6 +216,7 @@ function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<nu
     if (Math.abs(nn) > 0.1 || z < Math.min(0, f.d) - eps || z > Math.max(0, f.d) + eps) continue;
     const nu = dot(N, f.u), nv = dot(N, f.v);
     if (f.type === 'poly') {
+      if (f.smooth) continue; // shortcut: Spline-Wände lassen sich nicht ziehen, nur Deckel/Boden → Punkte im Seitenfeld bzw. Skizze bearbeiten (M2)
       for (let i = 0; i < pts.length; i++) {
         const q = pts[i], b = pts[(i + 1) % pts.length];
         if (q[2]) { // Bogenwand: auf dem Kreis und auf der Bogenseite der Sehne
