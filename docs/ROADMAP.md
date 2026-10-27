@@ -24,6 +24,9 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Versatz: neue Skizze im Abstand um eine flache Skizze (Seitenfeld)
 - [x] Spline-Werkzeug (S): geschlossene glatte Kurve durch geklickte Punkte
 - [ ] Trimmen (vorerst durch die Bereiche überschneidender Skizzen abgedeckt)
+- [x] X/Y/Z-Achsen im Raum und Maßstab unten rechts (passt sich dem Zoom an)
+- [x] Einrasten an Punkten (Ecken, Mittelpunkte, Ursprung) und Linien (Kanten, Skizzenlinien); Shift schaltet ab
+- [ ] Einrasten erweitern: Mittelpunkte von Kanten, Schnittpunkte, waagrecht/senkrecht zu einem Punkt
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [x] Skizzen nachträglich bearbeiten: Punkte von Vieleck/Spline ziehen (auch nach dem Extrudieren)
 

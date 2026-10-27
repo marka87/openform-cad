@@ -137,6 +137,28 @@ export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
   return ok;
 }
 
+// Einrasten: nächster Punkt innerhalb tol (hat Vorrang), sonst nächster Punkt auf einer Strecke; sonst null
+export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: Vec; kind: 'point' | 'line' } | null {
+  const dist = (q: Vec) => Math.hypot(...sub(P, q));
+  let best: Vec | null = null, d = tol;
+  for (const q of points) if (dist(q) < d) { d = dist(q); best = q; }
+  if (best) return { p: best, kind: 'point' };
+  for (const [a, b] of segs) {
+    const ab = sub(b, a), l = dot(ab, ab);
+    if (!l) continue;
+    const t = Math.max(0, Math.min(1, dot(sub(P, a), ab) / l)), q = a.map((x, k) => x + t * ab[k]) as Vec;
+    if (dist(q) < d) { d = dist(q); best = q; }
+  }
+  return best && { p: best, kind: 'line' };
+}
+
+// Punkte einer Skizze zum Einrasten (Ecken bzw. Mittelpunkt), unten und oben
+export function keyPoints(f: Extrude): Vec[] {
+  const p = f.p, pts = f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]]
+    : f.type === 'circle' ? [[p.cx, p.cy]] : f.pts!;
+  return [0, f.d].flatMap(z => pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k] + z * f.n[k]) as Vec));
+}
+
 // Vorzeichenbehaftete Fläche (> 0 = gegen den Uhrzeigersinn)
 export function area(pts: number[][]) {
   return pts.reduce((s, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return s + x * y2 - x2 * y; }, 0) / 2;

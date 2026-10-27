@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, contour, endTangent, movePoint, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -179,4 +179,13 @@ test('Skizzenpunkt nachträglich verschieben', () => {
   const t = polyFeature(GROUND, [[0, 0], [10, 0], [0, 10]], 1, false)!;
   expect(movePoint(t, structuredClone(t), 2, [20, 0])).toBe(false);    // alles auf einer Linie → bleibt wie vorher
   expect(t.pts![2]).toEqual([0, 10]);
+});
+
+test('Einrasten: Punkte vor Linien, sonst nichts', () => {
+  const pts: [number, number, number][] = [[0, 0, 0], [10, 0, 0]], segs = [[[0, 0, 5], [10, 0, 5]]] as [number, number, number][][];
+  expect(snapTo([9.6, 0, 0.3], pts, segs, 1)).toEqual({ p: [10, 0, 0], kind: 'point' });
+  expect(snapTo([4, 0, 4.5], pts, segs, 1)).toEqual({ p: [4, 0, 5], kind: 'line' });
+  expect(snapTo([4, 0, 2], pts, segs, 1)).toBeNull();
+  const r = sketchFeature('rect', GROUND, [0, 0], [20, 10], 1, false)!;
+  expect(keyPoints({ ...r, d: 5 })).toContainEqual([20, 5, -10]);      // obere Ecke (Skizzen-y 10 = Welt −z)
 });

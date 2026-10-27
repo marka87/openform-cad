@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, contour, endTangent, movePoint, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'line' | 'spline';
@@ -30,6 +30,13 @@ const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Ke
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
 const handles = new THREE.Group(); scene.add(handles);     // Punkte der ausgewählten Skizze zum Ziehen
+// Achsen wie in der Exportdatei (Z oben): X rot, Y grün (Szene −Z), Z blau (Szene +Y); knapp über dem Raster
+for (const [d, c] of [[[1, 0, 0], 0xe05555], [[0, 0, -1], 0x55c060], [[0, 1, 0], 0x5588ee]] as const) {
+  const ends = [-200, 200].map(s => V(d).multiplyScalar(s).setY(d[1] ? s : 0.02));
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ends), new THREE.LineBasicMaterial({ color: c })));
+}
+const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+snapMark.visible = false; snapMark.renderOrder = 2; scene.add(snapMark);
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
 el.addEventListener('pointerdown', onDown);
@@ -240,8 +247,7 @@ function planeFor(h: Hit | null): Frame {
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
 let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean } | null = null;
 function polyPoint(e: PointerEvent) {
-  const p = poly && planeHit(poly.pl);
-  return p ? toLocal(poly!.pl, p).map(x => snap(x, e)) : null;
+  return poly && sketchPoint(poly.pl, e);
 }
 function showPoly(pts: number[][]) {
   disposeGroup(preview);
@@ -252,6 +258,35 @@ function showPoly(pts: number[][]) {
   start.position.copy(world[0]);
   preview.add(line, start);
 }
+// Punkt auf der Skizzenebene unter der Maus, eingerastet an Punkte und Linien auf dieser Ebene, sonst ans Raster
+function sketchPoint(pl: Frame, e: PointerEvent) {
+  const p = planeHit(pl);
+  if (!p) return null;
+  const s = !e.shiftKey && snapTo(p.toArray() as Vec, snapPoints(pl), snapSegs(pl), 8 * pxSize());
+  snapMark.visible = !!s;
+  if (!s) return toLocal(pl, p).map(x => snap(x, e));
+  snapMark.position.fromArray(s.p);
+  snapMark.scale.setScalar((s.kind === 'point' ? 5 : 3) * pxSize());
+  return toLocal(pl, V(s.p));
+}
+const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
+function snapPoints(pl: Frame): Vec[] {
+  return [[0, 0, 0] as Vec, ...features.filter(isExtrude).flatMap(keyPoints)].filter(q => onPlane(pl, q));
+}
+// Körperkanten und Linien flacher Skizzen
+function snapSegs(pl: Frame): Vec[][] {
+  const segs: Vec[][] = [];
+  const lines = (bodyGroup.children[0]?.children[0] as THREE.LineSegments | undefined)?.geometry.attributes.position.array;
+  for (let i = 0; lines && i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
+  for (const f of features) {
+    if (!isExtrude(f) || Math.abs(f.d) > 1e-6) continue;
+    const w = (f.type === 'poly' ? contour(f.pts!, f.smooth) : shapeOf(f).getPoints(32).map(v => [v.x, v.y]))
+      .map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]) as Vec);
+    w.forEach((q, i) => segs.push([q, w[(i + 1) % w.length]]));
+  }
+  return segs.filter(([a, b]) => onPlane(pl, a) && onPlane(pl, b));
+}
+
 // Bogen vom letzten Punkt nach q, tangential an das vorige Segment
 function arcPts(q: number[]) {
   const pts = poly!.pts, a = pts.at(-2)!, b = pts.at(-1)!;
@@ -282,9 +317,8 @@ function onDown(e: PointerEvent) {
     else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
   } else if (tool === 'rect' || tool === 'circle') {
     const pl = planeFor(h); // auf Boden oder Fläche skizzieren
-    const p = planeHit(pl);
-    if (!p) return;
-    const a = toLocal(pl, p).map(x => snap(x, e));
+    const a = sketchPoint(pl, e);
+    if (!a) return;
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
   } else if (hp) { // Punkt der ausgewählten Skizze
     const f = getSel() as Extrude;
@@ -308,6 +342,8 @@ el.addEventListener('pointermove', onMove);
 function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
+  snapMark.visible = false;
+  if (!drag && (tool === 'rect' || tool === 'circle')) sketchPoint(planeFor(pick().face), e); // Einrasten schon vor dem Klick zeigen
   if (poly && !drag) {
     const q = polyPoint(e);
     if (!q || !poly.pts.length) return;
@@ -331,9 +367,9 @@ function onMove(e: PointerEvent) {
     return showHud(e, `Bogen R ${(L / 2 / Math.abs(Math.sin(2 * Math.atan(b[2])) || 1e-9)).toFixed(1)} mm`);
   }
   if (drag.kind === 'sketch') {
-    const p = planeHit(drag.pl);
-    if (!p) return;
-    drag.b = toLocal(drag.pl, p).map(x => snap(x, e));
+    const b = sketchPoint(drag.pl, e);
+    if (!b) return;
+    drag.b = b;
     const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
     disposeGroup(preview);
     if (f) {
@@ -389,6 +425,7 @@ el.addEventListener('pointerup', e => {
     if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
     else if (q) poly.pts = arcPts(q);
   }
+  snapMark.visible = false;
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push' && drag.f.and && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f); // flacher Bereich bringt nichts
   drag = null;
@@ -507,7 +544,17 @@ function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = i
 addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => {
   controls.update(); renderer.render(scene, camera);
+  updateScale();
 });
 
 try { const s = localStorage.getItem('openform'); if (s) ({ features, nextId } = JSON.parse(s)); } catch {}
 refresh();
+
+// Maßstab: runde Länge (1, 2 oder 5 × 10ⁿ mm), die auf Höhe des Drehpunkts etwa 100 Pixel lang ist
+const scaleBar = $('scale');
+function updateScale() {
+  const mm = 100 * pxSize(), e = 10 ** Math.floor(Math.log10(mm)), nice = [5, 2, 1].find(k => k * e <= mm)! * e;
+  const label = nice >= 1 ? `${nice} mm` : `${+nice.toFixed(3)} mm`;
+  (scaleBar.firstElementChild as HTMLElement).style.width = `${nice / pxSize()}px`;
+  if (scaleBar.lastElementChild!.textContent !== label) scaleBar.lastElementChild!.textContent = label;
+}
