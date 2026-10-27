@@ -45,6 +45,23 @@ export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: 
   return r < 0.5 ? null : { ...base, type, p: { cx: ax, cy: ay, r } };
 }
 
+// Regelmäßiges n-Eck um Mittelpunkt a, erste Ecke in Richtung b
+export function ngonPts(a: number[], b: number[], n: number): number[][] {
+  const r = Math.hypot(b[0] - a[0], b[1] - a[1]), t0 = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  return Array.from({ length: n }, (_, i) => [a[0] + r * Math.cos(t0 + 2 * Math.PI * i / n), a[1] + r * Math.sin(t0 + 2 * Math.PI * i / n)]);
+}
+
+// Langloch im Rechteck a–b: halbrunde Enden an der kürzeren Seite (gegen den Uhrzeigersinn)
+export function slotPts(a: number[], b: number[]): number[][] {
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+  if (x1 - x0 >= y1 - y0) {
+    const r = (y1 - y0) / 2;
+    return [[x0 + r, y0], [x1 - r, y0, 1], [x1 - r, y1], [x0 + r, y1, 1]];
+  }
+  const r = (x1 - x0) / 2;
+  return [[x1, y0 + r], [x1, y1 - r, 1], [x0, y1 - r], [x0, y0 + r, 1]];
+}
+
 // Bogen von a nach b als Punktfolge (ohne a), für Vorschau, Darstellung und Innen-Test
 export function arcPoints(a: number[], b: number[], bulge: number, n = 24): number[][] {
   if (!bulge) return [[b[0], b[1]]];

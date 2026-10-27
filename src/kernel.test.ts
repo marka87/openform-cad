@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { alignTo, applyPush, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { alignTo, applyPush, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -205,4 +205,15 @@ test('Einrasten an Schnittpunkten, nicht an Stoßstellen', () => {
   expect(snapTo([5.5, 0, 4.6], [], cross, 1)).toEqual({ p: [5, 0, 5], kind: 'point' });
   const chain = [s([0, 0, 0], [5, 0, 0]), s([5, 0, 0], [10, 0, 1])];   // zwei Stücke einer Kurve
   expect(snapTo([5.2, 0, 0.3], [], chain, 1)?.kind).toBe('line');
+});
+
+test('n-Eck und Langloch', () => {
+  const six = ngonPts([0, 0], [10, 0], 6);
+  expect(six).toHaveLength(6);
+  expect(six[1][0]).toBeCloseTo(5); expect(six[1][1]).toBeCloseTo(8.660);
+  const slot = polyFeature(GROUND, slotPts([0, 0], [30, 10]), 1, false)!;
+  slot.d = 2;
+  expect(measureVolume(buildBody([slot]).body!)).toBeCloseTo((20 * 10 + Math.PI * 25) * 2, 0); // Rechteck + zwei Halbkreise
+  const tall = polyFeature(GROUND, slotPts([0, 0], [10, 30]), 1, false)!;
+  expect(Math.max(...contour(tall.pts!).map(p => p[1]))).toBeCloseTo(30);
 });

@@ -27,14 +27,16 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] X/Y/Z-Achsen im Raum und Maßstab unten rechts (passt sich dem Zoom an)
 - [x] Einrasten an Punkten, Kantenmitten, Schnittpunkten und Linien; waagrecht/senkrecht ausrichten; Shift schaltet ab
 - [x] Skizzen nachträglich bearbeiten: Punkte von Vieleck/Spline ziehen (auch nach dem Extrudieren)
-- [ ] Maße beim Zeichnen eintippen (Länge, Breite, Radius als Zahl statt Ziehen)
-- [ ] Weitere Formen: Ellipse, regelmäßiges Vieleck (n Ecken), Langloch, Bogen über 3 Punkte
+- [x] Maße beim Zeichnen eintippen (Rechteck „20x10“, Radius, Linienlänge)
+- [x] Weitere Formen: regelmäßiges Vieleck (n Ecken), Langloch
+- [ ] Ellipse, Bogen über 3 Punkte
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs (Länge, Abstand, Winkel, Radius; parallel, senkrecht, tangential, gleich, fest)
 - [ ] Abhängigkeiten beim Zeichnen automatisch setzen (aus dem Einrasten: waagrecht, auf Linie, im Punkt)
 - [ ] Skizzen spiegeln und als Muster (linear, kreisförmig) vervielfachen
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
 - [ ] Hilfsgeometrie (Konstruktionslinien, die keine Fläche bilden)
-- [ ] Skizzenebenen: auf beliebiger Fläche, versetzt, Raster beginnt am Ursprung der Ebene
+- [x] Raster auf Flächen beginnt am Lotpunkt des Ursprungs (nicht mehr am Klickpunkt)
+- [ ] Versetzte Skizzenebenen (Ebene im Abstand zu einer Fläche)
 
 ## M3 – Modellieren
 - [ ] Feature-Baum (Liste links): Schritte anzeigen, ändern, ausblenden, umsortieren, „bis hier“ zurückspulen

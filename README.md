@@ -21,6 +21,8 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 |---|---|
 | Auswählen / Fläche ziehen | `V`, Linksklick/-ziehen auf Körper |
 | Rechteck / Kreis skizzieren | `R` / `C`, auf Boden oder Fläche ziehen |
+| Vieleck (n-Eck) / Langloch | `N` (beim Ziehen `+`/`-` = Ecken) / `O` (Rechteck aufziehen) |
+| Maße eintippen | Beim Aufziehen oder Linienzeichnen Zahl tippen, `Enter`: Rechteck/Langloch `20x10`, Kreis/n-Eck Radius, Linie Länge in Mausrichtung |
 | Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
 | Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) |
 | Spline | `S`, Punkte klicken – die Kurve läuft glatt hindurch; Klick auf den ersten Punkt oder `Enter` schließt |

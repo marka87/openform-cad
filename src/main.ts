@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { alignTo, applyPush, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { alignTo, applyPush, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
-type Tool = 'select' | 'rect' | 'circle' | 'line' | 'spline';
+type Tool = 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
   select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = drehen · Rechts = verschieben',
-  rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
-  circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
-  line:   'Punkte klicken · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
+  rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · beim Ziehen „20x10“ tippen + Enter = genaues Maß',
+  circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
+  ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
+  slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
+  line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
 
@@ -245,11 +247,49 @@ function planeFor(h: Hit | null): Frame {
   if (!h) return GROUND;
   const n = h.n, helper = Math.abs(n.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
   const u = helper.clone().cross(n).normalize(), v = n.clone().cross(u);
-  return { o: h.point.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
+  const o = n.clone().multiplyScalar(n.dot(h.point)); // Lotpunkt des Ursprungs: Raster liegt wie auf dem Boden, nicht am Klickpunkt
+  return { o: o.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
+}
+
+// Skizze des aufgezogenen Werkzeugs zwischen a und b
+let sides = 6, typed = ''; // Ecken des n-Ecks; eingetippte Maße
+function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extrude | null {
+  if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonPts(a, b, sides), nextId, onFace);
+  if (tool === 'slot') return Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
+  return sketchFeature(tool as 'rect' | 'circle', pl, a, b, nextId, onFace);
+}
+function hudText(f: Extrude) {
+  return f.type === 'rect' ? `${f.p.w.toFixed(1)} × ${f.p.h.toFixed(1)} mm` : f.type === 'circle' ? `R ${f.p.r.toFixed(1)} mm`
+    : tool === 'ngon' ? `${sides}-Eck R ${Math.hypot(f.pts![0][0] - drag.a[0], f.pts![0][1] - drag.a[1]).toFixed(1)} mm` : 'Langloch';
+}
+function finishSketch(b?: number[]) {
+  if (b) drag.b = b;
+  disposeGroup(preview);
+  const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
+  if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
+}
+// Eingetippte Maße anwenden: Rechteck/Langloch „B x T“, Kreis/n-Eck Radius (Richtung der Maus), Linie Länge in Mausrichtung
+function applyTyped() {
+  const v = typed.split(/[x*; ]+/).map(Number).filter(n => isFinite(n) && n > 0);
+  typed = '';
+  hud.style.display = 'none';
+  if (!v.length) return;
+  if (drag?.kind === 'sketch') {
+    const { a, b } = drag, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    const end = tool === 'rect' || tool === 'slot' ? [a[0] + (Math.sign(dx) || 1) * v[0], a[1] + (Math.sign(dy) || 1) * (v[1] ?? v[0])]
+      : [a[0] + (l > 1e-6 && dx ? dx / l : 1) * v[0], a[1] + (dy / l) * v[0]];
+    finishSketch(end);
+    drag = null; controls.enabled = true; refresh();
+  } else if (poly?.pts.length && poly.hover) {
+    const last = poly.pts.at(-1)!, dx = poly.hover[0] - last[0], dy = poly.hover[1] - last[1], l = Math.hypot(dx, dy);
+    if (l < 1e-6) return;
+    poly.pts.push([last[0] + dx / l * v[0], last[1] + dy / l * v[0]]);
+    showPoly(poly.pts);
+  }
 }
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[] } | null = null;
 function polyPoint(e: PointerEvent) {
   return poly && sketchPoint(poly.pl, e);
 }
@@ -328,7 +368,7 @@ function onDown(e: PointerEvent) {
     drag = { kind: 'line', arc, sx: e.clientX, sy: e.clientY, started: false }; // drag hält auch die Kamera still
     if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
     else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
-  } else if (tool === 'rect' || tool === 'circle') {
+  } else if (tool === 'rect' || tool === 'circle' || tool === 'ngon' || tool === 'slot') {
     const pl = planeFor(h); // auf Boden oder Fläche skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
@@ -356,13 +396,14 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   hideSnap();
-  if (!drag && (tool === 'rect' || tool === 'circle')) sketchPoint(planeFor(pick().face), e); // Einrasten schon vor dem Klick zeigen
+  if (!drag && ['rect', 'circle', 'ngon', 'slot'].includes(tool)) sketchPoint(planeFor(pick().face), e); // Einrasten schon vor dem Klick zeigen
   if (poly && !drag) {
     const q = polyPoint(e);
     if (!q || !poly.pts.length) return;
     const last = poly.pts.at(-1)!;
+    poly.hover = q;
     showPoly([...poly.pts, q]);
-    return showHud(e, `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm`);
+    return showHud(e, typed ? `Länge: ${typed}` : `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm`);
   }
   if (!drag) {
     const h = tool === 'select' && pick();
@@ -383,11 +424,11 @@ function onMove(e: PointerEvent) {
     const b = sketchPoint(drag.pl, e);
     if (!b) return;
     drag.b = b;
-    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
+    const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
     disposeGroup(preview);
     if (f) {
       preview.add(buildMesh(f, 'preview'));
-      showHud(e, f.type === 'rect' ? `${f.p.w.toFixed(1)} × ${f.p.h.toFixed(1)} mm` : `R ${f.p.r.toFixed(1)} mm`);
+      showHud(e, typed ? `Maß: ${typed}` : hudText(f));
     }
   } else {
     if (!drag.started) {
@@ -428,11 +469,7 @@ el.addEventListener('pointerup', e => {
   if (!drag) return;
   onMove(e); // Endposition übernehmen
   hud.style.display = 'none';
-  if (drag.kind === 'sketch') {
-    disposeGroup(preview);
-    const f = sketchFeature(tool as Extrude['type'], drag.pl, drag.a, drag.b, nextId, drag.onFace);
-    if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
-  }
+  if (drag.kind === 'sketch') finishSketch();
   if (drag.kind === 'line' && drag.arc && drag.started && poly) {
     const q = polyPoint(e), first = poly.pts[0];
     if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
@@ -449,6 +486,7 @@ el.addEventListener('pointerup', e => {
 // ---------- UI ----------
 function setTool(t: Tool) {
   if (t !== tool) cancelPoly();
+  typed = '';
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   showHint(HINTS[t]);
@@ -541,16 +579,25 @@ $('bStep').onclick = () => send({ type: 'export', format: 'step' });
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  // Maße tippen, solange ein Rechteck/Kreis aufgezogen wird oder eine Linie entsteht
+  if ((drag?.kind === 'sketch' || poly?.pts.length) && !e.ctrlKey) {
+    if (/^[0-9.x ]$/.test(k) || k === ',' ) { typed += k === ',' ? '.' : k; hud.style.display = 'block'; hud.textContent = `Maß: ${typed}`; return; }
+    if (k === 'backspace' && typed) { typed = typed.slice(0, -1); hud.textContent = `Maß: ${typed}`; return; }
+    if (k === 'enter' && typed) return applyTyped();
+    if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
+  }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
   else if (k === 'v') setTool('select');
   else if (k === 'r') setTool('rect');
   else if (k === 'c') setTool('circle');
+  else if (k === 'n') setTool('ngon');
+  else if (k === 'o') setTool('slot');
   else if (k === 'l') setTool('line');
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { typed = ''; cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
