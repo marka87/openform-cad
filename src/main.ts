@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, contour, endTangent, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, contour, endTangent, movePoint, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Linksziehen ins Leere = drehen · Rechts = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
   line:   'Punkte klicken · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
@@ -29,6 +29,7 @@ const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
+const handles = new THREE.Group(); scene.add(handles);     // Punkte der ausgewählten Skizze zum Ziehen
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
 el.addEventListener('pointerdown', onDown);
@@ -151,6 +152,16 @@ function rebuild() {
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
   }
   group.updateMatrixWorld(true);
+  disposeGroup(handles);
+  const s = getSel();
+  if (s && isExtrude(s) && s.type === 'poly') s.pts!.forEach(([x, y], i) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(5 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0xffd2a8, depthTest: false }));
+    m.position.copy(V(s.o).addScaledVector(V(s.u), x).addScaledVector(V(s.v), y));
+    m.renderOrder = 1;
+    m.userData.i = i;
+    handles.add(m);
+  });
+  handles.updateMatrixWorld(true);
 }
 function refresh() { rebuild(); renderPanel(); save(); }
 
@@ -260,6 +271,7 @@ function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
   const { face: h, edge } = pick();
+  const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'line' || tool === 'spline') {
     if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h, smooth: tool === 'spline' };
     const q = polyPoint(e), last = poly.pts.at(-1);
@@ -274,6 +286,9 @@ function onDown(e: PointerEvent) {
     if (!p) return;
     const a = toLocal(pl, p).map(x => snap(x, e));
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+  } else if (hp) { // Punkt der ausgewählten Skizze
+    const f = getSel() as Extrude;
+    drag = { kind: 'point', f, f0: structuredClone(f), i: hp.object.userData.i, sx: e.clientX, sy: e.clientY, started: false };
   } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
     drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
@@ -343,6 +358,14 @@ function onMove(e: PointerEvent) {
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
+    }
+    if (drag.kind === 'point') {
+      const p = planeHit(drag.f);
+      if (!p) return;
+      const q = toLocal(drag.f, p).map(x => snap(x, e));
+      movePoint(drag.f, drag.f0, drag.i, q);
+      rebuild();
+      return showHud(e, `Punkt ${q[0].toFixed(1)} / ${q[1].toFixed(1)} mm`);
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;

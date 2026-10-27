@@ -128,6 +128,15 @@ export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null
   return g && Math.sign(area(outline(out))) === s ? g : null;
 }
 
+// Punkt i der Skizze nach q verschieben (Bogen bleibt erhalten); bliebe keine Fläche übrig, gilt wieder f0
+// shortcut: Selbstüberschneidungen werden nicht verhindert, der Kern meldet sie als fehlgeschlagenes Feature
+export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
+  const pts = f0.pts!.map((p, n) => n === i ? [q[0], q[1], ...p.slice(2)] : [...p]);
+  const ok = Math.abs(area(contour(pts, f.smooth))) > 0.25;
+  f.pts = ok ? pts : structuredClone(f0.pts!);
+  return ok;
+}
+
 // Vorzeichenbehaftete Fläche (> 0 = gegen den Uhrzeigersinn)
 export function area(pts: number[][]) {
   return pts.reduce((s, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return s + x * y2 - x2 * y; }, 0) / 2;

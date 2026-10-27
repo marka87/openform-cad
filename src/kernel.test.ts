@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, contour, endTangent, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, contour, endTangent, movePoint, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -168,4 +168,15 @@ test('Spline: geschlossene glatte Kurve durch die Punkte, im Kern als Bézier-St
   expect(v).toBeGreaterThan(200 * 5);                                  // mehr als die Raute
   expect(v).toBeLessThan(Math.PI * 100 * 5);                           // weniger als der Kreis
   expect(polyFeature(GROUND, [[0, 0], [10, 0]], 1, false, true)).toBeNull();
+});
+
+test('Skizzenpunkt nachträglich verschieben', () => {
+  const f = polyFeature(GROUND, [[0, 0, 0.5], [10, 0], [10, 10], [0, 10]], 1, false)!, f0 = structuredClone(f);
+  expect(movePoint(f, f0, 2, [15, 12])).toBe(true);
+  expect(f.pts).toEqual([[0, 0, 0.5], [10, 0], [15, 12], [0, 10]]);
+  expect(movePoint(f, f0, 0, [-2, -1])).toBe(true);                     // Bogen bleibt am Punkt
+  expect(f.pts![0]).toEqual([-2, -1, 0.5]);
+  const t = polyFeature(GROUND, [[0, 0], [10, 0], [0, 10]], 1, false)!;
+  expect(movePoint(t, structuredClone(t), 2, [20, 0])).toBe(false);    // alles auf einer Linie → bleibt wie vorher
+  expect(t.pts![2]).toEqual([0, 10]);
 });

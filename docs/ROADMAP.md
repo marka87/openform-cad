@@ -25,7 +25,7 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Spline-Werkzeug (S): geschlossene glatte Kurve durch geklickte Punkte
 - [ ] Trimmen (vorerst durch die Bereiche überschneidender Skizzen abgedeckt)
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
-- [ ] Skizzen nachträglich bearbeiten
+- [x] Skizzen nachträglich bearbeiten: Punkte von Vieleck/Spline ziehen (auch nach dem Extrudieren)
 
 ## M3 – Modellieren erweitert
 - [ ] Feature-Baum (Liste links), Features nachträglich ändern und umsortieren
