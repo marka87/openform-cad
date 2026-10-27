@@ -236,3 +236,15 @@ test('Ausgeschaltete Schritte werden übersprungen', () => {
   expect(buildBody([b, h]).body!.faces.length).toBe(6);                 // Bohrung aus → Quader
   expect(ownerOf([b, h], [10, 6, -5], [0, 1, 0])).toBeNull();            // Bohrungsboden gehört niemandem mehr
 });
+
+test('Drehkörper und Schale', () => {
+  // Rechteck x 5..10, Skizzen-y 0..20 auf dem Boden, um die y-Achse der Skizze (v) gedreht = Rohr
+  const ring = { ...sketchFeature('rect', GROUND, [5, 0], [10, 20], 1, false)!, rev: 360, axis: 'v' as const };
+  expect(measureVolume(buildBody([ring]).body!)).toBeCloseTo(Math.PI * (100 - 25) * 20, 0);
+  const half = { ...ring, rev: 180 };
+  expect(measureVolume(buildBody([half]).body!)).toBeCloseTo(Math.PI * (100 - 25) * 10, 0);
+  const b = box(); // 20 × 10 × 10, Deckel bei y = 10
+  const shelled = buildBody([b, { id: 9, type: 'shell', at: [5, 10, -5], t: 1 }]);
+  expect(shelled.failed).toEqual([]);
+  expect(measureVolume(shelled.body!)).toBeCloseTo(2000 - 18 * 9 * 8, 0);  // Wände nach innen, Deckel offen
+});

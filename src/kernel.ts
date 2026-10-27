@@ -1,13 +1,14 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawRectangle, importSTEP, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
-import { isCut, isExtrude, splineBeziers, type Extrude, type Feature, type Vec } from './model';
+import { isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
 
 export function solidOf(f: Extrude): Shape3D {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
     : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
     : polyDrawing(f.pts!, f.smooth);
-  let s = (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
+  const sk = drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch;
+  let s = (f.rev ? sk.revolve(f[f.axis ?? 'u'], { origin: f.o, angle: f.rev }) : sk.extrude(f.d)) as Shape3D;
   // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
   for (const c of [...f.and ?? [], ...f.not ?? []]) {
     const tool = solidOf({ ...c, o: c.o.map((x, i) => x - 1e4 * c.n[i]) as Vec, d: 2e4 });
@@ -40,6 +41,13 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   for (const f of features) {
     if (f.hidden) continue;
     try {
+      if (f.type === 'shell') {
+        if (!body) continue;
+        const next: Shape3D = body.shell(f.t, (q: any) => q.withinDistance(0.1, f.at)); // positive Dicke = Wand nach innen
+        body.delete();
+        body = next;
+        continue;
+      }
       if (f.type === 'fillet' || f.type === 'chamfer') {
         if (!body) continue;
         const pick = (e: EdgeFinder) => e.withinDistance(0.1, f.at);
@@ -54,7 +62,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!shape) throw new Error('STEP-Datei konnte nicht gelesen werden');
         s = shape.clone();
       } else {
-        if (!isExtrude(f) || Math.abs(f.d) < 1e-6 || (isCut(f) && !body)) continue;
+        if (!isExtrude(f) || isFlat(f) || (isCut(f) && !body)) continue;
         s = solidOf(f);
       }
       if (!body) { body = s; continue; }

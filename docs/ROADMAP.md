@@ -45,8 +45,10 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Mehrere Körper: neuer Körper statt Vereinigung, Körper benennen, ein-/ausblenden
 - [ ] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, schneiden
 - [ ] Körper verschieben, drehen, skalieren, kopieren (mit Griffen und Zahleneingabe)
-- [ ] Drehen (Revolve) einer Skizze um eine Achse
-- [ ] Schale (Wandstärke, Flächen öffnen)
+- [x] Drehen (Revolve) einer Skizze um ihre x- oder y-Achse, Winkel einstellbar
+- [ ] Drehkörper abziehen (Nut) und um beliebige Kante drehen
+- [x] Schale: Wandstärke, eine Fläche offen (Werkzeug H)
+- [ ] Schale mit mehreren offenen Flächen
 - [ ] Fläche versetzen (Offset Face) und Fläche löschen
 - [ ] Körper teilen (an Ebene oder Fläche)
 - [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
-type Tool = 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -12,6 +12,7 @@ const HINTS: Record<Tool, string> = {
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
   ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
+  shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
@@ -120,7 +121,7 @@ function bodyMesh(m: NonNullable<Extract<FromWorker, { type: 'built' }>['mesh']>
 }
 
 // Ausgewählte Rundung/Fase: Punkt auf der ursprünglichen Kante
-function edgeMarker(f: EdgeOp) {
+function edgeMarker(f: { at: Vec }) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 8), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
   m.position.fromArray(f.at);
   m.raycast = () => {};
@@ -161,7 +162,7 @@ function rebuild() {
   for (const f of features) {
     if (f.type === 'import' || f.hidden) continue;
     if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
-    else if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
+    else if (isFlat(f)) group.add(buildMesh(f, 'sketch'));
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
   }
   group.updateMatrixWorld(true);
@@ -182,7 +183,9 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 const tree = $('tree');
 function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
+  if (f.type === 'shell') return 'Schale';
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
+  if (f.rev) return 'Drehkörper';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
@@ -354,7 +357,7 @@ function snapSegs(pl: Frame): Vec[][] {
   const lines = (bodyGroup.children[0]?.children[0] as THREE.LineSegments | undefined)?.geometry.attributes.position.array;
   for (let i = 0; lines && i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
   for (const f of features) {
-    if (!isExtrude(f) || Math.abs(f.d) > 1e-6) continue;
+    if (!isExtrude(f) || !isFlat(f)) continue;
     const w = (f.type === 'poly' ? contour(f.pts!, f.smooth) : shapeOf(f).getPoints(32).map(v => [v.x, v.y]))
       .map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]) as Vec);
     w.forEach((q, i) => segs.push([q, w[(i + 1) % w.length]]));
@@ -395,6 +398,11 @@ function onDown(e: PointerEvent) {
     const a = sketchPoint(pl, e);
     if (!a) return;
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+  } else if (tool === 'shell') { // Körper aushöhlen, angeklickte Fläche bleibt offen
+    if (!h || h.grip?.f && isExtrude(h.grip.f) && isFlat(h.grip.f)) return;
+    const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1 };
+    pushHistory(); features.push(f); selId = f.id; setTool('select'); refresh();
+    return;
   } else if (hp) { // Punkt der ausgewählten Skizze
     const f = getSel() as Extrude;
     drag = { kind: 'point', f, f0: structuredClone(f), i: hp.object.userData.i, sx: e.clientX, sy: e.clientY, started: false };
@@ -521,15 +529,18 @@ function renderPanel() {
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   if (f.type === 'import') return renderImportPanel(f);
+  if (f.type === 'shell') return renderShellPanel(f);
   if (!isExtrude(f)) return renderEdgePanel(f);
   const fields = f.type === 'rect' ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
     : [['Höhe', 'd']];
+  if (f.rev) fields.splice(-1, 1, ['Winkel °', 'rev']);
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
   const name = nameOf(f);
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
-    (Math.abs(f.d) < 1e-6 && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
+    (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
+    (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
@@ -552,6 +563,15 @@ function renderPanel() {
   panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, ax) =>
     Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, [0, 0, 0], ax, 2 * Math.PI * (i + 1) / n)));
   panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, ax) => [mirroredCopy(f, nextId++, ax)]);
+  const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
+  if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
+    revAx.value = f.rev ? f.axis ?? 'u' : '';
+    revAx.onchange = () => {
+      pushHistory();
+      if (revAx.value) { f.axis = revAx.value as 'u' | 'v'; f.rev ||= 360; } else { delete f.rev; delete f.axis; }
+      refresh();
+    };
+  }
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);
@@ -564,7 +584,7 @@ function renderPanel() {
     pushHistory();
     const ks = inp.dataset.k!.split('.'), key = ks.at(-1)!;
     const obj: any = ks.length > 1 ? f.p : f;
-    obj[key] = ['w', 'h', 'r'].includes(key) ? Math.max(0.5, v) : v;
+    obj[key] = ['w', 'h', 'r'].includes(key) ? Math.max(0.5, v) : key === 'rev' ? Math.max(1, Math.min(360, v)) : v;
     refresh();
   });
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -587,6 +607,12 @@ function renderEdgePanel(f: EdgeOp) {
     if (!isFinite(v)) return;
     pushHistory(); f.r = Math.max(0.5, v); refresh();
   };
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
+function renderShellPanel(f: Shell) {
+  panel.innerHTML = `<h3>Schale #${f.id}</h3><label>Wandstärke <input type="number" step="0.5" min="0.1" value="${+f.t.toFixed(2)}"></label><button class="del">Löschen</button>`;
+  const inp = panel.querySelector('input')!;
+  inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function deleteSel() {
@@ -636,6 +662,7 @@ addEventListener('keydown', e => {
   else if (k === 'c') setTool('circle');
   else if (k === 'n') setTool('ngon');
   else if (k === 'o') setTool('slot');
+  else if (k === 'h') setTool('shell');
   else if (k === 'l') setTool('line');
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();

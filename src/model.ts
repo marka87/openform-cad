@@ -11,6 +11,8 @@ export interface Extrude extends Frame {
   onFace?: boolean;          // auf einer Körperfläche skizziert
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
+  rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
+  axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
@@ -20,8 +22,12 @@ export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: 
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
 export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean }
-export type Feature = Extrude | EdgeOp | Import;
+// Schale: Körper aushöhlen (Wandstärke t), die Fläche durch at wird geöffnet
+export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?: boolean }
+export type Feature = Extrude | EdgeOp | Import | Shell;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
+// Flache Skizze: weder extrudiert noch gedreht
+export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | 'arc';
 // i = Segment des Vielecks bei 'seg' und 'arc'
@@ -271,7 +277,7 @@ function bounds(f: Extrude) {
 // shortcut: Überschneidung nur über umschließende Quader geprüft, Nachbarn ohne echte Überschneidung kosten eine Boolesche Operation
 export function regionFeature(features: Feature[], f: Extrude, P: ArrayLike<number>, id: number): Extrude | null {
   const b = bounds(f);
-  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && Math.abs(g.d) < 1e-6
+  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && isFlat(g)
     && Math.abs(dot(f.n, g.n)) > 0.999 && Math.abs(dot(sub(g.o, f.o), f.n)) < 1e-6
     && bounds(g).every(([lo, hi], k) => lo < b[k][1] + 1e-6 && b[k][0] < hi + 1e-6));
   if (!near.length) return null;

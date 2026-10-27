@@ -22,6 +22,9 @@
     border-radius:14px; padding:12px; display:none; }
   #panel h3 { margin:0 0 10px; font-size:13px; }
   #panel label { display:flex; justify-content:space-between; align-items:center; margin:6px 0; color:var(--muted); }
+  #panel select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:3px; font:inherit; max-width:120px; }
+  #panel details { margin:8px 0; color:var(--muted); }
+  #panel details button { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:5px; cursor:pointer; font:inherit; }
   #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
   #panel .del { margin-top:10px; width:100%; background:#4a2a2a; color:#ffb4b4; border:0; border-radius:8px; padding:7px; cursor:pointer; }
   #tree { position:fixed; right:12px; bottom:48px; width:220px; max-height:35vh; overflow:auto; background:var(--panel);
@@ -34,7 +37,7 @@
   #tree .row span { flex:1; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
   #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; }
+    border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 500px); }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
   #scale div { height:6px; border:2px solid var(--muted); border-top:none; margin-bottom:3px; }
   #hud { position:fixed; pointer-events:none; background:var(--accent); color:#1e2126; font-weight:600; border-radius:6px;
@@ -50,6 +53,7 @@
   <button data-tool="slot">Langloch <kbd>O</kbd></button>
   <button data-tool="line">Linie <kbd>L</kbd></button>
   <button data-tool="spline">Spline <kbd>S</kbd></button>
+  <button data-tool="shell">Schale <kbd>H</kbd></button>
 </div>
 <div id="top">
   <button id="bNew">Neu</button>
