@@ -13,6 +13,7 @@ export interface Extrude extends Frame {
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
+  sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
@@ -39,7 +40,7 @@ const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] *
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 // In eine Fläche hineingedrückt = Schnitt (Bohrung, Tasche), sonst Vereinigung
-export const isCut = (f: Feature) => isExtrude(f) && !!f.onFace && f.d < 0;
+export const isCut = (f: Feature) => isExtrude(f) && (f.rev ? !!f.sub : !!f.onFace && f.d < 0);
 
 export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: number[], id: number, onFace: boolean): Extrude | null {
   const [ax, ay] = a, [bx, by] = b, base = { id, d: 0, onFace, ...structuredClone(pl) };

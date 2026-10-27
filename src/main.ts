@@ -191,7 +191,7 @@ function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
-  if (f.rev) return 'Drehkörper';
+  if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
@@ -556,6 +556,7 @@ function renderPanel() {
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
+    (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
@@ -587,6 +588,8 @@ function renderPanel() {
       refresh();
     };
   }
+  const sub = panel.querySelector<HTMLInputElement>('.sub');
+  if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; refresh(); };
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);

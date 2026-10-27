@@ -248,3 +248,11 @@ test('Drehkörper und Schale', () => {
   expect(shelled.failed).toEqual([]);
   expect(measureVolume(shelled.body!)).toBeCloseTo(2000 - 18 * 9 * 8, 0);  // Wände nach innen, Deckel offen
 });
+
+test('Drehkörper als Nut abziehen', () => {
+  const b = box(); // 20 × 10 × 10
+  const groove = { ...sketchFeature('rect', GROUND, [0, 0], [20, 1], 2, false)!, rev: 360, axis: 'u' as const, sub: true }; // dünner Ring um die x-Achse
+  const v = measureVolume(buildBody([b, groove]).body!);
+  expect(v).toBeLessThan(2000);
+  expect(v).toBeGreaterThan(1900);
+});

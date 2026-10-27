@@ -39,7 +39,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |
 | Feature-Baum | Liste „Schritte“ rechts unten: anklicken = auswählen, `↑` = früher ausführen, `●`/`○` = ein-/ausschalten |
-| Drehkörper | Flache Skizze anklicken → Seitenfeld „Drehen um“ x- oder y-Achse der Skizze; Winkel im Seitenfeld |
+| Drehkörper / Nut | Flache Skizze anklicken → Seitenfeld „Drehen um“ x- oder y-Achse der Skizze; Winkel und „Abziehen (Nut)“ im Seitenfeld |
 | Schale | `H`, Fläche des Körpers anklicken, die offen bleiben soll; Wandstärke im Seitenfeld |
 | Werkzeugsuche | `Strg+K`, tippen, `Enter` |
 | Ansichten | Kasten unten links oder Tasten `0` Iso, `1` Vorne, `2` Oben, `3` Rechts, `F` Einpassen |
