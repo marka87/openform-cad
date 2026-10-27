@@ -42,9 +42,11 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Feature-Baum (Liste „Schritte“): anzeigen, auswählen/ändern, ein-/ausschalten, umsortieren
 - [ ] Feature-Baum: „bis hier“ zurückspulen, Schritte umbenennen, Ziehen statt ↑
 - [ ] Skizzen hängen an ihrer Fläche: wird die Fläche verschoben, wandert die Bohrung mit
-- [ ] Mehrere Körper: neuer Körper statt Vereinigung, Körper benennen, ein-/ausblenden
-- [ ] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, schneiden
-- [ ] Körper verschieben, drehen, skalieren, kopieren (mit Griffen und Zahleneingabe)
+- [x] Mehrere Körper: Skizze auf dem Boden = neuer Körper, auf einer Fläche = dessen Körper; Körperliste
+- [ ] Körper benennen, ein-/ausblenden, kopieren, Körper eines Features nachträglich ändern
+- [x] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, Schnittmenge
+- [x] Körper verschieben und drehen (Griffe mit 1 mm/15° Raster oder Zahleneingabe)
+- [ ] Körper skalieren
 - [x] Drehen (Revolve) einer Skizze um ihre x- oder y-Achse, Winkel einstellbar
 - [x] Drehkörper abziehen (Nut, Häkchen im Seitenfeld)
 - [ ] Um beliebige Kante drehen

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
-import type { FromWorker, ToWorker } from './kernel.worker';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
@@ -107,7 +108,7 @@ function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline') {
   return mesh;
 }
 
-function bodyMesh(m: NonNullable<Extract<FromWorker, { type: 'built' }>['mesh']>) {
+function bodyMesh(m: BodyMesh) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(m.vertices, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3));
@@ -119,6 +120,7 @@ function bodyMesh(m: NonNullable<Extract<FromWorker, { type: 'built' }>['mesh']>
   const eg = new THREE.BufferGeometry();
   eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
   mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }))); // Kanten sind anklickbar
+  mesh.userData.body = m.body;
   return mesh;
 }
 
@@ -149,10 +151,13 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   else if (data.type === 'error') $('hint').textContent = 'CAD-Kern konnte nicht geladen werden: ' + data.message;
   else if (data.type === 'built') {
     disposeGroup(bodyGroup);
-    if (data.mesh) bodyGroup.add(bodyMesh(data.mesh));
+    for (const m of data.meshes) bodyGroup.add(bodyMesh(m));
     bodyGroup.updateMatrixWorld(true);
+    bodyIds = data.meshes.map(m => m.body);
+    if (selBody !== null && !bodyIds.includes(selBody)) { selBody = null; renderPanel(); }
+    if (gizmo.object) attachGizmo(gizmo.mode as 'translate' | 'rotate'); // Griffe an die neue Lage setzen
     applyDisplay();
-    bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area! / 100).toFixed(1)} cm²` : '';
+    bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area / 100).toFixed(1)} cm²` : '';
     renderTree();
     showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
     busy = false;
@@ -164,16 +169,21 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
 function rebuild() {
   requestBuild();
   disposeGroup(group);
-  for (const f of features) {
-    if (f.type === 'import' || f.hidden) continue;
-    if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
-    else if (isFlat(f)) group.add(buildMesh(f, 'sketch'));
-    else if (f.id === selId) group.add(buildMesh(f, 'outline'));
-  }
+  features.forEach((f, i) => {
+    if (f.type === 'import' || f.hidden) return;
+    const M = moveMatrix(movesAfter(features, i));
+    const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
+      : isFlat(f) ? buildMesh(f, 'sketch') : f.id === selId ? buildMesh(f, 'outline') : null;
+    if (!o) return;
+    if (o.matrixAutoUpdate) o.updateMatrix();
+    o.matrixAutoUpdate = false;
+    o.matrix.premultiply(M);
+    group.add(o);
+  });
   group.updateMatrixWorld(true);
   disposeGroup(handles);
   const s = getSel();
-  if (s && isExtrude(s) && s.type === 'poly') s.pts!.forEach(([x, y], i) => {
+  if (s && isExtrude(s) && s.type === 'poly' && !movesAfter(features, features.indexOf(s)).length) s.pts!.forEach(([x, y], i) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(5 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0xffd2a8, depthTest: false }));
     m.position.copy(V(s.o).addScaledVector(V(s.u), x).addScaledVector(V(s.v), y));
     m.renderOrder = 1;
@@ -182,29 +192,48 @@ function rebuild() {
   });
   handles.updateMatrixWorld(true);
 }
+// Bewegungen als Matrix: x' = R(q)·(x − c) + c + t, in Reihenfolge
+function moveMatrix(moves: Move[]) {
+  const M = new THREE.Matrix4();
+  for (const m of moves) {
+    const c = V(m.c);
+    M.premultiply(new THREE.Matrix4().makeTranslation(c.clone().negate()))
+      .premultiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().fromArray(m.q)))
+      .premultiply(new THREE.Matrix4().makeTranslation(c.add(V(m.t))));
+  }
+  return M;
+}
 function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');
-let bodyInfo = ''; // Volumen und Oberfläche des Körpers, vom Kern gemeldet
+let bodyInfo = ''; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
+let bodyIds: number[] = [], selBody: number | null = null; // vorhandene Körper (vom Kern) und der ausgewählte
 function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
+  if (f.type === 'move') return `Körper #${f.body} bewegen`;
+  if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
 function renderTree() {
-  tree.innerHTML = `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
+  tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
+    `<div class="row${b === selBody ? ' on' : ''}" data-b="${b}"><span>Körper #${b}</span></div>`).join('') : '') +
+    `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
     `<div class="row${f.id === selId ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
     `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
-  tree.querySelectorAll<HTMLElement>('.row').forEach(row => row.onclick = ev => {
+  tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => row.onclick = () => {
+    selBody = +row.dataset.b!; selId = null; detachGizmo(); refresh();
+  });
+  tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => row.onclick = ev => {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
     else if (a === 'up') { if (!i) return; pushHistory(); [features[i - 1], features[i]] = [features[i], features[i - 1]]; }
-    else selId = f.id;
+    else { selId = f.id; selBody = null; detachGizmo(); }
     refresh();
   });
 }
@@ -218,8 +247,8 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null };
-type EdgeHit = { at: Vec; dir: Vec };
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number };
+type EdgeHit = { at: Vec; dir: Vec; body?: number };
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
@@ -231,13 +260,14 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
     const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : ownerOf(features, fh.point.toArray(), n.toArray());
-    face = { point: fh.point.clone(), n, grip };
+    const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
+    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body };
   }
   if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
     const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
     const a = new THREE.Vector3().fromBufferAttribute(pos, eh.index!), b = new THREE.Vector3().fromBufferAttribute(pos, eh.index! + 1);
     const at = new THREE.Line3(a, b).closestPointToPoint(eh.point, true, new THREE.Vector3()); // genau auf die Kante legen
-    edge = { at: at.toArray() as Vec, dir: b.sub(a).normalize().toArray() as Vec };
+    edge = { at: at.toArray() as Vec, dir: b.sub(a).normalize().toArray() as Vec, body: eh.object.parent?.userData.body };
   }
   return { face, edge };
 }
@@ -258,15 +288,15 @@ function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; h
 
 // Richtung von der Kante ins Freie: Summe der Normalen der beiden angrenzenden Flächen (stimmt auch an Innenecken)
 function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
-  const mesh = bodyGroup.children[0] as THREE.Mesh | undefined;
-  if (!mesh) return null;
-  const pos = mesh.geometry.attributes.position as THREE.BufferAttribute, idx = mesh.geometry.index!;
   const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3(), normals: THREE.Vector3[] = [];
-  for (let i = 0; i < idx.count && normals.length < 2; i += 3) {
-    tri.setFromAttributeAndIndices(pos, idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
-    if (tri.closestPointToPoint(at, q).distanceTo(at) > 0.05) continue;
-    tri.getNormal(n);
-    if (!normals.some(m => m.dot(n) > 0.99)) normals.push(n.clone());
+  for (const mesh of bodyGroup.children as THREE.Mesh[]) {
+    const pos = mesh.geometry.attributes.position as THREE.BufferAttribute, idx = mesh.geometry.index!;
+    for (let i = 0; i < idx.count && normals.length < 2; i += 3) {
+      tri.setFromAttributeAndIndices(pos, idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+      if (tri.closestPointToPoint(at, q).distanceTo(at) > 0.05) continue;
+      tri.getNormal(n);
+      if (!normals.some(m => m.dot(n) > 0.99)) normals.push(n.clone());
+    }
   }
   return normals.length === 2 ? normals[0].add(normals[1]).normalize() : null;
 }
@@ -297,7 +327,7 @@ function finishSketch(b?: number[]) {
   if (b) drag.b = b;
   disposeGroup(preview);
   const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
-  if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
+  if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
 }
 // Eingetippte Maße anwenden: Rechteck/Langloch „B x T“, Kreis/n-Eck Radius (Richtung der Maus), Linie Länge in Mausrichtung
 function applyTyped() {
@@ -320,7 +350,7 @@ function applyTyped() {
 }
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[] } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number } | null = null;
 function polyPoint(e: PointerEvent) {
   return poly && sketchPoint(poly.pl, e);
 }
@@ -360,8 +390,10 @@ function snapPoints(pl: Frame): Vec[] {
 // Körperkanten und Linien flacher Skizzen
 function snapSegs(pl: Frame | null): Vec[][] {
   const segs: Vec[][] = [];
-  const lines = (bodyGroup.children[0]?.children[0] as THREE.LineSegments | undefined)?.geometry.attributes.position.array;
-  for (let i = 0; lines && i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
+  for (const mesh of bodyGroup.children) {
+    const lines = (mesh.children[0] as THREE.LineSegments).geometry.attributes.position.array;
+    for (let i = 0; i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
+  }
   for (const f of features) {
     if (!isExtrude(f) || !isFlat(f)) continue;
     const w = (f.type === 'poly' ? contour(f.pts!, f.smooth) : shapeOf(f).getPoints(32).map(v => [v.x, v.y]))
@@ -380,6 +412,7 @@ function arcPts(q: number[]) {
 const nearPt = (q: number[] | null, p?: number[]) => !!q && !!p && Math.hypot(q[0] - p[0], q[1] - p[1]) < 8 * pxSize();
 function finishPoly() {
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
+  if (f) f.body = poly!.body ?? f.id;
   cancelPoly();
   if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); refresh(); }
 }
@@ -389,10 +422,12 @@ function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 
 function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
+  if (gizmo.object) (gizmo as any).pointerHover({ x: ndc.x, y: ndc.y, button: 0 }); // Treffer auch ohne vorherige Mausbewegung
+  if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'line' || tool === 'spline') {
-    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h, smooth: tool === 'spline' };
+    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h, smooth: tool === 'spline', body: h?.body };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -403,7 +438,7 @@ function onDown(e: PointerEvent) {
     const pl = planeFor(h); // auf Boden oder Fläche skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: !!h, body: h?.body };
   } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
     const P = edge ? V(edge.at) : h?.point;
     if (!P) return;
@@ -415,7 +450,7 @@ function onDown(e: PointerEvent) {
     return;
   } else if (tool === 'shell') { // Körper aushöhlen, angeklickte Fläche bleibt offen
     if (!h || h.grip?.f && isExtrude(h.grip.f) && isFlat(h.grip.f)) return;
-    const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1 };
+    const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1, body: h.body };
     pushHistory(); features.push(f); selId = f.id; setTool('select'); refresh();
     return;
   } else if (hp) { // Punkt der ausgewählten Skizze
@@ -424,9 +459,9 @@ function onDown(e: PointerEvent) {
   } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
     drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
-    if (!h?.grip) { if (selId !== null) { selId = null; refresh(); } return; } // Leere: Orbit
+    if (!h?.grip) { if (selId !== null || selBody !== null) { selId = selBody = null; detachGizmo(); refresh(); } return; } // Leere: Orbit
     const g = h.grip;
-    selId = g.f.id; refresh();
+    selId = g.f.id; selBody = null; detachGizmo(); refresh();
     if (g.part === 'import') return; // importierte Körper nur auswählen
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
@@ -487,7 +522,7 @@ function onMove(e: PointerEvent) {
         // Erste Bewegung entscheidet: vom Körper weg = Rundung, in den Körper hinein = Fase
         const out = edgeOutward(drag.P0), a = drag.P0.clone().project(camera), b = out && drag.P0.clone().add(out).project(camera);
         const inward = b && (b.x - a.x) * (e.clientX - drag.sx) - (b.y - a.y) * (e.clientY - drag.sy) < 0;
-        drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1 } satisfies EdgeOp;
+        drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         features.push(drag.f); selId = drag.f.id;
       }
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));
@@ -541,8 +576,13 @@ document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.o
 const panel = $('panel');
 function renderPanel() {
   const f = getSel();
+  if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
+  if (f.type === 'move' || f.type === 'combine') {
+    panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   if (f.type === 'import') return renderImportPanel(f);
   if (f.type === 'shell') return renderShellPanel(f);
   if (!isExtrude(f)) return renderEdgePanel(f);
@@ -656,7 +696,7 @@ fileIn.onchange = async () => {
   const text = await file.text();
   pushHistory();
   if (!/\.(step|stp)$/i.test(file.name)) return restore(text);
-  const f: Import = { id: nextId++, type: 'import', name: file.name, step: text };
+  const f: Import = { id: nextId, type: 'import', name: file.name, step: text, body: nextId++ };
   features.push(f); selId = f.id; refresh();
 };
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
@@ -688,8 +728,59 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { typed = ''; cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { typed = ''; selBody = null; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
+
+// ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------
+const gizmo = new TransformControls(camera, el), pivot = new THREE.Object3D(), gizmoStart = new THREE.Vector3();
+scene.add(pivot, gizmo.getHelper());
+gizmo.setTranslationSnap(1); gizmo.setRotationSnap(Math.PI / 12); // 1 mm bzw. 15°
+gizmo.addEventListener('dragging-changed', e => { controls.enabled = !e.value; if (!e.value) commitGizmo(); });
+const bodyMeshOf = (b: number) => bodyGroup.children.find(m => m.userData.body === b);
+function attachGizmo(mode: 'translate' | 'rotate') {
+  const m = selBody !== null && bodyMeshOf(selBody);
+  if (!m) return detachGizmo();
+  new THREE.Box3().setFromObject(m).getCenter(gizmoStart);
+  pivot.position.copy(gizmoStart); pivot.quaternion.identity();
+  gizmo.setMode(mode); gizmo.attach(pivot);
+}
+function detachGizmo() { gizmo.detach(); }
+function addMove(q: THREE.Quaternion, t: THREE.Vector3) {
+  if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9) return;
+  pushHistory();
+  features.push({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec });
+  refresh();
+}
+function commitGizmo() { addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart)); }
+function renderBodyPanel(b: number) {
+  const others = bodyIds.filter(o => o !== b);
+  panel.innerHTML = `<h3>Körper #${b}</h3>
+    <button class="gT">Verschieben (Griffe)</button><button class="gR">Drehen (Griffe)</button>
+    <details><summary>Genau verschieben / drehen</summary>
+      <label>ΔX <input type="number" step="0.5" value="0" class="dx"></label><label>ΔY <input type="number" step="0.5" value="0" class="dy"></label>
+      <label>ΔZ <input type="number" step="0.5" value="0" class="dz"></label><button class="mv">Verschieben</button>
+      <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
+      <label>Winkel ° <input type="number" step="5" value="90" class="ang"></label><button class="rt">Drehen um Mitte</button>
+    </details>` +
+    (others.length ? `<label>mit <select class="other">${others.map(o => `<option value="${o}">Körper #${o}</option>`).join('')}</select></label>
+    <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '');
+  panel.querySelectorAll<HTMLButtonElement>('button').forEach(x => x.classList.add('act'));
+  const q = <T extends HTMLElement>(c: string) => panel.querySelector<T>(c)!;
+  q<HTMLButtonElement>('.gT').onclick = () => attachGizmo('translate');
+  q<HTMLButtonElement>('.gR').onclick = () => attachGizmo('rotate');
+  const num = (c: string) => parseFloat(q<HTMLInputElement>(c).value) || 0;
+  // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
+  q<HTMLButtonElement>('.mv').onclick = () => { attachGizmo('translate'); addMove(new THREE.Quaternion(), new THREE.Vector3(num('.dx'), num('.dz'), -num('.dy'))); };
+  q<HTMLButtonElement>('.rt').onclick = () => {
+    attachGizmo('rotate');
+    const ax = V({ X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }[q<HTMLSelectElement>('.ax').value]!);
+    addMove(new THREE.Quaternion().setFromAxisAngle(ax, num('.ang') * Math.PI / 180), new THREE.Vector3());
+  };
+  panel.querySelectorAll<HTMLButtonElement>('.op').forEach(x => x.onclick = () => { // b nimmt den anderen Körper auf
+    const f: Combine = { id: nextId++, type: 'combine', op: x.dataset.op as Combine['op'], a: b, b: +q<HTMLSelectElement>('.other').value };
+    pushHistory(); features.push(f); detachGizmo(); refresh();
+  });
+}
 
 // ---------- Messen ----------
 let measure: THREE.Vector3[] = [];
@@ -729,19 +820,19 @@ let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
 function applyDisplay() {
   localStorage.setItem('openform-view', JSON.stringify(display));
-  const mesh = bodyGroup.children[0] as THREE.Mesh | undefined;
   if (display.render && !envMap) envMap = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = display.render ? envMap : null;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   grid.visible = fine.visible = !display.render;
   renderer.localClippingEnabled = !!display.section;
-  if (mesh && display.section) { // Schnittebene durch die Mitte des Körpers; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
-    const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
+  if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
+    const c = new THREE.Box3().setFromObject(bodyGroup).getCenter(new THREE.Vector3()), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
     cut.setFromNormalAndCoplanarPoint(n, c);
   }
-  if (mesh) {
+  for (const mesh of bodyGroup.children as THREE.Mesh[]) {
     const m = mesh.material as THREE.MeshStandardMaterial, lines = mesh.children[0] as THREE.LineSegments;
     m.color.set(display.color);
+    m.emissive.set(mesh.userData.body === selBody ? 0x5a2a00 : 0x000000);
     m.wireframe = display.wire;
     m.transparent = display.glass; m.opacity = display.glass ? 0.35 : 1; m.depthWrite = !display.glass;
     m.metalness = display.render ? 0.35 : 0.1; m.roughness = display.render ? 0.35 : 0.6;

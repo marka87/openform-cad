@@ -10,13 +10,14 @@ export type ToWorker =
   | { type: 'export'; format: 'step' | 'stl' };
 export type FromWorker =
   | { type: 'ready' }
-  | { type: 'built'; failed: number[]; volume?: number; area?: number; mesh: { vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array } | null }
+  | { type: 'built'; failed: number[]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl'; blob: Blob | null }
   | { type: 'error'; message: string };
 
+export type BodyMesh = { body: number; vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array };
 const post = (m: FromWorker, transfer: Transferable[] = []) => postMessage(m, { transfer });
 const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
-let body: Shape3D | null = null;
+let body: Shape3D | null = null, bodies = new Map<number, Shape3D>();
 const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit sie nicht bei jedem Ziehen neu geparst werden
 
 const ready = opencascade({ locateFile: () => wasmUrl }).then(oc => { setOC(oc); post({ type: 'ready' }); },
@@ -30,16 +31,18 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
       try { imports.set(f.id, await loadStep(f.step)); } catch (e) { console.warn('STEP-Import fehlgeschlagen', e); }
     }
     for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
-    body?.delete();
+    if (body && bodies.size > 1) body.delete(); // Verbund; ein einzelner Körper wird unten mit gelöscht
+    for (const s of bodies.values()) s.delete();
     const r = buildBody(data.features, imports);
-    body = r.body;
-    if (!body) return post({ type: 'built', failed: r.failed, mesh: null });
-    const m = body.mesh(MESH);
-    const mesh = {
-      vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
-      triangles: new Uint32Array(m.triangles), lines: new Float32Array(body.meshEdges(MESH).lines),
-    };
-    post({ type: 'built', failed: r.failed, volume: measureVolume(body), area: measureArea(body), mesh }, [mesh.vertices.buffer, mesh.normals.buffer, mesh.triangles.buffer, mesh.lines.buffer]);
+    body = r.body; bodies = r.bodies;
+    const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
+      const m = s.mesh(MESH);
+      return { body: id, vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
+        triangles: new Uint32Array(m.triangles), lines: new Float32Array(s.meshEdges(MESH).lines) };
+    });
+    let volume = 0, area = 0;
+    for (const s of bodies.values()) { volume += measureVolume(s); area += measureArea(s); }
+    post({ type: 'built', failed: r.failed, volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer]));
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
     const s = forExport(body);

@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { alignTo, applyPush, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -255,4 +255,29 @@ test('Drehkörper als Nut abziehen', () => {
   const v = measureVolume(buildBody([b, groove]).body!);
   expect(v).toBeLessThan(2000);
   expect(v).toBeGreaterThan(1900);
+});
+
+test('Mehrere Körper: getrennt, verrechnen, bewegen', () => {
+  const a = { ...box(), body: 1 };                                                   // 20 × 10 × 10 bei x 0..20
+  const b = { ...sketchFeature('rect', GROUND, [10, 0], [30, 10], 2, false)!, d: 10, body: 2 }; // überlappt a bei x 10..20
+  const two = buildBody([a, b]);
+  expect([...two.bodies.keys()]).toEqual([1, 2]);
+  expect(measureVolume(two.body!)).toBeCloseTo(4000, 0);                               // Verbund: beide ganz
+  const cut = buildBody([a, b, { id: 3, type: 'combine', op: 'cut', a: 1, b: 2 }]);
+  expect([...cut.bodies.keys()]).toEqual([1]);
+  expect(measureVolume(cut.body!)).toBeCloseTo(1000, 0);                               // a ohne Überlappung
+  const common = buildBody([a, b, { id: 3, type: 'combine', op: 'common', a: 1, b: 2 }]);
+  expect(measureVolume(common.body!)).toBeCloseTo(1000, 0);
+  // Körper 2 um 50 mm in x verschieben und 90° um die Hochachse (Szene y) drehen
+  const q = [0, Math.sin(Math.PI / 4), 0, Math.cos(Math.PI / 4)];
+  const moved = buildBody([a, b, { id: 4, type: 'move', body: 2, c: [20, 5, -5], q, t: [50, 0, 0] }]);
+  const [lo, hi] = moved.bodies.get(2)!.boundingBox.bounds;
+  expect(lo[0]).toBeCloseTo(65); expect(hi[0]).toBeCloseTo(75); expect(lo[2]).toBeCloseTo(-15); expect(hi[2]).toBeCloseTo(5);
+  expect(qrot(q, [1, 0, 0])[2]).toBeCloseTo(-1);
+  // Deckel des bewegten Körpers gehört weiter zu b (Punkt zurückgerechnet)
+  const fs = [a, b, { id: 4, type: 'move' as const, body: 2, c: [20, 5, -5] as [number, number, number], q, t: [50, 0, 0] as [number, number, number] }];
+  expect(ownerOf(fs, [70, 10, 0], [0, 1, 0])).toMatchObject({ f: b, part: 'end' });
+  // Vereinigung leitet spätere Bewegungen weiter: Feature von Körper 2 wandert mit Körper 1
+  const fs2 = [a, b, { id: 3, type: 'combine' as const, op: 'fuse' as const, a: 1, b: 2 }, { ...fs[2], body: 1 }];
+  expect(ownerOf(fs2, [70, 10, 0], [0, 1, 0])?.f).toBe(b);
 });

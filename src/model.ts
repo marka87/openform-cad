@@ -11,6 +11,7 @@ export interface Extrude extends Frame {
   onFace?: boolean;          // auf einer Körperfläche skizziert
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
+  body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
@@ -19,13 +20,18 @@ export interface Extrude extends Frame {
 }
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
-export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; hidden?: boolean }
+export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; hidden?: boolean; body?: number }
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
-export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean }
+export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean; body?: number }
 // Schale: Körper aushöhlen (Wandstärke t), die Fläche durch at wird geöffnet
-export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?: boolean }
-export type Feature = Extrude | EdgeOp | Import | Shell;
+export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?: boolean; body?: number }
+// Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
+export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
+// Körper bewegen: x' = R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w]
+export interface Move { id: number; type: 'move'; body: number; c: Vec; q: number[]; t: Vec; hidden?: boolean }
+export type Feature = Extrude | EdgeOp | Import | Shell | Combine | Move;
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Flache Skizze: weder extrudiert noch gedreht
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
@@ -311,6 +317,37 @@ export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<
 }
 
 // shortcut: Flächen ohne Besitzer gehören zum zuletzt importierten Körper; bei mehreren Importen ungenau → Flächen-IDs aus dem Kern
+// Vektor mit Quaternion q drehen (inv = Gegendrehung)
+export function qrot(q: number[], v: ArrayLike<number>, inv = false): Vec {
+  const [x, y, z] = inv ? [-q[0], -q[1], -q[2]] : q, w = q[3];
+  const c1 = [y * v[2] - z * v[1], z * v[0] - x * v[2], x * v[1] - y * v[0]];
+  const c2 = [y * c1[2] - z * c1[1], z * c1[0] - x * c1[2], x * c1[1] - y * c1[0]];
+  return [0, 1, 2].map(i => v[i] + 2 * w * c1[i] + 2 * c2[i]) as Vec;
+}
+
+// Bewegungen, die nach Feature i seinen Körper noch verschieben (in Reihenfolge); Vereinigungen leiten weiter
+export function movesAfter(features: Feature[], i: number): Move[] {
+  const f = features[i], moves: Move[] = [];
+  if (f.type === 'combine' || f.type === 'move') return moves;
+  let b = bodyOf(f);
+  for (const g of features.slice(i + 1)) {
+    if (g.hidden) continue;
+    if (g.type === 'combine' && g.b === b) b = g.a;
+    else if (g.type === 'move' && g.body === b) moves.push(g);
+  }
+  return moves;
+}
+
+// Punkt und Normale zurück in die Lage, in der Feature i entstanden ist
+function toOriginal(features: Feature[], i: number, P: ArrayLike<number>, N: ArrayLike<number>): [Vec, Vec] {
+  let p = [P[0], P[1], P[2]] as Vec, n = [N[0], N[1], N[2]] as Vec;
+  for (const m of movesAfter(features, i).reverse()) {
+    p = qrot(m.q, [0, 1, 2].map(k => p[k] - m.c[k] - m.t[k]), true).map((x, k) => x + m.c[k]) as Vec;
+    n = qrot(m.q, n, true);
+  }
+  return [p, n];
+}
+
 function importOwner(features: Feature[]): Grip | null {
   const f = [...features].reverse().find(f => f.type === 'import');
   return f?.type === 'import' ? { f, part: 'import', k: 0 } : null;
@@ -320,17 +357,18 @@ function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number): Grip
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
     if (f.type !== 'fillet' && f.type !== 'chamfer') continue;
-    const q = sub(P, f.at), along = dot(q, f.dir);
+    const q = sub(toOriginal(features, i, P, P)[0], f.at), along = dot(q, f.dir);
     const toLine = Math.sqrt(Math.max(0, dot(q, q) - along * along));
     if (Math.min(toLine, Math.hypot(...q)) < f.r * 1.5 + eps) return { f, part: 'edge', k: 0 };
   }
   return null;
 }
 
-function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps: number): Grip | null {
+function extrudeOwner(features: Feature[], P0: ArrayLike<number>, N0: ArrayLike<number>, eps: number): Grip | null {
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
     if (!isExtrude(f) || Math.abs(f.d) < 1e-6) continue;
+    const [P, N] = toOriginal(features, i, P0, N0);
     const q = sub(P, f.o), x = dot(q, f.u), y = dot(q, f.v), z = dot(q, f.n);
     const nn = dot(N, f.n), p = f.p, pts = f.pts ?? [];
     if (Math.abs(nn) > 0.9 && insideShape(f, x, y, eps)) {
