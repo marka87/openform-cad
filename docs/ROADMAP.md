@@ -20,7 +20,7 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Linien-Werkzeug: Vieleck Punkt für Punkt, Seitenflächen parallel verschiebbar
 - [x] Bogen: im Linien-Werkzeug vom letzten Punkt aus ziehen = tangentialer Bogen
 - [x] Bogenflächen ziehen (Radius ändern, Endpunkte bleiben)
-- [ ] Geschlossene Bereiche automatisch erkennen (sich überschneidende Skizzen)
+- [x] Überschneidende Skizzen zerfallen in Bereiche; Ziehen nimmt nur den angeklickten Bereich
 - [ ] Spline, Versatz, Trimmen
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [ ] Skizzen nachträglich bearbeiten

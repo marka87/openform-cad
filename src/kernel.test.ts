@@ -1,8 +1,8 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
-import { setOC } from 'replicad';
+import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, endTangent, GROUND, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, endTangent, GROUND, outline, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -127,4 +127,19 @@ test('Bogenwand anfassen und ziehen ändert den Radius, Endpunkte bleiben', () =
 
   applyPush(D, D0, 'arc', g!.k, -10, 2);                               // nicht unter die Sehne
   expect(D.pts![2][2]).toBeGreaterThan(0);
+});
+
+test('Überschneidende Skizzen zerfallen in Bereiche', () => {
+  const rect = sketchFeature('rect', GROUND, [0, 0], [20, 20], 1, false)!, circ = sketchFeature('circle', GROUND, [20, 10], [30, 10], 2, false)!;
+  const half = Math.PI * 100 / 2, fs = [rect, circ];
+  const vol = (f: Extrude, P: number[]) => {
+    const r = regionFeature(fs, f, P, 3)!;
+    r.d = 5;
+    return measureVolume(buildBody([r]).body!);
+  };
+  expect(vol(rect, [5, 0, -10])).toBeCloseTo((400 - half) * 5, 0);   // nur Rechteck
+  expect(vol(rect, [15, 0, -10])).toBeCloseTo(half * 5, 0);          // Schnittmenge
+  expect(vol(circ, [25, 0, -10])).toBeCloseTo(half * 5, 0);          // nur Kreis
+  const far = sketchFeature('rect', GROUND, [50, 50], [60, 60], 4, false)!;
+  expect(regionFeature([rect, far], rect, [5, 0, -10], 5)).toBeNull(); // keine Überschneidung → Skizze selbst ziehen
 });

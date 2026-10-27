@@ -9,6 +9,8 @@ export interface Extrude extends Frame {
                              // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
+  and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
+  not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
@@ -89,6 +91,35 @@ export function area(pts: number[][]) {
   return pts.reduce((s, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return s + x * y2 - x2 * y; }, 0) / 2;
 }
 
+// Punkt (x, y) in Skizzenkoordinaten innerhalb der Form (eps = Toleranz am Rand)
+function insideShape(f: Extrude, x: number, y: number, eps: number) {
+  const p = f.p, pts = f.pts ?? [];
+  return f.type === 'rect' ? x > p.x - eps && x < p.x + p.w + eps && y > p.y - eps && y < p.y + p.h + eps
+    : f.type === 'circle' ? Math.hypot(x - p.cx, y - p.cy) < p.r + eps
+    : insidePoly(outline(pts), x, y) || pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
+}
+
+// Achsenparalleler Quader um die Skizze in Weltkoordinaten
+function bounds(f: Extrude) {
+  const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - p.r, p.cx + p.r, p.cy + p.r];
+  const pts = f.type === 'poly' ? outline(f.pts!) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]));
+  return [0, 1, 2].map(k => [Math.min(...w.map(q => q[k])), Math.max(...w.map(q => q[k]))]);
+}
+
+// Wird eine flache Skizze f an P gezogen und überschneidet sie andere flache Skizzen derselben Ebene,
+// entsteht ein eigener Bereich: in f und allen Nachbarn, die P enthalten, aber in keinem anderen. Sonst null.
+// shortcut: Überschneidung nur über umschließende Quader geprüft, Nachbarn ohne echte Überschneidung kosten eine Boolesche Operation
+export function regionFeature(features: Feature[], f: Extrude, P: ArrayLike<number>, id: number): Extrude | null {
+  const b = bounds(f);
+  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && Math.abs(g.d) < 1e-6
+    && Math.abs(dot(f.n, g.n)) > 0.999 && Math.abs(dot(sub(g.o, f.o), f.n)) < 1e-6
+    && bounds(g).every(([lo, hi], k) => lo < b[k][1] + 1e-6 && b[k][0] < hi + 1e-6));
+  if (!near.length) return null;
+  const has = (g: Extrude) => { const q = sub(P, g.o); return insideShape(g, dot(q, g.u), dot(q, g.v), 0); };
+  return { ...structuredClone(f), id, and: structuredClone(near.filter(has)), not: structuredClone(near.filter(g => !has(g))) };
+}
+
 function insidePoly(pts: number[][], x: number, y: number) {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -134,12 +165,8 @@ function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<nu
     const f = features[i];
     if (!isExtrude(f) || Math.abs(f.d) < 1e-6) continue;
     const q = sub(P, f.o), x = dot(q, f.u), y = dot(q, f.v), z = dot(q, f.n);
-    const nn = dot(N, f.n), p = f.p;
-    const pts = f.pts ?? [];
-    const inside = f.type === 'rect' ? x > p.x - eps && x < p.x + p.w + eps && y > p.y - eps && y < p.y + p.h + eps
-      : f.type === 'circle' ? Math.hypot(x - p.cx, y - p.cy) < p.r + eps
-      : insidePoly(outline(pts), x, y) || pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
-    if (Math.abs(nn) > 0.9 && inside) {
+    const nn = dot(N, f.n), p = f.p, pts = f.pts ?? [];
+    if (Math.abs(nn) > 0.9 && insideShape(f, x, y, eps)) {
       if (Math.abs(z - f.d) < eps) return { f, part: 'end', k: Math.sign(nn) };
       if (Math.abs(z) < eps) return { f, part: 'start', k: Math.sign(nn) };
       continue;

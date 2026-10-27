@@ -1,13 +1,21 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawRectangle, importSTEP, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
-import { isCut, isExtrude, type Extrude, type Feature } from './model';
+import { isCut, isExtrude, type Extrude, type Feature, type Vec } from './model';
 
 export function solidOf(f: Extrude): Shape3D {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
     : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
     : polyDrawing(f.pts!);
-  return (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
+  let s = (drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch).extrude(f.d) as Shape3D;
+  // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
+  for (const c of [...f.and ?? [], ...f.not ?? []]) {
+    const tool = solidOf({ ...c, o: c.o.map((x, i) => x - 1e4 * c.n[i]) as Vec, d: 2e4 });
+    const next = f.and?.includes(c) ? s.intersect(tool) : s.cut(tool);
+    s.delete(); tool.delete();
+    s = next;
+  }
+  return s;
 }
 
 function polyDrawing(pts: number[][]) {
