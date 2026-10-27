@@ -152,10 +152,25 @@ export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: 
   return best && { p: best, kind: 'line' };
 }
 
-// Punkte einer Skizze zum Einrasten (Ecken bzw. Mittelpunkt), unten und oben
+// Ausrichten in Skizzenkoordinaten: x bzw. y wird dem nächsten Punkt gleich, der innerhalb tol liegt
+// ax/ay = Bezugspunkt der senkrechten bzw. waagrechten Hilfslinie (oder null)
+export function alignTo(q: number[], pts: number[][], tol: number) {
+  let ax: number[] | null = null, ay: number[] | null = null;
+  for (const p of pts) {
+    if (Math.abs(p[0] - q[0]) < Math.min(tol, ax ? Math.abs(ax[0] - q[0]) : tol)) ax = p;
+    if (Math.abs(p[1] - q[1]) < Math.min(tol, ay ? Math.abs(ay[1] - q[1]) : tol)) ay = p;
+  }
+  return { ax, ay };
+}
+
+// Punkte einer Skizze zum Einrasten (Ecken, Mitten gerader Seiten bzw. Kreismittelpunkt), unten und oben
 export function keyPoints(f: Extrude): Vec[] {
-  const p = f.p, pts = f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]]
-    : f.type === 'circle' ? [[p.cx, p.cy]] : f.pts!;
+  const p = f.p, corners = f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]] : f.pts ?? [];
+  const mids = f.smooth ? [] : corners.flatMap((a, i) => {
+    const b = corners[(i + 1) % corners.length];
+    return a[2] ? [] : [[(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]];
+  });
+  const pts = f.type === 'circle' ? [[p.cx, p.cy]] : [...corners, ...mids];
   return [0, f.d].flatMap(z => pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k] + z * f.n[k]) as Vec));
 }
 

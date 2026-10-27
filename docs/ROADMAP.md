@@ -26,7 +26,8 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [ ] Trimmen (vorerst durch die Bereiche überschneidender Skizzen abgedeckt)
 - [x] X/Y/Z-Achsen im Raum und Maßstab unten rechts (passt sich dem Zoom an)
 - [x] Einrasten an Punkten (Ecken, Mittelpunkte, Ursprung) und Linien (Kanten, Skizzenlinien); Shift schaltet ab
-- [ ] Einrasten erweitern: Mittelpunkte von Kanten, Schnittpunkte, waagrecht/senkrecht zu einem Punkt
+- [x] Einrasten an Kantenmitten; waagrecht/senkrecht zu Punkten ausrichten (orange Hilfslinie)
+- [ ] Einrasten an Schnittpunkten von Linien
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [x] Skizzen nachträglich bearbeiten: Punkte von Vieleck/Spline ziehen (auch nach dem Extrudieren)
 

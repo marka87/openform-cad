@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { alignTo, applyPush, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'line' | 'spline';
@@ -37,6 +37,10 @@ for (const [d, c] of [[[1, 0, 0], 0xe05555], [[0, 0, -1], 0x55c060], [[0, 1, 0],
 }
 const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
 snapMark.visible = false; snapMark.renderOrder = 2; scene.add(snapMark);
+// Hilfslinien beim Ausrichten: vom Bezugspunkt zum Mauszeiger
+const guides = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.6, depthTest: false }));
+guides.frustumCulled = false; scene.add(guides);
+const hideSnap = () => { snapMark.visible = false; guides.visible = false; };
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
 el.addEventListener('pointerdown', onDown);
@@ -262,16 +266,25 @@ function showPoly(pts: number[][]) {
 function sketchPoint(pl: Frame, e: PointerEvent) {
   const p = planeHit(pl);
   if (!p) return null;
-  const s = !e.shiftKey && snapTo(p.toArray() as Vec, snapPoints(pl), snapSegs(pl), 8 * pxSize());
+  const pts = snapPoints(pl), s = !e.shiftKey && snapTo(p.toArray() as Vec, pts, snapSegs(pl), 8 * pxSize());
   snapMark.visible = !!s;
-  if (!s) return toLocal(pl, p).map(x => snap(x, e));
+  if (!s) { // waagrecht/senkrecht zu einem Punkt ausrichten, sonst Raster
+    const raw = toLocal(pl, p), loc = pts.map(q => toLocal(pl, V(q)));
+    const { ax, ay } = e.shiftKey ? { ax: null, ay: null } : alignTo(raw, loc, 8 * pxSize());
+    const q = [ax ? ax[0] : snap(raw[0], e), ay ? ay[1] : snap(raw[1], e)];
+    const world = (r: number[]) => V(pl.o).addScaledVector(V(pl.u), r[0]).addScaledVector(V(pl.v), r[1]);
+    guides.geometry.setFromPoints([ax, ay].filter(a => a).flatMap(a => [world(a!), world(q)]));
+    guides.visible = !!(ax || ay);
+    return q;
+  }
   snapMark.position.fromArray(s.p);
   snapMark.scale.setScalar((s.kind === 'point' ? 5 : 3) * pxSize());
   return toLocal(pl, V(s.p));
 }
 const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
 function snapPoints(pl: Frame): Vec[] {
-  return [[0, 0, 0] as Vec, ...features.filter(isExtrude).flatMap(keyPoints)].filter(q => onPlane(pl, q));
+  const own = poly ? keyPoints({ ...poly.pl, id: 0, type: 'poly', p: {}, pts: poly.pts, d: 0 }) : []; // Punkte der Linie, die gerade entsteht
+  return [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(keyPoints)].filter(q => onPlane(pl, q));
 }
 // Körperkanten und Linien flacher Skizzen
 function snapSegs(pl: Frame): Vec[][] {
@@ -342,7 +355,7 @@ el.addEventListener('pointermove', onMove);
 function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
-  snapMark.visible = false;
+  hideSnap();
   if (!drag && (tool === 'rect' || tool === 'circle')) sketchPoint(planeFor(pick().face), e); // Einrasten schon vor dem Klick zeigen
   if (poly && !drag) {
     const q = polyPoint(e);
@@ -425,7 +438,7 @@ el.addEventListener('pointerup', e => {
     if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
     else if (q) poly.pts = arcPts(q);
   }
-  snapMark.visible = false;
+  hideSnap();
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push' && drag.f.and && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f); // flacher Bereich bringt nichts
   drag = null;

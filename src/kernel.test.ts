@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { alignTo, applyPush, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -188,4 +188,13 @@ test('Einrasten: Punkte vor Linien, sonst nichts', () => {
   expect(snapTo([4, 0, 2], pts, segs, 1)).toBeNull();
   const r = sketchFeature('rect', GROUND, [0, 0], [20, 10], 1, false)!;
   expect(keyPoints({ ...r, d: 5 })).toContainEqual([20, 5, -10]);      // obere Ecke (Skizzen-y 10 = Welt −z)
+});
+
+test('Kantenmitten und Ausrichten an Punkten', () => {
+  const r = sketchFeature('rect', GROUND, [0, 0], [20, 10], 1, false)!;
+  expect(keyPoints(r)).toContainEqual([10, 0, 0]);                     // Mitte der unteren Seite
+  const arc = polyFeature(GROUND, [[0, 0, 1], [20, 0], [20, -10]], 1, false)!;
+  expect(keyPoints(arc)).not.toContainEqual([10, 0, 0]);               // keine Mitte auf der Sehne eines Bogens
+  expect(alignTo([5.2, 7.9], [[5, 0], [5.3, 3], [30, 8]], 1)).toEqual({ ax: [5.3, 3], ay: [30, 8] });
+  expect(alignTo([12, 12], [[5, 0]], 1)).toEqual({ ax: null, ay: null });
 });
