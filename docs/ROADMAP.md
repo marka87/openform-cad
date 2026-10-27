@@ -32,7 +32,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Ellipse, Bogen über 3 Punkte
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs (Länge, Abstand, Winkel, Radius; parallel, senkrecht, tangential, gleich, fest)
 - [ ] Abhängigkeiten beim Zeichnen automatisch setzen (aus dem Einrasten: waagrecht, auf Linie, im Punkt)
-- [ ] Skizzen spiegeln und als Muster (linear, kreisförmig) vervielfachen
+- [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
 - [ ] Hilfsgeometrie (Konstruktionslinien, die keine Fläche bilden)
 - [x] Raster auf Flächen beginnt am Lotpunkt des Ursprungs (nicht mehr am Klickpunkt)
@@ -48,7 +48,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Schale (Wandstärke, Flächen öffnen)
 - [ ] Fläche versetzen (Offset Face) und Fläche löschen
 - [ ] Körper teilen (an Ebene oder Fläche)
-- [ ] Spiegeln und Muster (linear, kreisförmig) für Körper und Features
+- [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung
+- [ ] Muster und Spiegeln an beliebiger Kante/Fläche, inklusive Rundungen
 - [ ] Sweep (Profil entlang Pfad) und Loft (Übergang zwischen Profilen)
 - [ ] Rundung/Fase an mehreren Kanten auf einmal, variable Rundung
 - [ ] Gewinde- und Bohrungsvorlagen (Senkung, Gewindebohrung als Maß)

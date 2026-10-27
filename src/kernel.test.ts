@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { alignTo, applyPush, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -216,4 +216,17 @@ test('n-Eck und Langloch', () => {
   expect(measureVolume(buildBody([slot]).body!)).toBeCloseTo((20 * 10 + Math.PI * 25) * 2, 0); // Rechteck + zwei Halbkreise
   const tall = polyFeature(GROUND, slotPts([0, 0], [10, 30]), 1, false)!;
   expect(Math.max(...contour(tall.pts!).map(p => p[1]))).toBeCloseTo(30);
+});
+
+test('Muster und Spiegeln', () => {
+  const box = { ...sketchFeature('rect', GROUND, [10, 0], [20, 5], 1, false)!, d: 3 }; // x 10..20, z 0..-5, y 0..3
+  const bb = (f: Extrude) => buildBody([f]).body!.boundingBox.bounds.map(p => p.map(x => +x.toFixed(6) || 0));
+  expect(bb(movedCopy(box, 2, [0, 0, -20]))).toEqual([[10, 0, -25], [20, 3, -20]]);           // Reihe entlang Y (Szene −Z)
+  expect(bb(movedCopy(box, 2, [0, 0, 0], [0, 1, 0], Math.PI))).toEqual([[-20, 0, 0], [-10, 3, 5]]); // halbe Drehung um Z
+  expect(bb(mirroredCopy(box, 2, [1, 0, 0]))).toEqual([[-20, 0, -5], [-10, 3, 0]]);           // an YZ-Ebene gespiegelt
+  const arc = { ...polyFeature(GROUND, [[10, 0, 0.4], [20, 0], [20, 8], [10, 8]], 1, false)!, d: 2 };
+  const m = mirroredCopy(arc, 2, [0, 0, 1]);                                                  // an XY-Ebene (z → −z)
+  expect(measureVolume(buildBody([m]).body!)).toBeCloseTo(measureVolume(buildBody([arc]).body!), 3);
+  const [lo, hi] = buildBody([arc]).body!.boundingBox.bounds, [mlo, mhi] = buildBody([m]).body!.boundingBox.bounds;
+  expect(mlo[2]).toBeCloseTo(-hi[2]); expect(mhi[2]).toBeCloseTo(-lo[2]);
 });

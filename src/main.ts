@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { alignTo, applyPush, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
@@ -508,7 +508,28 @@ function renderPanel() {
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     (Math.abs(f.d) < 1e-6 && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
+    `<details><summary>Muster / Spiegeln</summary>
+      <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
+      <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
+      <label>Abstand <input class="dist" type="number" step="0.5" value="20"></label>
+      <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
+    </details>` +
     `<button class="del">Löschen</button>`;
+  // Muster und Spiegeln im Raum; Achsen wie in der Exportdatei (Z oben = Szene +Y), Kreis und Spiegelebene durch den Ursprung
+  // shortcut: nur durch den Ursprung und nur das ausgewählte Feature (ohne Rundungen) → Bezug auf Kante/Fläche (M3)
+  const AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] };
+  const num = (c: string) => parseFloat(panel.querySelector<HTMLInputElement>(c)!.value);
+  const addCopies = (make: (i: number, ax: Vec) => Extrude[]) => {
+    const ax = AXES[panel.querySelector<HTMLSelectElement>('.ax')!.value];
+    pushHistory();
+    const cs = make(Math.max(2, Math.round(num('.cnt')) || 2), ax);
+    features.push(...cs); selId = cs.at(-1)!.id; refresh();
+  };
+  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, ax) =>
+    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, ax.map(x => x * num('.dist') * (i + 1)) as Vec)));
+  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, ax) =>
+    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, [0, 0, 0], ax, 2 * Math.PI * (i + 1) / n)));
+  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, ax) => [mirroredCopy(f, nextId++, ax)]);
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);

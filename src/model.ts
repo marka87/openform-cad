@@ -212,6 +212,38 @@ export function keyPoints(f: Extrude): Vec[] {
   return [0, f.d].flatMap(z => pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k] + z * f.n[k]) as Vec));
 }
 
+// Kopie von f, verschoben um t und gedreht um die Achse ax (Einheitsvektor) durch c um angle (Bogenmaß)
+export function movedCopy(f: Extrude, id: number, t: Vec, ax: Vec = [0, 1, 0], angle = 0, c: Vec = [0, 0, 0]): Extrude {
+  const cs = Math.cos(angle), sn = Math.sin(angle);
+  const rot = (d: Vec): Vec => { // Rodrigues
+    const k = dot(ax, d), x = [ax[1] * d[2] - ax[2] * d[1], ax[2] * d[0] - ax[0] * d[2], ax[0] * d[1] - ax[1] * d[0]];
+    return [0, 1, 2].map(i => d[i] * cs + x[i] * sn + ax[i] * k * (1 - cs)) as Vec;
+  };
+  const move = (g: Extrude): Extrude => ({
+    ...structuredClone(g), o: rot(sub(g.o, c)).map((x, i) => x + c[i] + t[i]) as Vec, u: rot(g.u), v: rot(g.v), n: rot(g.n),
+    ...g.and && { and: g.and.map(move) }, ...g.not && { not: g.not.map(move) },
+  });
+  return { ...move(f), id };
+}
+
+// Spiegelbild von f an der Ebene durch c mit Normale m. Spiegeln dreht die Händigkeit um: v' = n' × u' = −R·v,
+// deshalb wird die Form in Skizzenkoordinaten an der x-Achse gespiegelt (y → −y, Bögen kehren ihre Richtung)
+export function mirroredCopy(f: Extrude, id: number, m: Vec, c: Vec = [0, 0, 0]): Extrude {
+  const R = (d: Vec): Vec => { const k = 2 * dot(d, m); return [0, 1, 2].map(i => d[i] - k * m[i]) as Vec; };
+  const flip = (g: Extrude): Extrude => {
+    const p = g.p, h = structuredClone(g);
+    h.o = R(sub(g.o, c)).map((x, i) => x + c[i]) as Vec;
+    h.u = R(g.u); h.n = R(g.n); h.v = R(g.v).map(x => -x) as Vec;
+    if (g.type === 'rect') h.p = { ...p, y: -(p.y + p.h) };
+    else if (g.type === 'circle') h.p = { ...p, cy: -p.cy };
+    else h.pts = g.pts!.map(q => q[2] ? [q[0], -q[1], -q[2]] : [q[0], -q[1]]);
+    if (g.and) h.and = g.and.map(flip);
+    if (g.not) h.not = g.not.map(flip);
+    return h;
+  };
+  return { ...flip(f), id };
+}
+
 // Vorzeichenbehaftete Fläche (> 0 = gegen den Uhrzeigersinn)
 export function area(pts: number[][]) {
   return pts.reduce((s, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return s + x * y2 - x2 * y; }, 0) / 2;
