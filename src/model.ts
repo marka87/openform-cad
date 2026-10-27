@@ -19,8 +19,8 @@ export interface Import { id: number; type: 'import'; name: string; step: string
 export type Feature = Extrude | EdgeOp | Import;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
-export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg';
-// i = Kante des Vielecks bei 'seg'
+export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | 'arc';
+// i = Segment des Vielecks bei 'seg' und 'arc'
 export type Grip = { f: Extrude; part: Part; k: number; i?: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 };
 
 export const GROUND: Frame = { o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
@@ -45,10 +45,16 @@ export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: 
 // Bogen von a nach b als Punktfolge (ohne a), für Vorschau, Darstellung und Innen-Test
 export function arcPoints(a: number[], b: number[], bulge: number, n = 24): number[][] {
   if (!bulge) return [[b[0], b[1]]];
+  const { cx, cy, r, th } = arcInfo(a, b, bulge), a0 = Math.atan2(a[1] - cy, a[0] - cx);
+  return Array.from({ length: n }, (_, i) => { const t = a0 + th * (i + 1) / n; return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; });
+}
+
+// Kreis eines Bogens: Mitte, Radius, Winkel th, Sehnenlänge L, Pfeilhöhe s und Richtung (wx, wy) von der Sehne zum Bogen
+function arcInfo(a: number[], b: number[], bulge: number) {
   const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), th = 4 * Math.atan(bulge);
   const off = L / 2 / Math.tan(th / 2), cx = (a[0] + b[0]) / 2 - dy / L * off, cy = (a[1] + b[1]) / 2 + dx / L * off;
-  const r = Math.hypot(a[0] - cx, a[1] - cy), a0 = Math.atan2(a[1] - cy, a[0] - cx);
-  return Array.from({ length: n }, (_, i) => { const t = a0 + th * (i + 1) / n; return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; });
+  const sg = Math.sign(bulge);
+  return { cx, cy, r: Math.hypot(a[0] - cx, a[1] - cy), th, L, s: Math.abs(bulge) * L / 2, wx: sg * dy / L, wy: -sg * dx / L };
 }
 
 // Umriss mit aufgelösten Bögen; closed = auch das Segment vom letzten zum ersten Punkt
@@ -142,7 +148,13 @@ function extrudeOwner(features: Feature[], P: ArrayLike<number>, N: ArrayLike<nu
     const nu = dot(N, f.u), nv = dot(N, f.v);
     if (f.type === 'poly') {
       for (let i = 0; i < pts.length; i++) {
-        if (pts[i][2]) continue; // shortcut: Bogenflächen lassen sich nicht verschieben → Radius ziehen (später)
+        const q = pts[i], b = pts[(i + 1) % pts.length];
+        if (q[2]) { // Bogenwand: auf dem Kreis und auf der Bogenseite der Sehne
+          const c = arcInfo(q, b, q[2]), dx = x - c.cx, dy = y - c.cy;
+          const onArc = Math.abs(Math.hypot(dx, dy) - c.r) < eps && (x - (q[0] + b[0]) / 2) * c.wx + (y - (q[1] + b[1]) / 2) * c.wy > -eps;
+          if (onArc && Math.abs(nu * dx + nv * dy) / c.r > 0.9) return { f, part: 'arc', k: Math.sign(nu * c.wx + nv * c.wy) || 1, i };
+          continue;
+        }
         const sg = segment(pts, i, x, y), along = nu * sg.ox + nv * sg.oy;
         if (sg.dist < eps && Math.abs(along) > 0.9) return { f, part: 'seg', k: Math.sign(along), i };
       }
@@ -170,6 +182,12 @@ export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: num
       const pts = f0.pts!, j = (i + 1) % pts.length, { ox, oy } = segment(pts, i, ...pts[i] as [number, number]);
       f.pts = pts.map((q, n) => n === i || n === j ? [q[0] + m * ox, q[1] + m * oy, ...q.slice(2)] : [...q]);
       return ['Versatz', m];
+    }
+    case 'arc': { // Pfeilhöhe ändern, Endpunkte bleiben stehen
+      const pts = f0.pts!, q = pts[i], c = arcInfo(q, pts[(i + 1) % pts.length], q[2]);
+      const s = Math.max(0.1, c.s + m), bulge = Math.sign(q[2]) * 2 * s / c.L;
+      f.pts = pts.map((p, n) => n === i ? [p[0], p[1], bulge] : [...p]);
+      return ['Radius', (c.L * c.L / 4 + s * s) / (2 * s)];
     }
     case 'end': f.d = f0.d + m; return ['Höhe', f.d];
     case 'start':

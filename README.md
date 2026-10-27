@@ -24,7 +24,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
 | Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
-| Rundung / Fase | Kante anfassen und vom Körper wegziehen; Art und Maß im Seitenfeld |
+| Rundung / Fase | Kante anfassen: vom Körper wegziehen = Rundung, in den Körper hineinschieben = Fase; Maß im Seitenfeld |
 | Export | STL (3D-Druck) oder STEP (CAD, Fertigung) |
 | STEP-Import | „Öffnen“ und eine .step/.stp-Datei wählen |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |

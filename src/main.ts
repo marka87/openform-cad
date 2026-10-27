@@ -7,7 +7,7 @@ type Tool = 'select' | 'rect' | 'circle' | 'line';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante ziehen = runden · Linksziehen ins Leere = drehen · Rechts = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Linksziehen ins Leere = drehen · Rechts = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · in eine Fläche drücken = Tasche',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · in eine Fläche drücken = Bohrung',
   line:   'Punkte klicken · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
@@ -200,6 +200,21 @@ function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
 const hud = $('hud');
 function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; hud.style.left = e.clientX + 16 + 'px'; hud.style.top = e.clientY + 16 + 'px'; hud.textContent = text; }
 
+// Richtung von der Kante ins Freie: Summe der Normalen der beiden angrenzenden Flächen (stimmt auch an Innenecken)
+function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
+  const mesh = bodyGroup.children[0] as THREE.Mesh | undefined;
+  if (!mesh) return null;
+  const pos = mesh.geometry.attributes.position as THREE.BufferAttribute, idx = mesh.geometry.index!;
+  const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3(), normals: THREE.Vector3[] = [];
+  for (let i = 0; i < idx.count && normals.length < 2; i += 3) {
+    tri.setFromAttributeAndIndices(pos, idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+    if (tri.closestPointToPoint(at, q).distanceTo(at) > 0.05) continue;
+    tri.getNormal(n);
+    if (!normals.some(m => m.dot(n) > 0.99)) normals.push(n.clone());
+  }
+  return normals.length === 2 ? normals[0].add(normals[1]).normalize() : null;
+}
+
 // Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
 const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
 // Skizzenebene: Boden oder die angeklickte Fläche
@@ -316,7 +331,10 @@ function onMove(e: PointerEvent) {
     }
     if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
       if (!drag.f) {
-        drag.f = { id: nextId++, type: 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1 } satisfies EdgeOp;
+        // Erste Bewegung entscheidet: vom Körper weg = Rundung, in den Körper hinein = Fase
+        const out = edgeOutward(drag.P0), a = drag.P0.clone().project(camera), b = out && drag.P0.clone().add(out).project(camera);
+        const inward = b && (b.x - a.x) * (e.clientX - drag.sx) - (b.y - a.y) * (e.clientY - drag.sy) < 0;
+        drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1 } satisfies EdgeOp;
         features.push(drag.f); selId = drag.f.id;
       }
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));

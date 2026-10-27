@@ -12,14 +12,14 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Herausziehen vereinigt, Hineindrücken in eine Fläche schneidet (Bohrung, Tasche)
 - [x] STEP- und STL-Export aus dem Kern
 - [x] Kern in einen Web Worker verlegen (Oberfläche bleibt flüssig)
-- [x] Fasen und Rundungen an Kanten (Kante anfassen und ziehen, Art im Seitenfeld)
+- [x] Fasen und Rundungen an Kanten (Kante wegziehen = Rundung, hineinschieben = Fase; Art auch im Seitenfeld)
 - [x] STEP-Import (Öffnen → .step/.stp; Körper lässt sich bohren und runden, aber nicht ziehen)
 - [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
 ## M2 – Skizzieren richtig (läuft)
 - [x] Linien-Werkzeug: Vieleck Punkt für Punkt, Seitenflächen parallel verschiebbar
 - [x] Bogen: im Linien-Werkzeug vom letzten Punkt aus ziehen = tangentialer Bogen
-- [ ] Bogenflächen ziehen (Radius ändern)
+- [x] Bogenflächen ziehen (Radius ändern, Endpunkte bleiben)
 - [ ] Geschlossene Bereiche automatisch erkennen (sich überschneidende Skizzen)
 - [ ] Spline, Versatz, Trimmen
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs

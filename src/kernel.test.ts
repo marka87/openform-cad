@@ -109,3 +109,22 @@ test('Bögen: Halbkreis, tangentialer Anschluss, Profil mit Bogen im Kern', () =
   expect(ownerOf([D], [5, 2, -5], [0, 1, 0])).toMatchObject({ part: 'end' }); // Deckel im Bogenbereich
   expect(polyFeature(GROUND, [[0, 0, 1], [10, 0, 1]], 10, false)).not.toBeNull(); // Kreis aus zwei Bögen
 });
+
+test('Bogenwand anfassen und ziehen ändert den Radius, Endpunkte bleiben', () => {
+  // Halbkreis oben (Skizze y = 5..10), auf dem Boden: Skizzen-y = Welt -z; Bogenmitte bei Welt (5, ·, -10), Normale -z
+  const D = { ...polyFeature(GROUND, [[0, 0], [10, 0], [10, 5, 1], [0, 5]], 9, false)!, d: 2 };
+  const g = ownerOf([D], [5, 1, -10], [0, 0, -1]);
+  expect(g).toMatchObject({ part: 'arc', i: 2, k: 1 });
+  expect(ownerOf([D], [5, 1, 0], [0, 0, 1])).toMatchObject({ part: 'seg', i: 0 });   // gerade Unterseite weiterhin 'seg'
+
+  const D0 = structuredClone(D);
+  const [label, R] = applyPush(D, D0, 'arc', g!.k, 2, 2);             // 2 mm nach außen: Pfeilhöhe 5 → 7
+  expect(label).toBe('Radius');
+  expect(R).toBeCloseTo((25 + 49) / 14);
+  expect(D.pts![2][2]).toBeCloseTo(1.4);
+  expect(D.pts!.map(p => p.slice(0, 2))).toEqual(D0.pts!.map(p => p.slice(0, 2)));
+  expect(buildBody([D]).body!.boundingBox.bounds[0][2]).toBeCloseTo(-12);
+
+  applyPush(D, D0, 'arc', g!.k, -10, 2);                               // nicht unter die Sehne
+  expect(D.pts![2][2]).toBeGreaterThan(0);
+});
