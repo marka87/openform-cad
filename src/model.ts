@@ -86,6 +86,24 @@ export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: bool
     ? { id, d: 0, onFace, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts) } : null;
 }
 
+// Neue Skizze im Abstand d um f herum (d < 0 = nach innen); null, wenn nichts übrig bleibt
+// shortcut: Ecken zwischen Bogen und Gerade ohne Tangente werden nur angenähert, Selbstüberschneidungen nicht erkannt → Kern-Offset (replicad) nutzen
+export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null {
+  const p = f.p, base = { ...structuredClone(f), id, d: 0 };
+  if (f.type === 'rect') return p.w + 2 * d < 0.5 || p.h + 2 * d < 0.5 ? null : { ...base, p: { x: p.x - d, y: p.y - d, w: p.w + 2 * d, h: p.h + 2 * d } };
+  if (f.type === 'circle') return p.r + d < 0.5 ? null : { ...base, p: { ...p, r: p.r + d } };
+  const pts = f.pts!, n = pts.length, s = Math.sign(area(outline(pts)));
+  const normal = (t: number[]) => [s * t[1], -s * t[0]];
+  const out = pts.map((q, i) => {
+    const a = pts[(i + n - 1) % n], b = pts[(i + 1) % n];
+    const n1 = normal(endTangent(a, q, a[2] ?? 0)), t2 = endTangent(b, q, -(q[2] ?? 0)), n2 = normal([-t2[0], -t2[1]]);
+    const k = 1 + n1[0] * n2[0] + n1[1] * n2[1], m = k < 0.1 ? n1 : [(n1[0] + n2[0]) / k, (n1[1] + n2[1]) / k]; // Gehrung
+    return [q[0] + d * m[0], q[1] + d * m[1], ...q.slice(2)];
+  });
+  const g = polyFeature({ o: f.o, n: f.n, u: f.u, v: f.v }, out, id, !!f.onFace);
+  return g && Math.sign(area(outline(out))) === s ? g : null;
+}
+
 // Vorzeichenbehaftete Fläche (> 0 = gegen den Uhrzeigersinn)
 export function area(pts: number[][]) {
   return pts.reduce((s, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return s + x * y2 - x2 * y; }, 0) / 2;

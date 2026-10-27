@@ -21,7 +21,8 @@ Regel: ein Meilenstein nach dem anderen, jeder endet mit etwas, das man im Brows
 - [x] Bogen: im Linien-Werkzeug vom letzten Punkt aus ziehen = tangentialer Bogen
 - [x] Bogenflächen ziehen (Radius ändern, Endpunkte bleiben)
 - [x] Überschneidende Skizzen zerfallen in Bereiche; Ziehen nimmt nur den angeklickten Bereich
-- [ ] Spline, Versatz, Trimmen
+- [x] Versatz: neue Skizze im Abstand um eine flache Skizze (Seitenfeld)
+- [ ] Spline, Trimmen
 - [ ] Bemaßungen und Abhängigkeiten mit planegcs
 - [ ] Skizzen nachträglich bearbeiten
 

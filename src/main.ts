@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { applyPush, endTangent, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { applyPush, endTangent, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
 type Tool = 'select' | 'rect' | 'circle' | 'line';
@@ -395,8 +395,15 @@ function renderPanel() {
   const name = isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
+    (Math.abs(f.d) < 1e-6 && !f.and ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     `<button class="del">Löschen</button>`;
-  panel.querySelectorAll('input').forEach(inp => inp.onchange = () => {
+  const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
+  if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
+    const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);
+    if (!g) return showHint('Versatz zu groß: von der Skizze bleibt nichts übrig');
+    pushHistory(); nextId++; features.push(g); selId = g.id; refresh();
+  };
+  panel.querySelectorAll<HTMLInputElement>('input[data-k]').forEach(inp => inp.onchange = () => {
     const v = parseFloat(inp.value);
     if (!isFinite(v)) return;
     pushHistory();

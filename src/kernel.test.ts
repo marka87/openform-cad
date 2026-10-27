@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { applyPush, arcPoints, endTangent, GROUND, outline, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { applyPush, arcPoints, endTangent, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -142,4 +142,17 @@ test('Überschneidende Skizzen zerfallen in Bereiche', () => {
   expect(vol(circ, [25, 0, -10])).toBeCloseTo(half * 5, 0);          // nur Kreis
   const far = sketchFeature('rect', GROUND, [50, 50], [60, 60], 4, false)!;
   expect(regionFeature([rect, far], rect, [5, 0, -10], 5)).toBeNull(); // keine Überschneidung → Skizze selbst ziehen
+});
+
+test('Versatz um Rechteck, Kreis und Vieleck mit Bogen', () => {
+  const rect = sketchFeature('rect', GROUND, [0, 0], [20, 10], 1, false)!;
+  expect(offsetFeature(rect, 2, 2)!.p).toEqual({ x: -2, y: -2, w: 24, h: 14 });
+  expect(offsetFeature(rect, -6, 2)).toBeNull();                     // nach innen aufgebraucht
+  expect(offsetFeature(sketchFeature('circle', GROUND, [0, 0], [5, 0], 1, false)!, -1, 2)!.p.r).toBe(4);
+  const L = polyFeature(GROUND, [[0, 0], [20, 0], [20, 10], [10, 10], [10, 20], [0, 20]], 1, false)!;
+  expect(offsetFeature(L, 1, 2)!.pts).toEqual([[-1, -1], [21, -1], [21, 11], [11, 11], [11, 21], [-1, 21]]);
+  // Halbkreis: Bogen behält seinen Winkel, Radius 10 → 12
+  const D = polyFeature(GROUND, [[0, 0, 1], [20, 0]], 1, false)!, o = offsetFeature(D, 2, 2)!;
+  expect(o.pts![0][2]).toBe(1);
+  expect(Math.hypot(o.pts![1][0] - o.pts![0][0], o.pts![1][1] - o.pts![0][1]) / 2).toBeCloseTo(12);
 });
