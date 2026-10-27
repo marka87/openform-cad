@@ -10,15 +10,16 @@ export interface Extrude extends Frame {
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
+  hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
-export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number }
+export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; hidden?: boolean }
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
-export interface Import { id: number; type: 'import'; name: string; step: string }
+export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean }
 export type Feature = Extrude | EdgeOp | Import;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
@@ -298,6 +299,7 @@ function segment(pts: number[][], i: number, x: number, y: number) {
 // Findet das Feature, auf dessen Begrenzung der Punkt (mit Flächennormale N) liegt. Spätere Features gewinnen.
 // Rundungs-/Fasenflächen gehören zu keinem Extrude; sie werden danach über die Nähe zur Kante gefunden.
 export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps = 0.15): Grip | null {
+  features = features.filter(f => !f.hidden);
   return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps) ?? importOwner(features);
 }
 

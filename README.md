@@ -38,5 +38,6 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | STEP-Import | „Öffnen“ und eine .step/.stp-Datei wählen |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |
+| Feature-Baum | Liste „Schritte“ rechts unten: anklicken = auswählen, `↑` = früher ausführen, `●`/`○` = ein-/ausschalten |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |

@@ -24,6 +24,15 @@
   #panel label { display:flex; justify-content:space-between; align-items:center; margin:6px 0; color:var(--muted); }
   #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
   #panel .del { margin-top:10px; width:100%; background:#4a2a2a; color:#ffb4b4; border:0; border-radius:8px; padding:7px; cursor:pointer; }
+  #tree { position:fixed; right:12px; bottom:48px; width:220px; max-height:35vh; overflow:auto; background:var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:8px; }
+  #tree h3 { margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:600; }
+  #tree .row { display:flex; align-items:center; gap:4px; padding:3px 6px; border-radius:6px; cursor:pointer; }
+  #tree .row:hover { background:#353a42; }
+  #tree .row.on { color:var(--accent); }
+  #tree .row.off span { opacity:.45; text-decoration:line-through; }
+  #tree .row span { flex:1; }
+  #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
   #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
     border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
@@ -55,6 +64,7 @@
 </div>
 <div id="panel"></div>
 <div id="hud"></div>
+<div id="tree"></div>
 <div id="scale"><div></div><span></span></div>
 <div id="hint">CAD-Kern wird geladen (großer Download, nur beim ersten Mal langsam) …</div>
 

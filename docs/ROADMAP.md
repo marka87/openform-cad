@@ -39,7 +39,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Versetzte Skizzenebenen (Ebene im Abstand zu einer Fläche)
 
 ## M3 – Modellieren
-- [ ] Feature-Baum (Liste links): Schritte anzeigen, ändern, ausblenden, umsortieren, „bis hier“ zurückspulen
+- [x] Feature-Baum (Liste „Schritte“): anzeigen, auswählen/ändern, ein-/ausschalten, umsortieren
+- [ ] Feature-Baum: „bis hier“ zurückspulen, Schritte umbenennen, Ziehen statt ↑
 - [ ] Skizzen hängen an ihrer Fläche: wird die Fläche verschoben, wandert die Bohrung mit
 - [ ] Mehrere Körper: neuer Körper statt Vereinigung, Körper benennen, ein-/ausblenden
 - [ ] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, schneiden

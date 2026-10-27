@@ -159,7 +159,7 @@ function rebuild() {
   requestBuild();
   disposeGroup(group);
   for (const f of features) {
-    if (f.type === 'import') continue;
+    if (f.type === 'import' || f.hidden) continue;
     if (!isExtrude(f)) { if (f.id === selId) group.add(edgeMarker(f)); }
     else if (Math.abs(f.d) < 1e-6) group.add(buildMesh(f, 'sketch'));
     else if (f.id === selId) group.add(buildMesh(f, 'outline'));
@@ -176,7 +176,29 @@ function rebuild() {
   });
   handles.updateMatrixWorld(true);
 }
-function refresh() { rebuild(); renderPanel(); save(); }
+function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
+
+// ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
+const tree = $('tree');
+function nameOf(f: Feature) {
+  if (f.type === 'import') return 'Import';
+  if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
+  if (Math.abs(f.d) < 1e-6) return 'Skizze';
+  return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
+}
+function renderTree() {
+  tree.innerHTML = '<h3>Schritte</h3>' + (features.map((f, i) =>
+    `<div class="row${f.id === selId ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
+    `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
+    || '<em>Noch keine Schritte</em>');
+  tree.querySelectorAll<HTMLElement>('.row').forEach(row => row.onclick = ev => {
+    const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
+    if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
+    else if (a === 'up') { if (!i) return; pushHistory(); [features[i - 1], features[i]] = [features[i], features[i - 1]]; }
+    else selId = f.id;
+    refresh();
+  });
+}
 
 // ---------- Eingabe-Helfer ----------
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -504,7 +526,7 @@ function renderPanel() {
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
     : [['Höhe', 'd']];
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
-  const name = isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : (f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type]);
+  const name = nameOf(f);
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     (Math.abs(f.d) < 1e-6 && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +

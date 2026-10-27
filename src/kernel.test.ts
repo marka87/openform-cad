@@ -230,3 +230,9 @@ test('Muster und Spiegeln', () => {
   const [lo, hi] = buildBody([arc]).body!.boundingBox.bounds, [mlo, mhi] = buildBody([m]).body!.boundingBox.bounds;
   expect(mlo[2]).toBeCloseTo(-hi[2]); expect(mhi[2]).toBeCloseTo(-lo[2]);
 });
+
+test('Ausgeschaltete Schritte werden übersprungen', () => {
+  const b = box(), h = { ...hole(-4), hidden: true };
+  expect(buildBody([b, h]).body!.faces.length).toBe(6);                 // Bohrung aus → Quader
+  expect(ownerOf([b, h], [10, 6, -5], [0, 1, 0])).toBeNull();            // Bohrungsboden gehört niemandem mehr
+});

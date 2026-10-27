@@ -38,6 +38,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   let body: Shape3D | null = null;
   const failed: number[] = [];
   for (const f of features) {
+    if (f.hidden) continue;
     try {
       if (f.type === 'fillet' || f.type === 'chamfer') {
         if (!body) continue;
