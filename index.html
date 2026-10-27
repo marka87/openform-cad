@@ -41,8 +41,13 @@
   #palette input { width:100%; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
   #palette div div { padding:5px 9px; border-radius:6px; cursor:pointer; }
   #palette div div:hover, #palette div div.first { background:#353a42; }
+  #views { position:fixed; left:12px; bottom:14px; width:250px; display:flex; flex-wrap:wrap; gap:4px; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; padding:5px; }
+  #views button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:8px; padding:4px 7px; cursor:pointer; font:inherit; }
+  #views button:hover { background:#353a42; }
+  #views button.on { border-color:var(--accent); color:var(--accent); }
   #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 500px); }
+    border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 540px); }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
   #scale div { height:6px; border:2px solid var(--muted); border-top:none; margin-bottom:3px; }
   #hud { position:fixed; pointer-events:none; background:var(--accent); color:#1e2126; font-weight:600; border-radius:6px;
@@ -59,6 +64,7 @@
   <button data-tool="line">Linie <kbd>L</kbd></button>
   <button data-tool="spline">Spline <kbd>S</kbd></button>
   <button data-tool="shell">Schale <kbd>H</kbd></button>
+  <button data-tool="measure">Messen <kbd>M</kbd></button>
 </div>
 <div id="top">
   <button id="bNew">Neu</button>
@@ -68,12 +74,16 @@
   <button id="bOpen">Öffnen</button>
   <button id="bStl">STL-Export</button>
   <button id="bStep">STEP-Export</button>
-  <button id="bView">Ansicht</button>
   <input id="fileIn" type="file" accept=".json,.step,.stp" hidden>
 </div>
 <div id="panel"></div>
 <div id="hud"></div>
 <div id="tree"></div>
+<div id="views">
+  <button data-view="iso" title="Taste 0">Iso</button><button data-view="top" title="Taste 2">Oben</button>
+  <button data-view="front" title="Taste 1">Vorne</button><button data-view="right" title="Taste 3">Rechts</button>
+  <button data-view="fit" title="Taste F">Einpassen</button>
+</div>
 <div id="palette"><input placeholder="Werkzeug oder Befehl suchen …"><div></div></div>
 <div id="scale"><div></div><span></span></div>
 <div id="hint">CAD-Kern wird geladen (großer Download, nur beim ersten Mal langsam) …</div>

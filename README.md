@@ -42,5 +42,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Drehkörper | Flache Skizze anklicken → Seitenfeld „Drehen um“ x- oder y-Achse der Skizze; Winkel im Seitenfeld |
 | Schale | `H`, Fläche des Körpers anklicken, die offen bleiben soll; Wandstärke im Seitenfeld |
 | Werkzeugsuche | `Strg+K`, tippen, `Enter` |
+| Ansichten | Kasten unten links oder Tasten `0` Iso, `1` Vorne, `2` Oben, `3` Rechts, `F` Einpassen |
+| Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ; Volumen und Oberfläche stehen über der Schrittliste |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |

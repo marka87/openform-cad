@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
-type Tool = 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -12,6 +12,7 @@ const HINTS: Record<Tool, string> = {
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
   ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
+  measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
@@ -149,6 +150,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     disposeGroup(bodyGroup);
     if (data.mesh) bodyGroup.add(bodyMesh(data.mesh));
     bodyGroup.updateMatrixWorld(true);
+    bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area! / 100).toFixed(1)} cm²` : '';
+    renderTree();
     showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
     busy = false;
     if (pending) requestBuild();
@@ -181,6 +184,7 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');
+let bodyInfo = ''; // Volumen und Oberfläche des Körpers, vom Kern gemeldet
 function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
@@ -190,7 +194,7 @@ function nameOf(f: Feature) {
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
 function renderTree() {
-  tree.innerHTML = '<h3>Schritte</h3>' + (features.map((f, i) =>
+  tree.innerHTML = `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
     `<div class="row${f.id === selId ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
     `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
@@ -352,7 +356,7 @@ function snapPoints(pl: Frame): Vec[] {
   return [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(keyPoints)].filter(q => onPlane(pl, q));
 }
 // Körperkanten und Linien flacher Skizzen
-function snapSegs(pl: Frame): Vec[][] {
+function snapSegs(pl: Frame | null): Vec[][] {
   const segs: Vec[][] = [];
   const lines = (bodyGroup.children[0]?.children[0] as THREE.LineSegments | undefined)?.geometry.attributes.position.array;
   for (let i = 0; lines && i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
@@ -362,7 +366,7 @@ function snapSegs(pl: Frame): Vec[][] {
       .map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]) as Vec);
     w.forEach((q, i) => segs.push([q, w[(i + 1) % w.length]]));
   }
-  return segs.filter(([a, b]) => onPlane(pl, a) && onPlane(pl, b));
+  return pl ? segs.filter(([a, b]) => onPlane(pl, a) && onPlane(pl, b)) : segs;
 }
 
 // Bogen vom letzten Punkt nach q, tangential an das vorige Segment
@@ -398,6 +402,15 @@ function onDown(e: PointerEvent) {
     const a = sketchPoint(pl, e);
     if (!a) return;
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!h };
+  } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
+    const P = edge ? V(edge.at) : h?.point;
+    if (!P) return;
+    const pts = [...features.filter(isExtrude).filter(f => !f.hidden).flatMap(keyPoints), ...snapSegs(null).flat()];
+    const s = snapTo(P.toArray() as Vec, pts, [], 8 * pxSize());
+    measure = measure.length === 2 ? [] : measure;
+    measure.push(s ? V(s.p) : P.clone());
+    showMeasure();
+    return;
   } else if (tool === 'shell') { // Körper aushöhlen, angeklickte Fläche bleibt offen
     if (!h || h.grip?.f && isExtrude(h.grip.f) && isFlat(h.grip.f)) return;
     const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1 };
@@ -515,7 +528,7 @@ el.addEventListener('pointerup', e => {
 
 // ---------- UI ----------
 function setTool(t: Tool) {
-  if (t !== tool) cancelPoly();
+  if (t !== tool) { cancelPoly(); measure = []; }
   typed = '';
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -627,7 +640,6 @@ function download(name: string, blob: Blob) {
 $('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; selId = null; refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
-$('bView').onclick = resetView;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
 const fileIn = $<HTMLInputElement>('fileIn');
 $('bOpen').onclick = () => fileIn.click();
@@ -664,6 +676,9 @@ addEventListener('keydown', e => {
   else if (k === 'n') setTool('ngon');
   else if (k === 'o') setTool('slot');
   else if (k === 'h') setTool('shell');
+  else if (k === 'm') setTool('measure');
+  else if (k === 'f') fitView();
+  else if (k in { 0: 1, 1: 1, 2: 1, 3: 1 }) setView(['iso', 'front', 'top', 'right'][+k]);
   else if (k === 'l') setTool('line');
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();
@@ -671,9 +686,40 @@ addEventListener('keydown', e => {
   else if (k === 'escape') { typed = ''; cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
+// ---------- Messen ----------
+let measure: THREE.Vector3[] = [];
+function showMeasure() {
+  disposeGroup(preview);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false });
+  for (const p of measure) { const m = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), mat.clone()); m.position.copy(p); m.renderOrder = 2; preview.add(m); }
+  if (measure.length < 2) return showHint('Zweiten Punkt anklicken');
+  const [a, b] = measure, d = b.clone().sub(a);
+  preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false })));
+  // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
+  showHint(`Abstand ${d.length().toFixed(2)} mm · ΔX ${d.x.toFixed(2)} · ΔY ${(-d.z).toFixed(2)} · ΔZ ${d.y.toFixed(2)}`);
+}
+
+// ---------- Ansichten ----------
+const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], front: [0, 0, 1], right: [1, 0, 0] };
+function setView(name: string) {
+  if (name === 'fit') return fitView();
+  const dist = camera.position.distanceTo(controls.target);
+  camera.position.copy(controls.target).addScaledVector(V(VIEWS[name]).normalize(), dist);
+}
+// Kamera so setzen, dass Körper und Skizzen ganz zu sehen sind
+function fitView() {
+  const box = new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group));
+  if (box.isEmpty()) return resetView();
+  const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  controls.target.copy(c);
+  camera.position.copy(c).addScaledVector(dir, Math.max(r, 5) / Math.sin(camera.fov * Math.PI / 360) * 1.1);
+}
+document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
+
 // ---------- Werkzeugsuche (Strg+K): alle Knöpfe der Werkzeugleiste und der oberen Leiste ----------
 const palette = $('palette'), palIn = palette.querySelector('input')!, palList = palette.querySelector('div')!;
-const commands = () => [...document.querySelectorAll<HTMLButtonElement>('#toolbar button, #top button')]
+const commands = () => [...document.querySelectorAll<HTMLButtonElement>('#toolbar button, #top button, #views button')]
   .map(b => ({ label: b.firstChild!.textContent!.replace(/[↶↷]/g, '').trim(), run: () => b.click() }));
 function renderPalette() {
   const q = palIn.value.toLowerCase(), hits = commands().filter(c => c.label.toLowerCase().includes(q));

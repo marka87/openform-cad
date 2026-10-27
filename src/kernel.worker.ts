@@ -1,7 +1,7 @@
 // Kern im Web Worker, damit Ziehen und Drehen flüssig bleiben, während OpenCascade rechnet.
 import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
-import { setOC, type Shape3D } from 'replicad';
+import { measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
 import type { Feature } from './model';
 
@@ -10,7 +10,7 @@ export type ToWorker =
   | { type: 'export'; format: 'step' | 'stl' };
 export type FromWorker =
   | { type: 'ready' }
-  | { type: 'built'; failed: number[]; mesh: { vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array } | null }
+  | { type: 'built'; failed: number[]; volume?: number; area?: number; mesh: { vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array } | null }
   | { type: 'export'; format: 'step' | 'stl'; blob: Blob | null }
   | { type: 'error'; message: string };
 
@@ -39,7 +39,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
       vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
       triangles: new Uint32Array(m.triangles), lines: new Float32Array(body.meshEdges(MESH).lines),
     };
-    post({ type: 'built', failed: r.failed, mesh }, [mesh.vertices.buffer, mesh.normals.buffer, mesh.triangles.buffer, mesh.lines.buffer]);
+    post({ type: 'built', failed: r.failed, volume: measureVolume(body), area: measureArea(body), mesh }, [mesh.vertices.buffer, mesh.normals.buffer, mesh.triangles.buffer, mesh.lines.buffer]);
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
     const s = forExport(body);

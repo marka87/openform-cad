@@ -59,8 +59,10 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Werkzeugsuche (Strg+K) über alle Werkzeuge und Befehle
 
 ## M4 – Ansicht, Messen, Darstellung
-- [ ] Ansichtswürfel (oben, vorne, iso per Klick), Kamera auf Auswahl zentrieren
-- [ ] Messen: Abstand, Winkel, Fläche, Volumen, Masse (mit Dichte)
+- [x] Ansichten Iso/Oben/Vorne/Rechts per Klick oder Taste 0–3, Einpassen (F)
+- [ ] Echter Ansichtswürfel zum Anklicken, auf Auswahl zentrieren
+- [x] Messen: Abstand zwischen zwei Punkten (M), Volumen und Oberfläche des Körpers
+- [ ] Messen: Winkel, einzelne Flächen, Masse mit Dichte/Material
 - [ ] Schnittansicht (Ebene durch das Modell)
 - [ ] Drahtmodell, transparent, Kanten an/aus
 - [ ] Farben und Materialien je Körper
