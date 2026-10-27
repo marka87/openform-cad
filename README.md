@@ -27,7 +27,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Bereiche | Überschneiden sich flache Skizzen, zieht man nur den angeklickten Bereich (z. B. die Schnittmenge) |
 | Versatz | Flache Skizze anklicken, im Seitenfeld Abstand eingeben (minus = nach innen) → „Versatz anlegen“ |
 | Punkte verschieben | Vieleck oder Spline anklicken (auch als Körper) – die Punkte erscheinen und lassen sich ziehen |
-| Einrasten | Beim Skizzieren rastet der Mauszeiger an Ecken, Kantenmitten, Mittelpunkten, dem Ursprung und an Kanten/Linien ein (oranger Punkt); `Shift` schaltet Einrasten und Raster ab |
+| Einrasten | Beim Skizzieren rastet der Mauszeiger an Ecken, Kantenmitten, Schnittpunkten, Mittelpunkten, dem Ursprung und an Kanten/Linien ein (oranger Punkt); `Shift` schaltet Einrasten und Raster ab |
 | Ausrichten | Liegt der Zeiger waagrecht oder senkrecht zu einem Punkt, rastet er dort ein (orange Hilfslinie) |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
 | Rundung / Fase | Kante anfassen: vom Körper wegziehen = Rundung, in den Körper hineinschieben = Fase; Maß im Seitenfeld |

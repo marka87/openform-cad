@@ -137,13 +137,34 @@ export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
   return ok;
 }
 
-// Einrasten: nächster Punkt innerhalb tol (hat Vorrang), sonst nächster Punkt auf einer Strecke; sonst null
+// Schnittpunkt zweier Strecken (gleiche Ebene); gemeinsame Endpunkte zählen nicht (z. B. Stücke eines Kreises)
+function crossing(a: Vec, b: Vec, c: Vec, d: Vec): Vec | null {
+  const u = sub(b, a), v = sub(d, c), w = sub(a, c);
+  const A = dot(u, u), B = dot(u, v), C = dot(v, v), D = dot(u, w), E = dot(v, w), den = A * C - B * B;
+  if (den <= 1e-9 * A * C) return null; // parallel
+  const s = (B * E - C * D) / den, t = (A * E - B * D) / den, end = (x: number) => x < 1e-6 || x > 1 - 1e-6;
+  if (s < 0 || s > 1 || t < 0 || t > 1 || end(s) && end(t)) return null;
+  const p = a.map((x, k) => x + s * u[k]) as Vec, q = c.map((x, k) => x + t * v[k]) as Vec;
+  return Math.hypot(...sub(p, q)) < 1e-6 ? p : null;
+}
+
+// Einrasten: nächster Punkt bzw. Schnittpunkt innerhalb tol (haben Vorrang), sonst nächster Punkt auf einer Strecke; sonst null
 export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: Vec; kind: 'point' | 'line' } | null {
   const dist = (q: Vec) => Math.hypot(...sub(P, q));
   let best: Vec | null = null, d = tol;
   for (const q of points) if (dist(q) < d) { d = dist(q); best = q; }
   if (best) return { p: best, kind: 'point' };
-  for (const [a, b] of segs) {
+  const close = segs.filter(([a, b]) => { // nur Strecken nahe P können einen Schnittpunkt nahe P haben
+    const ab = sub(b, a), l = dot(ab, ab), t = l ? Math.max(0, Math.min(1, dot(sub(P, a), ab) / l)) : 0;
+    return Math.hypot(...sub(P, a.map((x, k) => x + t * ab[k]))) < tol;
+  });
+  for (let i = 0; i < close.length; i++)
+    for (let j = i + 1; j < close.length; j++) {
+      const x = crossing(close[i][0], close[i][1], close[j][0], close[j][1]);
+      if (x && dist(x) < d) { d = dist(x); best = x; }
+    }
+  if (best) return { p: best, kind: 'point' };
+  for (const [a, b] of close) {
     const ab = sub(b, a), l = dot(ab, ab);
     if (!l) continue;
     const t = Math.max(0, Math.min(1, dot(sub(P, a), ab) / l)), q = a.map((x, k) => x + t * ab[k]) as Vec;

@@ -198,3 +198,11 @@ test('Kantenmitten und Ausrichten an Punkten', () => {
   expect(alignTo([5.2, 7.9], [[5, 0], [5.3, 3], [30, 8]], 1)).toEqual({ ax: [5.3, 3], ay: [30, 8] });
   expect(alignTo([12, 12], [[5, 0]], 1)).toEqual({ ax: null, ay: null });
 });
+
+test('Einrasten an Schnittpunkten, nicht an Stoßstellen', () => {
+  const s = (a: number[], b: number[]) => [a, b] as [number, number, number][];
+  const cross = [s([0, 0, 0], [10, 0, 10]), s([0, 0, 10], [10, 0, 0])];
+  expect(snapTo([5.5, 0, 4.6], [], cross, 1)).toEqual({ p: [5, 0, 5], kind: 'point' });
+  const chain = [s([0, 0, 0], [5, 0, 0]), s([5, 0, 0], [10, 0, 1])];   // zwei Stücke einer Kurve
+  expect(snapTo([5.2, 0, 0.3], [], chain, 1)?.kind).toBe('line');
+});
