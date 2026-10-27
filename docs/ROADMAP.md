@@ -17,7 +17,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] STEP-Import (Öffnen → .step/.stp; Körper lässt sich bohren und runden, aber nicht ziehen)
 - [x] Hinweis, solange der Kern lädt (WASM ca. 23 MB, gzip ca. 7 MB)
 
-## M2 – Skizzieren (läuft)
+## M2 – Skizzieren (großteils fertig)
 - [x] Linien-Werkzeug: Vieleck Punkt für Punkt, Seitenflächen parallel verschiebbar
 - [x] Bogen: im Linien-Werkzeug vom letzten Punkt aus ziehen = tangentialer Bogen
 - [x] Bogenflächen ziehen (Radius ändern, Endpunkte bleiben)
@@ -63,10 +63,12 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Echter Ansichtswürfel zum Anklicken, auf Auswahl zentrieren
 - [x] Messen: Abstand zwischen zwei Punkten (M), Volumen und Oberfläche des Körpers
 - [ ] Messen: Winkel, einzelne Flächen, Masse mit Dichte/Material
-- [ ] Schnittansicht (Ebene durch das Modell)
-- [ ] Drahtmodell, transparent, Kanten an/aus
-- [ ] Farben und Materialien je Körper
-- [ ] Rendermodus: realistisches Licht und Materialien (Three.js PBR, Umgebungsbild)
+- [x] Schnittansicht: Ebene durch die Körpermitte senkrecht zu X, Y oder Z
+- [ ] Schnittansicht: Ebene verschieben, Schnittfläche gefüllt
+- [x] Drahtmodell, transparent, Kanten an/aus
+- [x] Körperfarbe (Anzeige)
+- [ ] Materialien mit Dichte, Farbe je Körper im Modell gespeichert
+- [x] Rendermodus: Umgebungslicht (RoomEnvironment), glänzenderes Material, ohne Raster
 
 ## M5 – Technische Zeichnungen
 - [ ] 2D-Zeichnung aus dem Modell: Vorder-, Seiten-, Draufsicht, Iso

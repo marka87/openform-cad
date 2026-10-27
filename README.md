@@ -44,5 +44,6 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Werkzeugsuche | `Strg+K`, tippen, `Enter` |
 | Ansichten | Kasten unten links oder Tasten `0` Iso, `1` Vorne, `2` Oben, `3` Rechts, `F` Einpassen |
 | Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ; Volumen und Oberfläche stehen über der Schrittliste |
+| Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z, durch die Mitte), Render, Farbe |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |

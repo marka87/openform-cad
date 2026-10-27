@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { FromWorker, ToWorker } from './kernel.worker';
 
@@ -150,6 +151,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     disposeGroup(bodyGroup);
     if (data.mesh) bodyGroup.add(bodyMesh(data.mesh));
     bodyGroup.updateMatrixWorld(true);
+    applyDisplay();
     bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area! / 100).toFixed(1)} cm²` : '';
     renderTree();
     showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
@@ -716,6 +718,48 @@ function fitView() {
   camera.position.copy(c).addScaledVector(dir, Math.max(r, 5) / Math.sin(camera.fov * Math.PI / 360) * 1.1);
 }
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
+
+// ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
+const display = { wire: false, glass: false, edges: true, section: 0, render: false, color: '#c9ced6' };
+try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
+let envMap: THREE.Texture | null = null;
+const cut = new THREE.Plane();
+function applyDisplay() {
+  localStorage.setItem('openform-view', JSON.stringify(display));
+  const mesh = bodyGroup.children[0] as THREE.Mesh | undefined;
+  if (display.render && !envMap) envMap = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = display.render ? envMap : null;
+  renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  grid.visible = fine.visible = !display.render;
+  renderer.localClippingEnabled = !!display.section;
+  if (mesh && display.section) { // Schnittebene durch die Mitte des Körpers; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
+    const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
+    cut.setFromNormalAndCoplanarPoint(n, c);
+  }
+  if (mesh) {
+    const m = mesh.material as THREE.MeshStandardMaterial, lines = mesh.children[0] as THREE.LineSegments;
+    m.color.set(display.color);
+    m.wireframe = display.wire;
+    m.transparent = display.glass; m.opacity = display.glass ? 0.35 : 1; m.depthWrite = !display.glass;
+    m.metalness = display.render ? 0.35 : 0.1; m.roughness = display.render ? 0.35 : 0.6;
+    m.clippingPlanes = (lines.material as THREE.Material).clippingPlanes = display.section ? [cut] : null;
+    m.needsUpdate = true;
+    lines.visible = display.edges;
+  }
+  document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => {
+    const v = display[b.dataset.show as 'wire'];
+    b.classList.toggle('on', !!v);
+    if (b.dataset.show === 'section') b.textContent = display.section ? `Schnitt ${'XYZ'[display.section - 1]}` : 'Schnitt';
+  });
+  $<HTMLInputElement>('bodyColor').value = display.color;
+}
+document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => b.onclick = () => {
+  const k = b.dataset.show as 'wire' | 'glass' | 'edges' | 'render' | 'section';
+  if (k === 'section') display.section = (display.section + 1) % 4; else display[k] = !display[k];
+  applyDisplay();
+});
+$<HTMLInputElement>('bodyColor').oninput = e => { display.color = (e.target as HTMLInputElement).value; applyDisplay(); };
+applyDisplay();
 
 // ---------- Werkzeugsuche (Strg+K): alle Knöpfe der Werkzeugleiste und der oberen Leiste ----------
 const palette = $('palette'), palIn = palette.querySelector('input')!, palList = palette.querySelector('div')!;
