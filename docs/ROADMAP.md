@@ -56,7 +56,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Sweep (Profil entlang Pfad) und Loft (Übergang zwischen Profilen)
 - [ ] Rundung/Fase an mehreren Kanten auf einmal, variable Rundung
 - [ ] Gewinde- und Bohrungsvorlagen (Senkung, Gewindebohrung als Maß)
-- [ ] Werkzeugsuche (Strg+K)
+- [x] Werkzeugsuche (Strg+K) über alle Werkzeuge und Befehle
 
 ## M4 – Ansicht, Messen, Darstellung
 - [ ] Ansichtswürfel (oben, vorne, iso per Klick), Kamera auf Auswahl zentrieren

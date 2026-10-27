@@ -655,6 +655,7 @@ addEventListener('keydown', e => {
     if (k === 'enter' && typed) return applyTyped();
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
   }
+  if (e.ctrlKey && k === 'k') { e.preventDefault(); return openPalette(); }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
   else if (k === 'v') setTool('select');
@@ -669,6 +670,30 @@ addEventListener('keydown', e => {
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') { typed = ''; cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
+
+// ---------- Werkzeugsuche (Strg+K): alle Knöpfe der Werkzeugleiste und der oberen Leiste ----------
+const palette = $('palette'), palIn = palette.querySelector('input')!, palList = palette.querySelector('div')!;
+const commands = () => [...document.querySelectorAll<HTMLButtonElement>('#toolbar button, #top button')]
+  .map(b => ({ label: b.firstChild!.textContent!.replace(/[↶↷]/g, '').trim(), run: () => b.click() }));
+function renderPalette() {
+  const q = palIn.value.toLowerCase(), hits = commands().filter(c => c.label.toLowerCase().includes(q));
+  palList.replaceChildren(...hits.map((c, i) => {
+    const d = document.createElement('div');
+    d.textContent = c.label; // Beschriftung als Text, nicht als HTML
+    if (!i) d.className = 'first';
+    d.onclick = () => { closePalette(); c.run(); };
+    return d;
+  }));
+  return hits;
+}
+function openPalette() { palette.style.display = 'block'; palIn.value = ''; renderPalette(); palIn.focus(); }
+function closePalette() { palette.style.display = 'none'; palIn.blur(); }
+palIn.oninput = renderPalette;
+palIn.onkeydown = e => {
+  if (e.key === 'Escape') closePalette();
+  if (e.key === 'Enter') { const c = renderPalette()[0]; closePalette(); c?.run(); }
+};
+palIn.onblur = () => setTimeout(closePalette, 150);
 
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();

@@ -36,6 +36,11 @@
   #tree .row.off span { opacity:.45; text-decoration:line-through; }
   #tree .row span { flex:1; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
+  #palette { position:fixed; top:70px; left:50%; transform:translateX(-50%); width:340px; background:var(--panel);
+    border:1px solid var(--accent); border-radius:12px; padding:8px; display:none; z-index:10; }
+  #palette input { width:100%; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
+  #palette div div { padding:5px 9px; border-radius:6px; cursor:pointer; }
+  #palette div div:hover, #palette div div.first { background:#353a42; }
   #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
     border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 500px); }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
@@ -69,6 +74,7 @@
 <div id="panel"></div>
 <div id="hud"></div>
 <div id="tree"></div>
+<div id="palette"><input placeholder="Werkzeug oder Befehl suchen …"><div></div></div>
 <div id="scale"><div></div><span></span></div>
 <div id="hint">CAD-Kern wird geladen (großer Download, nur beim ersten Mal langsam) …</div>
 
