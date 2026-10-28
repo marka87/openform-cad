@@ -118,10 +118,13 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Einrasten und Bemaßen (Umschalter im Linien-Werkzeug, gestrichelt).
 - [x] T5.2 DONE — Trimmen: Stück einer Skizzenlinie zwischen zwei
       Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
-- [ ] T5.3 TODO — Körperkanten in die Skizzenebene projizieren (als
+- [x] T5.3 DONE — Körperkanten in die Skizzenebene projizieren (als
       Hilfslinien, an den Körper gebunden).
 - [ ] T5.4 TODO — Weitere Abhängigkeiten: Winkel zwischen Seiten, fester
       Punkt, Tangente Linie–Bogen, Radius eines Bogens.
+
+- [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen) und
+      an den Körper gebunden, damit sie bei Änderungen mitwandert.
 
 ## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
 - [ ] T6.1 TODO — Fläche versetzen (Offset Face) und Fläche löschen
@@ -132,6 +135,11 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T5.3: P bei aktivem Flächenraster projiziert alle Kanten des
+  Körpers als Hilfslinien „Projektion“ in diese Ebene (deckungsgleiche nur
+  einmal, von der Seite gesehene Kreise als eine Strecke). Abweichung vom
+  Plan: Momentaufnahme aus dem Anzeige-Netz, nicht an den Körper gebunden
+  und Kreise nur auf ~0,01 mm genau → T5.5. Im Browser geprüft.
 - 2026-10-28 T5.2: Werkzeug Trimmen (T) für offene Hilfslinien: Klick
   entfernt das Stück bis zu den nächsten Schnittpunkten mit allen Linien
   und Körperkanten der Ebene (Mitte raus = zwei Linien), Shift+Klick

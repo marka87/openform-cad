@@ -309,6 +309,35 @@ function trimAt(e: PointerEvent) {
   if (parts[1]) add({ ...structuredClone(f), id: nextId++, pts: parts[1] });
   refresh();
 }
+// Kanten des Körpers unter dem Flächenraster als Hilfslinien in dessen Ebene legen (je Kante eine Linie, deckungsgleiche nur einmal)
+// shortcut: Momentaufnahme aus dem Anzeige-Netz (Kreise auf ~0,01 mm genau); ändert sich der Körper, bleiben die Linien → aus dem B-Rep im Kern projizieren und an den Körper binden
+function projectEdges() {
+  const mesh = workHit?.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
+  if (!workHit || !mesh) return showHint('Erst mit Doppelklick oder Leertaste ein Raster auf eine Fläche legen, dann P');
+  const pl = planeFor(workHit), pos = ((mesh as THREE.Mesh).children[0] as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
+  const groups: Int32Array = mesh.userData.edges, seen = new Set<string>(), out: Extrude[] = [];
+  for (let g = 0; g < groups.length; g += 2) {
+    const [s, n] = [groups[g], groups[g + 1]], pts: number[][] = [];
+    for (let k = s; k < s + n; k++) {
+      if (k > s && (k - s) % 2 === 0) continue; // Segmente liegen paarweise (a,b)(b,c)…: Anfang + jedes Segmentende
+      const q = toLocal(pl, new THREE.Vector3().fromBufferAttribute(pos, k)).map(x => Math.round(x * 1e4) / 1e4);
+      if (!pts.length || Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) > 1e-3) pts.push(q);
+    }
+    if (pts.length < 2) continue; // Kante steht senkrecht auf der Ebene
+    // von der Seite gesehene Kreise u. Ä. fallen auf eine Strecke: auf deren zwei Enden kürzen
+    const [a, z] = pts.flatMap(p => pts.map(q => [p, q] as const)).sort((x, y) => Math.hypot(y[0][0] - y[1][0], y[0][1] - y[1][1]) - Math.hypot(x[0][0] - x[1][0], x[0][1] - x[1][1]))[0];
+    const L = Math.hypot(z[0] - a[0], z[1] - a[1]);
+    if (L < 1e-3) continue;
+    if (pts.every(p => Math.abs((p[0] - a[0]) * (z[1] - a[1]) - (p[1] - a[1]) * (z[0] - a[0])) / L < 1e-3)) pts.splice(0, pts.length, a, z);
+    const key = [pts[0], pts.at(-1)!, pts.length].flat().map(x => x.toFixed(2)).join(), rev = [pts.at(-1)!, pts[0], pts.length].flat().map(x => x.toFixed(2)).join();
+    if (seen.has(key) || seen.has(rev)) continue;
+    seen.add(key);
+    out.push({ id: nextId + out.length, ...structuredClone(pl), type: 'poly', p: {}, pts, d: 0, onFace: true, aux: true, open: true, body: workHit.body, name: 'Projektion' } as Extrude);
+  }
+  if (!out.length) return showHint('Keine Kanten zu projizieren');
+  pushHistory(); nextId += out.length; add(...out); refresh();
+  showHint(`${out.length} Kanten als Hilfslinien projiziert`);
+}
 // Hilfslinie gestrichelt; userData.aux = ID zum Anklicken
 function auxLine(f: Extrude) {
   const pts = outline(f.pts!, !f.open).map(([x, y]) => V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y));
@@ -555,7 +584,7 @@ function setWorkPlane(h: Hit | null) {
     .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
   showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
-    + 'Raster auf der Fläche: hier weiterskizzieren · Doppelklick ins Leere oder Esc = zurück zum Boden · Leertaste über einer Fläche = Raster dorthin');
+    + 'Raster auf der Fläche: hier weiterskizzieren · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
 }
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
@@ -1403,6 +1432,7 @@ addEventListener('keydown', e => {
   else if (k === 'l') setTool('line');
   else if (k === 'g') setTool('aux');
   else if (k === 't') setTool('trim');
+  else if (k === 'p') projectEdges();
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(poly.path === undefined && !poly.aux); // Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();

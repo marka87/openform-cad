@@ -92,7 +92,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Weiche Schatten, Umgebungslicht, dicke glatte Kanten
 - [x] Symbole und Tooltips, einstellbare Rastergröße
 - [x] Hilfsebenen (Werkzeug E)
-- [ ] Kanten eines Körpers in die Skizze projizieren
+- [x] Kanten eines Körpers in die Skizzenebene projizieren (P bei Flächenraster)
 - [ ] Zeitleiste unten (wie Fusion) statt Liste
 - [x] Einheiten mm/Zoll (Anzeige und Eingabe)
 - [ ] Umgebungsverdeckung (AO) im Rendermodus
