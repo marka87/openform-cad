@@ -69,7 +69,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       jede Seite bekommt eine eigene ID (statt Index), Con.i und Refs
       darauf umstellen, Migration.
 
-- [ ] T1.12 TODO — Schale über Sacklochbohrung: Volumen 2024 mm³ statt
+- [x] T1.12 DONE — Schale über Sacklochbohrung: Volumen 2024 mm³ statt
       < 2000 (Quader 20×10×10, Bohrung R3 tief 4 von oben, Schale 1 mm,
       Boden offen). Prüfen, ob der Körper gültig ist (BRepCheck), sonst
       Feature als fehlgeschlagen melden.
@@ -132,6 +132,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.12: Schale prüft ihr Ergebnis mit BRepCheck (wie der Zug);
+  der Fall Sacklochbohrung war tatsächlich ungültig und schlägt jetzt rot
+  mit Grund fehl, der Körper davor bleibt. Prüfung nur nach Schale und Zug,
+  weil sie teuer ist.
 - 2026-10-28 Wunsch des Nutzers: Doppelklick auf eine Fläche legt dort ein
   Raster (Arbeitsebene) an; Skizzen ins Leere landen in dieser Ebene statt
   auf dem Boden, gehören zum Körper der Fläche und hängen per Bezug an ihr

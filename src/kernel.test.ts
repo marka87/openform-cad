@@ -607,3 +607,10 @@ test('Zeichnung in Zoll: Gesamt- und Einzelmaße umgerechnet (T3.4)', () => {
   expect(svg).toContain('>0,787<');                 // 20 mm
   expect(svg).toContain('· Zoll');
 });
+
+test('Schale über einer Sacklochbohrung: ungültiger Körper wird gemeldet statt weitergerechnet (T1.12)', () => {
+  const r = buildBody([box(), hole(-4), { id: 9, type: 'shell', at: [5, 0, -5], t: 1 }]);
+  expect(r.failed).toEqual([9]);
+  expect(r.errors.get(9)).toMatch(/gültigen Körper/);
+  expect(measureVolume(r.body!)).toBeLessThan(2000);              // ohne die Schale: Quader mit Bohrung bleibt stehen
+});

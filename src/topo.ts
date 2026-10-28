@@ -161,6 +161,13 @@ export function nameLoft(id: number, A: Extrude, B: Extrude, s: Shape3D): Named 
   });
 }
 
+// OCCTs Gültigkeitsprüfung (Topologie und Geometrie); teuer, deshalb nur nach Operationen, die bekanntermaßen Kaputtes liefern können
+function isValid(shape: any) {
+  const check = new (getOC() as any).BRepCheck_Analyzer(shape, true, false), ok = check.IsValid();
+  check.delete();
+  return ok;
+}
+
 // Profil P entlang des Pfads ziehen (wie replicads genericSweep, aber mit Historie). Seiten = Generated(Profilkante),
 // benannt nach der Profilseite (wie beim Extrudieren) und dem Pfadabschnitt j; Anfang/Ende = Deckel in bzw. außerhalb der Profilebene
 // shortcut: j = Reihenfolge der erzeugten Flächen (OCCT legt sie entlang des Pfads an); bei Pfaden mit Splines prüfen
@@ -171,9 +178,7 @@ export function sweep(f: Sweep, P: Extrude, profile: Wire, spine: Wire): [Shape3
     b.Add(profile.wrapped, false, false);
     b.Build(new oc.Message_ProgressRange());
     if (!b.IsDone() || !b.MakeSolid()) throw new Error('Zug entlang des Pfads fehlgeschlagen');
-    const check = new oc.BRepCheck_Analyzer(b.Shape(), true, false), valid = check.IsValid();
-    check.delete();
-    if (!valid) throw new Error('Zug ergibt keinen gültigen Körper (Profil zu groß für den Pfad?)'); // nie ungültig weiterrechnen oder exportieren
+    if (!isValid(b.Shape())) throw new Error('Zug ergibt keinen gültigen Körper (Profil zu groß für den Pfad?)'); // nie ungültig weiterrechnen oder exportieren
     const s = cast(b.Shape()) as Shape3D, faces = s.faces, idx = faceIndex(faces), named: Named = [], taken = new Set<number>();
     const edges = profile.edges, side0 = edges.map(e => side(P, ...sketchXY(P, e.pointAt(0.5).toTuple())));
     // mehrere Profilkanten auf derselben Seite (Kreis = zwei Bögen): über die Kantennummer k unterscheiden
@@ -196,6 +201,7 @@ export function shell(id: number, A: Shape3D, nA: Named, open: Face[], t: number
     open.forEach(f => L.Append(f.wrapped));
     b.MakeThickSolidByJoin(A.wrapped, L, -t, 1e-3, oc.BRepOffset_Mode.BRepOffset_Skin, false, false, oc.GeomAbs_JoinType.GeomAbs_Arc, false, new oc.Message_ProgressRange());
     if (!b.IsDone()) throw new Error('Schale fehlgeschlagen');
+    if (!isValid(b.Shape())) throw new Error('Schale ergibt keinen gültigen Körper (Wand zu dick für eine Bohrung oder Rundung?)');
     const gen = nA.flatMap(({ face, o }) => list(b.Generated(face.wrapped)).map(g => [g, { f: id, tag: 'shell', of: o }] as [any, Origin]));
     const out = carry(b, nA, gen);
     gen.forEach(([g]) => g.delete());
