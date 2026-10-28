@@ -2,12 +2,17 @@
 import { draw, drawCircle, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, type Drawing, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
 
-export function solidOf(f: Extrude): Shape3D {
+// Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
+function sketchOf(f: Extrude) {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
     : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
     : polyDrawing(f.pts!, f.smooth);
-  const sk = drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch;
+  return drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch;
+}
+
+export function solidOf(f: Extrude): Shape3D {
+  const sk = sketchOf(f);
   let s = (f.rev ? sk.revolve(f[f.axis ?? 'u'], { origin: f.o, angle: f.rev }) : sk.extrude(f.d)) as Shape3D;
   // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
   for (const c of [...f.and ?? [], ...f.not ?? []]) {
@@ -50,6 +55,16 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         bodies.set(a, next); bodies.delete(b); alias.set(b, a);
         continue;
       }
+      if (f.type === 'split') {
+        const k = key(f.body), s = bodies.get(k), pl = features.find(g => g.id === f.plane);
+        if (!s || pl?.type !== 'plane') throw new Error('Körper oder Ebene fehlt');
+        const o = pl.c.map((x, i) => x + pl.off * pl.n[i]) as Vec;
+        const half = drawRectangle(2e4, 2e4).sketchOnPlane(new Plane(o, pl.u, pl.n)).extrude(1e4) as Shape3D; // Halbraum vor der Ebene
+        const front = s.intersect(half), back = s.cut(half);
+        half.delete(); s.delete();
+        bodies.set(k, back); bodies.set(f.id, front);
+        continue;
+      }
       if (f.type === 'move') {
         const k = key(f.body), s = bodies.get(k);
         if (!s) continue;
@@ -67,7 +82,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       const done = (next: Shape3D) => { body?.delete(); bodies.set(k, next); };
       if (f.type === 'shell') {
         if (!body) continue;
-        done(body.shell(f.t, (q: any) => q.withinDistance(0.1, f.at))); // positive Dicke = Wand nach innen
+        done(body.shell(f.t, (q: any) => q.either([f.at, ...f.more ?? []].map(p => (x: any) => x.withinDistance(0.1, p))))); // positive Dicke = Wand nach innen
         continue;
       }
       if (f.type === 'fillet' || f.type === 'chamfer') {
@@ -81,6 +96,10 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const shape = imports.get(f.id);
         if (!shape) throw new Error('STEP-Datei konnte nicht gelesen werden');
         s = shape.clone();
+      } else if (f.type === 'loft') {
+        const [A, B] = [f.a, f.b].map(id => features.find(g => g.id === id));
+        if (!A || !B || !isExtrude(A) || !isExtrude(B)) throw new Error('Skizze für den Übergang fehlt');
+        s = sketchOf(A).loftWith(sketchOf(B)) as Shape3D;
       } else {
         if (!isExtrude(f) || isFlat(f) || (isCut(f) && !body)) continue;
         s = solidOf(f);

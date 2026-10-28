@@ -323,3 +323,22 @@ test('Zeichnung als SVG: drei Ansichten, Bohrung verdeckt gestrichelt', () => {
   expect(svg).toContain('stroke-dasharray');                          // Bohrung ist in Vorder-/Seitenansicht verdeckt
   expect(svg).toMatch(/width="[\d.]+mm"/);
 });
+
+test('Körper an Ebene teilen, Übergang zwischen Skizzen, Schale mit zwei offenen Flächen', () => {
+  const b = { ...box(), body: 1 }; // x 0..20, y 0..10, z −10..0
+  const pl = { id: 2, type: 'plane' as const, c: [5, 5, -5] as [number, number, number], n: [1, 0, 0] as [number, number, number], u: [0, 0, -1] as [number, number, number], v: [0, 1, 0] as [number, number, number], off: 5 };
+  const split = buildBody([b, pl, { id: 3, type: 'split', body: 1, plane: 2 }]);
+  expect([...split.bodies.keys()].sort()).toEqual([1, 3]);
+  expect(measureVolume(split.bodies.get(1)!)).toBeCloseTo(1000, 0); // x 0..10
+  expect(measureVolume(split.bodies.get(3)!)).toBeCloseTo(1000, 0); // x 10..20 (vor der Ebene)
+  // Quadrat 10 × 10 am Boden, Kreis R 5 darüber in 20 mm Höhe → Übergang
+  const sq = sketchFeature('rect', GROUND, [-5, -5], [5, 5], 4, false)!;
+  const ci = sketchFeature('circle', { ...GROUND, o: [0, 20, 0] }, [0, 0], [5, 0], 5, false)!;
+  const loft = buildBody([sq, ci, { id: 6, type: 'loft', a: 4, b: 5, body: 6 }]);
+  const v = measureVolume(loft.body!);
+  expect(v).toBeGreaterThan(Math.PI * 25 * 20); expect(v).toBeLessThan(100 * 20); // zwischen Zylinder und Quader
+  // Schale: Deckel und rechte Seite offen
+  const one = measureVolume(buildBody([b, { id: 7, type: 'shell', at: [10, 10, -5], t: 1, body: 1 }]).body!);
+  const two = measureVolume(buildBody([b, { id: 7, type: 'shell', at: [10, 10, -5], more: [[20, 5, -5]], t: 1, body: 1 }]).body!);
+  expect(two).toBeLessThan(one);
+});

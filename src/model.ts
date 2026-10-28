@@ -27,8 +27,12 @@ export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: 
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
 export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean; body?: number }
-// Schale: Körper aushöhlen (Wandstärke t), die Fläche durch at wird geöffnet
-export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?: boolean; body?: number }
+// Schale: Körper aushöhlen (Wandstärke t), die Flächen durch at und more werden geöffnet
+export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; hidden?: boolean; body?: number }
+// Körper an der Hilfsebene plane teilen: der Teil auf der Seite der Normalen wird ein neuer Körper (Nummer = id)
+export interface Split { id: number; type: 'split'; body: number; plane: number; hidden?: boolean }
+// Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
+export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: number; hidden?: boolean }
 // Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
@@ -39,8 +43,8 @@ export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat
 export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, Aluminium: 2.7, Messing: 8.5, PLA: 1.24, ABS: 1.05, Holz: 0.6 };
 // Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
-export type Feature = Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane;
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Flache Skizze: weder extrudiert noch gedreht
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;

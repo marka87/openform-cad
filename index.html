@@ -35,7 +35,10 @@
   #tree .row:hover { background:#353a42; }
   #tree .row.on { color:var(--accent); }
   #tree .row.off span { opacity:.45; text-decoration:line-through; }
-  #tree .row span { flex:1; }
+  #tree .row span { flex:1; outline:none; }
+  #tree .row.later { opacity:.4; font-style:italic; }
+  #tree .row span[contenteditable=true] { background:#1e2126; border-radius:4px; padding:0 3px; }
+  #tree .rollEnd { display:block; width:100%; margin:0 0 6px; background:#4a3a20; color:var(--accent); border-radius:6px; padding:4px; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
   #palette { position:fixed; top:70px; left:50%; transform:translateX(-50%); width:340px; background:var(--panel);
     border:1px solid var(--accent); border-radius:12px; padding:8px; display:none; z-index:10; }

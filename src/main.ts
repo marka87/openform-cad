@@ -23,7 +23,7 @@ const HINTS: Record<Tool, string> = {
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
   plane:  'Fläche anklicken = Hilfsebene 10 mm davor · Ebene ziehen = Abstand ändern · darauf skizzieren wie auf einer Fläche',
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand · dritter Klick beginnt neu',
-  shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Wandstärke im Seitenfeld',
+  shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
@@ -90,9 +90,12 @@ let edgeSel: { at: Vec; dir: Vec; body?: number }[] = []; // angeklickte Kanten,
 const clearSel = () => { selId = selBody = null; multi.clear(); edgeSel = []; };
 const undoStack: string[] = [], redoStack: string[] = [];
 let meta: Record<number, BodyMeta> = {}; // Name, Sichtbarkeit, Farbe, Werkstoff je Körper
-const snapshot = () => JSON.stringify({ features, nextId, meta });
+let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werden berechnet, neue Schritte kommen dorthin
+const live = () => roll === null ? features : features.slice(0, roll);
+function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else { features.splice(roll, 0, ...fs); roll += fs.length; } }
+const snapshot = () => JSON.stringify({ features, nextId, meta, roll });
 function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
-function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; }
+function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; roll = d.roll ?? null; }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
@@ -106,7 +109,10 @@ function showHint(text: string) { $('hint').textContent = text + saveWarning; }
 // Warnung, die auch die nächste Kern-Meldung überdauert
 let notice = '';
 function showNotice(text: string) { notice = text; showHint(text); }
-const getSel = () => features.find(f => f.id === selId);
+const getById = (id: number) => features.find(f => f.id === id);
+const getSel = () => selId === null ? undefined : getById(selId);
+// Kernlochdurchmesser für metrische Regelgewinde in mm
+const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 
 function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
@@ -190,7 +196,7 @@ let busy = false, pending = false;
 function requestBuild() {
   if (!ready || busy) { pending = true; return; }
   busy = true; pending = false;
-  send({ type: 'build', features });
+  send({ type: 'build', features: live() });
 }
 worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   if (data.type === 'ready') { ready = true; setTool(tool); requestBuild(); }
@@ -217,10 +223,11 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
 function rebuild() {
   requestBuild();
   disposeGroup(group);
-  features.forEach((f, i) => {
+  const L = live();
+  L.forEach((f, i) => {
     if (f.type === 'plane' && !f.hidden) return void group.add(planeMesh(f));
     if (f.type === 'import' || f.hidden) return;
-    const M = moveMatrix(movesAfter(features, i));
+    const M = moveMatrix(movesAfter(L, i));
     const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
       : isFlat(f) ? buildMesh(f, 'sketch')
       : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
@@ -292,8 +299,11 @@ const bodyName = (b: number) => meta[b]?.name || `Körper #${b}`;
 // Masse in g aus Volumen (mm³) und Dichte (g/cm³); ohne Werkstoff leer
 const massText = (b: number) => { const d = MATERIALS[meta[b]?.mat ?? '']; return d && bodyVol[b] ? ` · ${(bodyVol[b] / 1000 * d).toFixed(1)} g` : ''; };
 function nameOf(f: Feature) {
+  if (f.name) return f.name;
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
+  if (f.type === 'split') return `${bodyName(f.body)} teilen`;
+  if (f.type === 'loft') return 'Übergang';
   if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
@@ -306,10 +316,11 @@ function renderTree() {
   tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
-    `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
-    `<div class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
-    `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
+    `<h3>Schritte${bodyInfo}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
+    `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
+    `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
+  tree.querySelector<HTMLButtonElement>('.rollEnd')?.addEventListener('click', () => { pushHistory(); roll = null; refresh(); });
   tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => {
     const b = +row.dataset.b!;
     row.querySelector('span')!.textContent = bodyName(b) + massText(b); // Name als Text, nicht als HTML
@@ -318,10 +329,28 @@ function renderTree() {
       clearSel(); selBody = b; detachGizmo(); refresh();
     };
   });
+  tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => {
+    const i = +row.dataset.i!, f = features[i], span = row.querySelector('span')!;
+    span.textContent = f.name ? `${f.name}` : `${nameOf(f)} #${f.id}`;
+    span.ondblclick = () => { // umbenennen; leer = wieder Standardname
+      span.contentEditable = 'true'; span.textContent = nameOf(f); span.focus(); getSelection()?.selectAllChildren(span);
+      span.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); span.blur(); } };
+      span.onblur = () => { const t = span.textContent!.trim(); delete f.name; if (t && t !== nameOf(f)) { pushHistory(); f.name = t; } refresh(); };
+    };
+    row.ondragstart = e => e.dataTransfer!.setData('text/plain', String(i));
+    row.ondragover = e => e.preventDefault();
+    row.ondrop = e => { // Schritt an diese Stelle verschieben
+      e.preventDefault();
+      const from = +e.dataTransfer!.getData('text/plain');
+      if (from === i || isNaN(from)) return;
+      pushHistory(); features.splice(i, 0, ...features.splice(from, 1)); refresh();
+    };
+  });
   tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => row.onclick = ev => {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
+    if ((ev.target as HTMLElement).isContentEditable) return;
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
-    else if (a === 'up') { if (!i) return; pushHistory(); [features[i - 1], features[i]] = [features[i], features[i - 1]]; }
+    else if (a === 'roll') { pushHistory(); roll = i + 1 >= features.length ? null : i + 1; }
     else if (ev.shiftKey && selId !== null && selId !== f.id) multi.has(f.id) ? multi.delete(f.id) : multi.add(f.id);
     else { clearSel(); selId = f.id; detachGizmo(); }
     refresh();
@@ -370,7 +399,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
-    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(features, fh.point.toArray(), n.toArray());
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
     face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body };
   }
@@ -439,7 +468,7 @@ function finishSketch(b?: number[]) {
   if (b) drag.b = b;
   disposeGroup(preview);
   const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
-  if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
+  if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); }
 }
 // Eingetippte Maße als Felder im HUD: Rechteck/Langloch zwei Felder (Tab wechselt), sonst eins
 function showTyped() {
@@ -543,7 +572,7 @@ function finishPoly() {
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
   if (f) f.body = poly!.body ?? f.id;
   cancelPoly();
-  if (f) { pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); refresh(); }
+  if (f) { pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); refresh(); }
 }
 function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 'none'; }
 
@@ -580,12 +609,14 @@ function onDown(e: PointerEvent) {
   } else if (tool === 'plane') {
     if (!h) return;
     const pl = planeFor(h), f: RefPlane = { id: nextId++, type: 'plane', c: h.point.toArray() as Vec, n: pl.n, u: pl.u, v: pl.v, off: 10 };
-    pushHistory(); features.push(f); clearSel(); selId = f.id; setTool('select'); refresh();
+    pushHistory(); add(f); clearSel(); selId = f.id; setTool('select'); refresh();
     return;
   } else if (tool === 'shell') { // Körper aushöhlen, angeklickte Fläche bleibt offen
     if (!h || h.grip?.f && isExtrude(h.grip.f) && isFlat(h.grip.f)) return;
+    const cur = getSel();
+    if (e.shiftKey && cur?.type === 'shell') { pushHistory(); (cur.more ??= []).push(h.point.toArray() as Vec); refresh(); return; }
     const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1, body: h.body };
-    pushHistory(); features.push(f); selId = f.id; setTool('select'); refresh();
+    pushHistory(); add(f); selId = f.id; setTool('select'); refresh();
     return;
   } else if (hp) { // Punkt der ausgewählten Skizze
     const f = getSel() as Extrude;
@@ -655,7 +686,7 @@ function onMove(e: PointerEvent) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.started = true; pushHistory(); el.style.cursor = 'grabbing';
       const r = drag.kind === 'push' && Math.abs(drag.f.d) < 1e-6 && regionFeature(features, drag.f, drag.P0.toArray(), nextId);
-      if (r) { nextId++; features.push(r); drag.f = r; drag.f0 = structuredClone(r); selId = r.id; } // nur den Bereich ziehen
+      if (r) { nextId++; add(r); drag.f = r; drag.f0 = structuredClone(r); selId = r.id; } // nur den Bereich ziehen
     }
     if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
       if (!drag.f) {
@@ -663,7 +694,7 @@ function onMove(e: PointerEvent) {
         const out = edgeOutward(drag.P0), a = drag.P0.clone().project(camera), b = out && drag.P0.clone().add(out).project(camera);
         const inward = b && (b.x - a.x) * (e.clientX - drag.sx) - (b.y - a.y) * (e.clientY - drag.sy) < 0;
         drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
-        features.push(drag.f); selId = drag.f.id;
+        add(drag.f); selId = drag.f.id;
       }
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep)));
       rebuild();
@@ -738,7 +769,7 @@ function renderPanel() {
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  if (f.type === 'move' || f.type === 'combine') {
+  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
     panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
@@ -757,11 +788,15 @@ function renderPanel() {
   if (f.rev) fields.splice(-1, 1, ['Winkel °', 'rev']);
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
   const name = nameOf(f);
+  const other = multi.size === 1 ? getById([...multi][0]) : undefined, loftTo = isFlat(f) && other && isExtrude(other) && isFlat(other) ? other : null;
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
+    (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
+    (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>
+      <button class="act cb">Senkung anlegen</button>` : '') +
     (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
@@ -778,7 +813,7 @@ function renderPanel() {
     const ax = AXES[panel.querySelector<HTMLSelectElement>('.ax')!.value];
     pushHistory();
     const cs = make(Math.max(2, Math.round(num('.cnt')) || 2), ax);
-    features.push(...cs); selId = cs.at(-1)!.id; refresh();
+    add(...cs); selId = cs.at(-1)!.id; refresh();
   };
   panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, ax) =>
     Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, ax.map(x => x * num('.dist') * (i + 1)) as Vec)));
@@ -795,13 +830,25 @@ function renderPanel() {
       refresh();
     };
   }
+  panel.querySelector<HTMLButtonElement>('.loft')?.addEventListener('click', () => {
+    pushHistory(); const id = nextId++; add({ id, type: 'loft', a: f.id, b: loftTo!.id, body: f.body ?? id }); clearSel(); selId = id; refresh();
+  });
+  const thr = panel.querySelector<HTMLSelectElement>('.thr');
+  if (thr) { // Kernloch für metrisches Gewinde (Bohrung bekommt den Namen, Gewinde selbst wird nicht modelliert)
+    thr.value = Object.keys(THREADS).find(m => f.name === `Gewinde ${m}`) ?? '';
+    thr.onchange = () => { pushHistory(); if (thr.value) { f.p.r = THREADS[thr.value] / 2; f.name = `Gewinde ${thr.value}`; } else delete f.name; refresh(); };
+  }
+  panel.querySelector<HTMLButtonElement>('.cb')?.addEventListener('click', () => { // Senkung: weitere Bohrung, 1,8-facher Durchmesser, 1/3 so tief
+    pushHistory(); const g: Extrude = { ...structuredClone(f), id: nextId++, p: { ...f.p, r: f.p.r * 1.8 }, d: -Math.max(1, Math.abs(f.d) / 3) };
+    delete (g as Feature).name; add(g); selId = g.id; refresh();
+  });
   const sub = panel.querySelector<HTMLInputElement>('.sub');
   if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; refresh(); };
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);
     if (!g) return showNotice('Versatz zu groß: von der Skizze bleibt nichts übrig');
-    pushHistory(); nextId++; features.push(g); selId = g.id; refresh();
+    pushHistory(); nextId++; add(g); selId = g.id; refresh();
   };
   panel.querySelectorAll<HTMLInputElement>('input[data-k]').forEach(inp => inp.onchange = () => {
     const v = parseFloat(inp.value);
@@ -906,7 +953,7 @@ function renderEdgePanel(f: EdgeOp) {
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function renderShellPanel(f: Shell) {
-  panel.innerHTML = `<h3>Schale #${f.id}</h3><label>Wandstärke <input type="number" step="0.5" min="0.1" value="${+f.t.toFixed(2)}"></label><button class="del">Löschen</button>`;
+  panel.innerHTML = `<h3>Schale #${f.id}</h3><p style="color:var(--muted);margin:0 0 6px">${1 + (f.more?.length ?? 0)} offene Fläche(n) · weitere: H, dann Shift+Klick</p><label>Wandstärke <input type="number" step="0.5" min="0.1" value="${+f.t.toFixed(2)}"></label><button class="del">Löschen</button>`;
   const inp = panel.querySelector('input')!;
   inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -919,14 +966,16 @@ function renderEdgeSetPanel() {
   panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => {
     const r = Math.max(0.5, parseFloat(panel.querySelector<HTMLInputElement>('.r')!.value) || 2);
     pushHistory();
-    for (const a of edgeSel) features.push({ id: nextId++, type: b.dataset.t as EdgeOp['type'], at: a.at, dir: a.dir, r, body: a.body });
+    for (const a of edgeSel) add({ id: nextId++, type: b.dataset.t as EdgeOp['type'], at: a.at, dir: a.dir, r, body: a.body });
     selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
   });
 }
 function deleteSel() {
   const ids = new Set([selId, ...multi]);
   if (!features.some(f => ids.has(f.id))) return;
-  pushHistory(); features = features.filter(f => !ids.has(f.id)); clearSel(); refresh();
+  pushHistory();
+  if (roll !== null) roll -= features.slice(0, roll).filter(f => ids.has(f.id)).length;
+  features = features.filter(f => !ids.has(f.id)); clearSel(); refresh();
 }
 function toggleHidden() {
   const fs = features.filter(f => f.id === selId || multi.has(f.id));
@@ -954,7 +1003,7 @@ function paste() {
     return isExtrude(f) ? { ...movedCopy(f, id, COPY_OFFSET), body }
       : { ...structuredClone(f), id, body, at: f.at.map((x, k) => x + COPY_OFFSET[k]) as Vec };
   });
-  features.push(...out);
+  add(...out);
   clip = structuredClone(out); // nochmal einfügen = nochmal versetzt
   clearSel();
   if (clipBody) selBody = newBody; else selId = out.at(-1)!.id;
@@ -981,7 +1030,7 @@ function openCtx(e: PointerEvent) {
   if (sel) {
     items.push([n > 1 ? `${n} Schritte löschen` : 'Löschen (Entf)', deleteSel], [sel.hidden ? 'Einschalten' : 'Ausschalten', toggleHidden],
       ['Duplizieren (Strg+D)', () => { copySel(); paste(); }], ['Kopieren (Strg+C)', copySel]);
-    const b = sel.type !== 'combine' && sel.type !== 'move' && sel.type !== 'plane' ? bodyOf(sel) : null;
+    const b = sel.type === 'move' ? sel.body : sel.type !== 'combine' && sel.type !== 'plane' ? bodyOf(sel) : null;
     if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
     if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details:not(.cons)'); if (d) d.open = true; }]);
     items.push(null);
@@ -1005,7 +1054,7 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; clearSel(); refresh(); } };
+$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
@@ -1020,7 +1069,7 @@ fileIn.onchange = async () => {
   pushHistory();
   if (!/\.(step|stp)$/i.test(file.name)) return restore(text);
   const f: Import = { id: nextId, type: 'import', name: file.name, step: text, body: nextId++ };
-  features.push(f); selId = f.id; refresh();
+  add(f); selId = f.id; refresh();
 };
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
@@ -1079,12 +1128,12 @@ function detachGizmo() { gizmo.detach(); }
 function addMove(q: THREE.Quaternion, t: THREE.Vector3, s = 1) {
   if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9 && s === 1) return;
   pushHistory();
-  features.push({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
+  add({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
   refresh();
 }
 function commitGizmo() { addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart)); }
 function renderBodyPanel(b: number) {
-  const others = bodyIds.filter(o => o !== b);
+  const others = bodyIds.filter(o => o !== b), planes = live().filter(f => f.type === 'plane');
   const bm = meta[b] ?? {};
   panel.innerHTML = `<h3>Körper #${b}</h3>
     <label>Name <input class="nm" placeholder="Körper #${b}"></label>
@@ -1099,6 +1148,8 @@ function renderBodyPanel(b: number) {
       <label>Winkel ° <input type="number" step="5" value="90" class="ang"></label><button class="rt">Drehen um Mitte</button>
       <label>Maßstab % <input type="number" step="10" value="200" class="sc"></label><button class="scl">Skalieren um Mitte</button>
     </details>` +
+    (planes.length ? `<label>an <select class="pl">${planes.map(p => `<option value="${p.id}">${nameOf(p)} #${p.id}</option>`).join('')}</select></label><button class="split">Teilen</button>`
+      : `<p style="color:var(--muted)">Teilen: erst mit E eine Ebene anlegen</p>`) +
     (others.length ? `<label>mit <select class="other">${others.map(o => `<option value="${o}">Körper #${o}</option>`).join('')}</select></label>
     <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '');
   panel.querySelectorAll<HTMLButtonElement>('button').forEach(x => x.classList.add('act'));
@@ -1112,6 +1163,8 @@ function renderBodyPanel(b: number) {
   q<HTMLSelectElement>('.mat').value = bm.mat ?? '';
   q<HTMLSelectElement>('.mat').onchange = e => setMeta('mat', (e.target as HTMLSelectElement).value);
   q<HTMLInputElement>('.col').onchange = e => setMeta('color', (e.target as HTMLInputElement).value);
+  const split = panel.querySelector<HTMLButtonElement>('.split');
+  if (split) split.onclick = () => { pushHistory(); add({ id: nextId++, type: 'split', body: b, plane: +q<HTMLSelectElement>('.pl').value }); detachGizmo(); refresh(); };
   q('.info').textContent = bodyVol[b] ? `${(bodyVol[b] / 1000).toFixed(2)} cm³${massText(b)}` : '';
   q<HTMLButtonElement>('.scl').onclick = () => {
     const s = num('.sc') / 100;
@@ -1128,7 +1181,7 @@ function renderBodyPanel(b: number) {
   };
   panel.querySelectorAll<HTMLButtonElement>('.op').forEach(x => x.onclick = () => { // b nimmt den anderen Körper auf
     const f: Combine = { id: nextId++, type: 'combine', op: x.dataset.op as Combine['op'], a: b, b: +q<HTMLSelectElement>('.other').value };
-    pushHistory(); features.push(f); detachGizmo(); refresh();
+    pushHistory(); add(f); detachGizmo(); refresh();
   });
 }
 
