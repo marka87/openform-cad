@@ -487,8 +487,10 @@ function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
   faceGrid.visible = !!workHit && grid.visible;
   if (!workHit) return;
-  const pl = planeFor(workHit); // Raster liegt im Ursprung der Skizzenebene, damit es zum Einrasten passt
-  faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v)).setPosition(V(pl.o).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
+  // Mitte an der angeklickten Stelle, auf volle 10 mm gerundet: die Linien bleiben auf dem Einrastraster der Skizzenebene
+  const pl = planeFor(workHit), [x, y] = toLocal(pl, workHit.point).map(c => Math.round(c / 10) * 10);
+  faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
+    .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
   showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
     + 'Raster auf der Fläche: hier weiterskizzieren · Doppelklick ins Leere oder Esc = zurück zum Boden · Leertaste über einer Fläche = Raster dorthin');
