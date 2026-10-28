@@ -55,8 +55,6 @@ const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
 // Raster auf einer Fläche (Doppelklick): dort weiterskizzieren, auch über den Rand der Fläche hinaus
 const faceGrid = new THREE.Group(); faceGrid.visible = false; scene.add(faceGrid);
-faceGrid.add(new THREE.GridHelper(200, 20, 0x4da3ff, 0x4d86c4), new THREE.GridHelper(200, 200, 0x4d86c4, 0x4d86c4));
-for (const [g, o] of faceGrid.children.map((g, i) => [g, i ? 0.12 : 0.55] as const)) Object.assign((g as THREE.GridHelper).material, { transparent: true, opacity: o, depthWrite: false }); // Körper bleibt sichtbar
 let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizzen ins Leere landen dort statt auf dem Boden
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
@@ -487,8 +485,17 @@ function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
   faceGrid.visible = !!workHit && grid.visible;
   if (!workHit) return;
-  // Mitte an der angeklickten Stelle, auf volle 10 mm gerundet: die Linien bleiben auf dem Einrastraster der Skizzenebene
-  const pl = planeFor(workHit), [x, y] = toLocal(pl, workHit.point).map(c => Math.round(c / 10) * 10);
+  // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
+  // die Linien bleiben auf dem Einrastraster der Skizzenebene
+  const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
+  const box = m ? new THREE.Box3().setFromObject(m) : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
+  const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
+  const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
+  const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
+  const size = 20 * Math.ceil((Math.max(hi[0] - x, x - lo[0], hi[1] - y, y - lo[1]) + 10) / 10), fine = Math.max(gridStep, 1);
+  faceGrid.children.forEach(g => (g as THREE.GridHelper).dispose());
+  faceGrid.clear().add(new THREE.GridHelper(size, size / 10, 0x4da3ff, 0x4d86c4), new THREE.GridHelper(size, Math.round(size / fine), 0x4d86c4, 0x4d86c4));
+  faceGrid.children.forEach((g, i) => Object.assign((g as THREE.GridHelper).material, { transparent: true, opacity: i ? 0.12 : 0.55, depthWrite: false })); // Körper bleibt sichtbar
   faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
     .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
