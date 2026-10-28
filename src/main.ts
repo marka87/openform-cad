@@ -217,8 +217,10 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     if (gizmo.object) attachGizmo(gizmo.mode as 'translate' | 'rotate'); // Griffe an die neue Lage setzen
     applyDisplay();
     bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area / 100).toFixed(1)} cm²` : '';
+    problems = new Map(data.unsure.map(id => [id, { bad: false, why: 'Bezug nur unsicher wiedergefunden – bitte prüfen' }]));
+    for (const [id, why] of data.errors) problems.set(id, { bad: true, why });
     renderTree();
-    showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : notice || HINTS[tool]);
+    showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || HINTS[tool]);
     notice = '';
     busy = false;
     // Vom Kern nachgetragene Bezüge und mitgewanderte Lagen übernehmen (kein Rückgängig-Schritt, ergibt sich aus dem Modell).
@@ -307,6 +309,8 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');
 let bodyInfo = ''; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
+// Schritte mit Problemen, vom Kern gemeldet: bad = nicht berechnet, sonst Bezug nur unsicher gefunden
+let problems = new Map<number, { bad: boolean; why: string }>();
 let bodyIds: number[] = [], selBody: number | null = null; // vorhandene Körper (vom Kern) und der ausgewählte
 let bodyVol: Record<number, number> = {}; // Volumen je Körper in mm³
 const bodyName = (b: number) => meta[b]?.name || `Körper #${b}`;
@@ -332,7 +336,7 @@ function renderTree() {
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
     `<h3>Schritte${bodyInfo}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
-    `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
+    `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}${problems.has(f.id) ? problems.get(f.id)!.bad ? ' bad' : ' unsure' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
   tree.querySelector<HTMLButtonElement>('.rollEnd')?.addEventListener('click', () => { pushHistory(); roll = null; refresh(); });
@@ -346,7 +350,8 @@ function renderTree() {
   });
   tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => {
     const i = +row.dataset.i!, f = features[i], span = row.querySelector('span')!;
-    span.textContent = f.name ? `${f.name}` : `${nameOf(f)} #${f.id}`;
+    span.textContent = (problems.has(f.id) ? '⚠ ' : '') + (f.name ? `${f.name}` : `${nameOf(f)} #${f.id}`);
+    if (problems.has(f.id)) span.title = problems.get(f.id)!.why; // Grund beim Überfahren
     span.ondblclick = () => { // umbenennen; leer = wieder Standardname
       span.contentEditable = 'true'; span.textContent = nameOf(f); span.focus(); getSelection()?.selectAllChildren(span);
       span.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); span.blur(); } };

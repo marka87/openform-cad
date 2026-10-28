@@ -51,10 +51,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Index-Referenzen bleiben vorerst parallel bestehen.
 - [x] T1.6 DONE — Rebuild auf Resolver umstellen, Feature für Feature.
       Reihenfolge: Fase/Rundung zuerst, dann Skizze-auf-Fläche.
-- [ ] T1.7 TODO — Fehlerfall sichtbar machen: unsichere oder verlorene
+- [x] T1.7 DONE — Fehlerfall sichtbar machen: unsichere oder verlorene
       Referenz markiert das Feature im Baum als defekt und bricht
       sichtbar ab. Niemals still auf die falsche Fläche auflösen.
-- [ ] T1.8 TODO — Gelöschtes oder umsortiertes Feature: Abstammung
+- [x] T1.8 DONE — Gelöschtes oder umsortiertes Feature: Abstammung
       zeigt ins Leere. Verhalten festlegen (Rückfall auf Fingerabdruck
       vs. Feature als defekt markieren) und testen.
 - [x] T1.9 DONE — Regressionstest: Grundkörper mit Skizze auf einer
@@ -80,6 +80,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen
       (heute zählt nur der Bezug).
 
+- [ ] T1.15 TODO — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
+      „Bezug übernehmen“ schreibt die gefundene Fläche als neuen Bezug.
+
 ## Epic 2: Sweep
 - [ ] T2.1 TODO — Profil + offener Pfad, ohne UI, mit Test.
 - [ ] T2.2 TODO — geschlossener Pfad, Ecken/Verrundung am Knick.
@@ -99,6 +102,15 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.7/T1.8: buildBody liefert `errors` (Grund je Feature),
+  der Baum markiert fehlgeschlagene Schritte rot mit ⚠, unsicher aufgelöste
+  gelb; Grund beim Überfahren und im Hinweis („Schritt #3: Kante nicht mehr
+  vorhanden“). Entscheidung T1.8: zeigt die Abstammung ins Leere
+  (Feature gelöscht, neu gezeichnet), entscheidet der Fingerabdruck und das
+  Feature baut, bleibt aber gelb markiert; der Bezug wird nicht still
+  umgeschrieben. Findet auch der Fingerabdruck nichts Passendes
+  (z. B. Fase vor ihre Bohrung geschoben), schlägt das Feature rot fehl.
+  Im Browser geprüft: Fase per Ziehen im Baum vor die Bohrung → rot.
 - 2026-10-28 T1.5/T1.6/T1.9/T1.10 (ein Commit, weil Schreib- und Lesepfad
   nur zusammen testbar sind): Skizze auf Fläche (`face`), Rundung/Fase
   (`edge`) und Schale (`faces`) tragen Bezüge. Entscheidung: nicht die

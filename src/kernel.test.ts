@@ -513,3 +513,19 @@ test('Bezüge werden nachgetragen und Abhängige wandern mit (T1.5/T1.6/T1.9)', 
   expect(c[1]).toBeCloseTo(15);
   expect(Math.hypot(c[0] - 3, c[2] + 7)).toBeCloseTo(1.5, 3);
 });
+
+test('Gelöschtes oder umsortiertes Bezugs-Feature: unsicher oder sichtbar fehlgeschlagen (T1.7/T1.8)', () => {
+  const take = (fs: Feature[]) => { const r = buildBody(fs); for (const [id, p] of r.fixes) Object.assign(fs.find(f => f.id === id)!, p); return r; };
+  // Grundkörper gelöscht und gleich neu gezeichnet: Abstammung zeigt ins Leere, Fingerabdruck findet den neuen Deckel → baut, aber unsicher
+  const h = hole(-4), rim: EdgeOp = { id: 3, type: 'chamfer', at: [13, 10, -5], dir: [0, 0, 1], r: 0.5 };
+  take([box(), h, rim]);
+  expect(h.face && rim.edge).toBeTruthy();
+  const again = { ...box(), id: 5 };
+  const r = buildBody([again, h, rim]);
+  expect(r.failed).toEqual([]);
+  expect(r.unsure).toContain(2);
+  // Fase vor die Bohrung geschoben: ihre Kante gibt es dort noch nicht → Fehler mit Grund, nicht irgendeine andere Kante
+  const moved = buildBody([box(), rim, h]);
+  expect(moved.failed).toEqual([3]);
+  expect(moved.errors.get(3)).toBe('Kante nicht mehr vorhanden');
+});
