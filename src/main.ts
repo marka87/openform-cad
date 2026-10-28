@@ -24,7 +24,7 @@ const HINTS: Record<Tool, string> = {
   arc:    'Anfang, Ende, dann Punkt auf dem Bogen klicken · weiter mit Bogen oder L (Linie) · Klick auf den ersten Punkt = schließen · Esc = abbrechen',
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
   plane:  'Fläche anklicken = Hilfsebene 10 mm davor · Ebene ziehen = Abstand ändern · darauf skizzieren wie auf einer Fläche',
-  measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand · dritter Klick beginnt neu',
+  measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
@@ -174,7 +174,10 @@ function bodyMesh(m: BodyMesh) {
   const he = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false }));
   he.geometry.setAttribute('position', eg.attributes.position);
   for (const o of [hf, he]) { o.visible = false; o.raycast = () => {}; o.renderOrder = 3; mesh.add(o); }
-  Object.assign(mesh.userData, { body: m.body, faces: m.faces, edges: m.edges, hf, he, fat });
+  // Schnittfläche: im Schnitt sieht man durch die Öffnung auf die Innenseiten; einfarbig wirken sie wie eine gefüllte Fläche
+  const cap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xd9822b, side: THREE.BackSide }));
+  cap.raycast = () => {}; cap.visible = false; mesh.add(cap);
+  Object.assign(mesh.userData, { body: m.body, faces: m.faces, edges: m.edges, hf, he, fat, cap });
   return mesh;
 }
 
@@ -629,8 +632,9 @@ function onDown(e: PointerEvent) {
     if (!P) return;
     const pts = [...features.filter(isExtrude).filter(f => !f.hidden).flatMap(keyPoints), ...snapSegs(null).flat()];
     const s = snapTo(P.toArray() as Vec, pts, [], 8 * pxSize());
-    measure = measure.length === 2 ? [] : measure;
+    if (measure.length === 2) { measure = []; measureN = []; }
     measure.push(s ? V(s.p) : P.clone());
+    measureN.push(!edge && h ? h.n.clone() : null);
     showMeasure();
     return;
   } else if (tool === 'plane') {
@@ -786,7 +790,7 @@ el.addEventListener('pointerup', e => {
 let lastTool: Tool = 'rect'; // Leertaste wählt es wieder
 function setTool(t: Tool) {
   const keep = poly && !poly.smooth && ['line', 'arc'].includes(t) && ['line', 'arc'].includes(tool); // zwischen Linie und Bogen wechseln
-  if (t !== tool && !keep) { cancelPoly(); measure = []; }
+  if (t !== tool && !keep) { cancelPoly(); measure = []; measureN = []; }
   if (poly) poly.arcEnd = undefined;
   if (t !== 'select') lastTool = t;
   typed = '';
@@ -1223,7 +1227,7 @@ function renderBodyPanel(b: number) {
 }
 
 // ---------- Messen ----------
-let measure: THREE.Vector3[] = [];
+let measure: THREE.Vector3[] = [], measureN: (THREE.Vector3 | null)[] = []; // Punkte und, auf Flächen, deren Normalen
 function showMeasure() {
   disposeGroup(preview);
   const mat = new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false });
@@ -1232,7 +1236,8 @@ function showMeasure() {
   const [a, b] = measure, d = b.clone().sub(a);
   preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false })));
   // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
-  showHint(`Abstand ${d.length().toFixed(2)} mm · ΔX ${d.x.toFixed(2)} · ΔY ${(-d.z).toFixed(2)} · ΔZ ${d.y.toFixed(2)}`);
+  const [n1, n2] = measureN, ang = n1 && n2 ? ` · Winkel der Flächen ${(Math.acos(Math.max(-1, Math.min(1, n1.dot(n2)))) * 180 / Math.PI).toFixed(1)}°` : '';
+  showHint(`Abstand ${d.length().toFixed(2)} mm · ΔX ${d.x.toFixed(2)} · ΔY ${(-d.z).toFixed(2)} · ΔZ ${d.y.toFixed(2)}${ang}`);
 }
 
 // ---------- Ansichten ----------
@@ -1292,7 +1297,7 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, render: false, color: '#c9ced6', grid: 1 };
+const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 1 };
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
@@ -1302,11 +1307,12 @@ function applyDisplay() {
   scene.environment = envMap;
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-  grid.visible = fine.visible = !display.render;
+  grid.visible = fine.visible = !display.render && !display.section; // Raster schiene durch die Schnittfläche
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
-    const c = new THREE.Box3().setFromObject(bodyGroup).getCenter(new THREE.Vector3()), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
-    cut.setFromNormalAndCoplanarPoint(n, c);
+    const box = new THREE.Box3().setFromObject(bodyGroup), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
+    const half = Math.abs(box.getSize(new THREE.Vector3()).dot(n)) / 2; // Regler −1 … 1 = ganze Tiefe des Modells
+    cut.setFromNormalAndCoplanarPoint(n, box.getCenter(new THREE.Vector3()).addScaledVector(n, display.secOff * half * 0.999));
   }
   for (const mesh of bodyGroup.children as THREE.Mesh[]) {
     const m = mesh.material as THREE.MeshStandardMaterial, lines = mesh.children[0] as THREE.LineSegments;
@@ -1318,6 +1324,9 @@ function applyDisplay() {
     m.transparent = display.glass; m.opacity = display.glass ? 0.35 : 1; m.depthWrite = !display.glass;
     m.metalness = display.render ? 0.35 : 0.1; m.roughness = display.render ? 0.35 : 0.6;
     m.clippingPlanes = (lines.material as THREE.Material).clippingPlanes = mesh.userData.fat.material.clippingPlanes = display.section ? [cut] : null;
+    m.side = display.section && !display.wire ? THREE.FrontSide : THREE.DoubleSide; // im Schnitt zeigt cap die Innenseiten
+    mesh.userData.cap.visible = !!display.section && !display.wire && !display.glass;
+    mesh.userData.cap.material.clippingPlanes = display.section ? [cut] : null;
     m.needsUpdate = true;
     mesh.userData.fat.visible = display.edges;
   }
@@ -1327,8 +1336,11 @@ function applyDisplay() {
     if (b.dataset.show === 'section') b.textContent = display.section ? `Schnitt ${'XYZ'[display.section - 1]}` : 'Schnitt';
   });
   $<HTMLInputElement>('bodyColor').value = display.color;
+  $('secOff').style.display = display.section ? '' : 'none';
+  $<HTMLInputElement>('secOff').value = String(display.secOff);
   gridStep = display.grid; $<HTMLSelectElement>('gridStep').value = String(display.grid);
 }
+$<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
 
 // Symbole und Tooltips für die Werkzeugleiste

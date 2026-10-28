@@ -9,10 +9,10 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
   canvas { display:block; }
-  #toolbar { position:fixed; left:12px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px;
+  #toolbar { position:fixed; left:12px; top:120px; bottom:150px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; justify-content:safe center;
     background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
-    padding:8px 10px; cursor:pointer; font:inherit; text-align:left; }
+    padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
   #toolbar button:hover, #top button:hover { background:#353a42; }
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
   #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
@@ -125,6 +125,7 @@
   <button data-view="fit" title="Taste F">Einpassen</button>
   <button data-show="wire">Draht</button><button data-show="glass">Transparent</button><button data-show="edges" class="on">Kanten</button>
   <button data-show="section" title="Schnitt durch die Mitte: aus → X → Y → Z">Schnitt</button><button data-show="render">Render</button>
+  <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
   <label title="Farbe des Körpers"><input type="color" id="bodyColor" value="#c9ced6"></label>
   <label title="Rastergröße beim Skizzieren">Raster <select id="gridStep"><option>0.1</option><option>0.5</option><option selected>1</option><option>5</option><option>10</option></select> mm</label>
 </div>
