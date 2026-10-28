@@ -134,12 +134,19 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [ ] T6.1b BLOCKED — Fläche löschen: die mitgelieferte OpenCascade-WASM
       enthält BRepAlgoAPI_Defeaturing nicht; bräuchte einen eigenen
       opencascade.js-Build (Entscheidung des Nutzers, siehe Offene Fragen).
-- [ ] T6.2 TODO — Drehkörper um eine beliebige gerade Kante.
+- [x] T6.2 DONE — Drehkörper um eine beliebige gerade Kante.
 - [ ] T6.3 TODO — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
       Rundungen und ganze Körper.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T6.2: Drehkörper um eine beliebige Gerade in der
+  Skizzenebene (`axisLine`), im Seitenfeld „Drehen um → Kante anklicken“;
+  die Kante muss in der Skizzenebene liegen (sonst Hinweis). revAxis() in
+  model.ts fasst x-/y-Achse und Gerade zusammen, die Flächenbenennung des
+  Drehkörpers rechnet jetzt allgemein (Test: Achse bei x = 2 → Rohr
+  3/8 mm, Seiten und Anfang/Ende benannt). Abkürzung: die Achse ist eine
+  feste Gerade, nicht an die Kante gebunden. Im Browser geprüft.
 - 2026-10-28 T6.1: Feature `offset` (Fläche versetzen): Ziehen an einer
   Fläche ohne eigenes Feature (STEP-Import, Loft, nach Booleschen
   Operationen) versetzt sie entlang der Normalen; Kern legt das Prisma der

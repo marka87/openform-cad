@@ -501,6 +501,7 @@ function setHover(on: boolean) {
   }
 }
 let auxPick: number | null = null;
+let axisFor: number | null = null; // Skizze, deren Drehachse gerade per Kantenklick gewählt wird
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
@@ -769,6 +770,16 @@ function onDown(e: PointerEvent) {
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'trim') return trimAt(e);
+  if (axisFor !== null) { // Drehachse: angeklickte gerade Kante, muss in der Skizzenebene liegen
+    const f = getById(axisFor);
+    axisFor = null;
+    if (!edge || !f || !isExtrude(f)) { showHint('Keine Kante getroffen'); return refresh(); }
+    const off = V(edge.at).sub(V(f.o)).dot(V(f.n)), tilt = V(edge.dir).dot(V(f.n));
+    if (Math.abs(off) > 1e-3 || Math.abs(tilt) > 1e-3) { showHint('Die Kante liegt nicht in der Ebene der Skizze'); return refresh(); }
+    // shortcut: Achse als feste Gerade gespeichert, nicht an die Kante gebunden → EdgeRef wie bei Rundungen, wenn sie mitwandern soll
+    pushHistory(); f.axisLine = { p: edge.at, d: edge.dir }; delete f.axis; f.rev ||= 360;
+    return refresh();
+  }
   if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
@@ -1042,7 +1053,7 @@ function renderPanel() {
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
     (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="${uval(2)}" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
-    (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
+    (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option><option value="edge">Kante anklicken …</option></select></label>` : '') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
@@ -1074,9 +1085,11 @@ function renderPanel() {
   if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
   if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
-    revAx.value = f.rev ? f.axis ?? 'u' : '';
+    revAx.value = f.rev ? f.axisLine ? 'edge' : f.axis ?? 'u' : '';
     revAx.onchange = () => {
+      if (revAx.value === 'edge') { axisFor = f.id; return showHint('Gerade Kante anklicken, die in der Ebene der Skizze liegt · Esc = abbrechen'); }
       pushHistory();
+      delete f.axisLine;
       if (revAx.value) { f.axis = revAx.value as 'u' | 'v'; f.rev ||= 360; } else { delete f.rev; delete f.axis; }
       refresh();
     };
@@ -1476,7 +1489,7 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(poly.path === undefined && !poly.aux); // Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { axisFor = null; if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 // ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------

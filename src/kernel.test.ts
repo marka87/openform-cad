@@ -693,3 +693,14 @@ test('Fläche versetzen an einer ebenen Loft-Seite (als B-Spline gespeichert)', 
   expect(r.failed).toEqual([]);
   expect(measureVolume(r.bodies.get(3)!)).toBeCloseTo(v0 + (40 + 20) / 2 * Math.hypot(10, 30) * 2, 0); // genau Fläche × Versatz dazu
 });
+
+test('Drehkörper um eine beliebige Gerade in der Skizzenebene (T6.2)', () => {
+  // Rechteck x 5..10, Skizzen-y 0..20 auf dem Boden; Achse parallel zur y-Achse der Skizze bei x = 2 → Rohr Innenradius 3, außen 8
+  const base = { ...sketchFeature('rect', GROUND, [5, 0], [10, 20], 1, false)!, rev: 360 };
+  const r = buildBody([{ ...base, axisLine: { p: [2, 0, 0] as Vec, d: [0, 0, -1] as Vec } }]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(Math.PI * (64 - 9) * 20, 0);
+  expect(r.origins.get(1)!.map(o => o?.tag).sort()).toEqual(['x0', 'x1', 'y0', 'y1']);   // Seiten weiter benannt
+  const half = buildBody([{ ...base, rev: 90, axisLine: { p: [2, 0, 0] as Vec, d: [0, 0, -1] as Vec } }]);
+  expect(half.origins.get(1)!.map(o => o?.tag).sort()).toEqual(['end', 'start', 'x0', 'x1', 'y0', 'y1']);
+});

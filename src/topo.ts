@@ -3,7 +3,7 @@
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
 import { basicFaceExtrusion, cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, Vector, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
-import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Offset, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
+import { bounds, movedCopy, revAxis, sideOf, type EdgeOp, type Extrude, type Offset, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -135,18 +135,20 @@ export function nameSolid(f: Extrude, s: Shape3D): Named {
 // Drehkörper: Seiten über Abstand zur Achse und Lage entlang der Achse zurück in die Skizze gedreht;
 // 'start' = Fläche in der Skizzenebene, 'end' = um den Winkel gedrehte Endfläche (fehlt bei 360°)
 function nameRevolved(f: Extrude, s: Shape3D): Named {
-  const ax = f.axis ?? 'u', a = f[ax], perp = ax === 'u' ? f.v : f.u, p = f.p;
+  const { p: A, d: a, w } = revAxis(f), p = f.p;
   const c = f.type === 'rect' ? [p.x + p.w / 2, p.y + p.h / 2] : f.type === 'circle' ? [p.cx, p.cy] : f.pts![0];
-  const sgn = Math.sign(ax === 'u' ? c[1] : c[0]) || 1; // Seite der Achse, auf der das Profil liegt
+  const C = [0, 1, 2].map(i => f.o[i] + c[0] * f.u[i] + c[1] * f.v[i]);
+  const sgn = Math.sign(dot(sub3(C, A), w)) || 1; // Seite der Achse, auf der das Profil liegt
   return s.faces.map(face => {
-    const P = face.pointOnSurface(0.5, 0.5).toTuple(), q = [0, 1, 2].map(i => P[i] - f.o[i]), t = dot(q, a);
+    const P = face.pointOnSurface(0.5, 0.5).toTuple(), q = sub3(P, A), t = dot(q, a);
     if (face.geomType === 'PLANE') {
       const N = face.normalAt(P).toTuple();
       if (Math.abs(dot(N, a)) < 1e-6 && Math.abs(dot(q, N)) < 1e-4) // Ebene durch die Achse: Anfang oder Ende
-        return { face, o: { f: f.id, tag: Math.abs(dot(N, f.n)) > 0.999 && Math.sign(dot(q, perp)) === sgn ? 'start' : 'end' } };
+        return { face, o: { f: f.id, tag: Math.abs(dot(N, f.n)) > 0.999 && Math.sign(dot(q, w)) === sgn ? 'start' : 'end' } };
     }
-    const r = sgn * Math.hypot(...[0, 1, 2].map(i => q[i] - t * a[i]));
-    return { face, o: ax === 'u' ? side(f, t, r) : side(f, r, t) };
+    // Punkt um die Achse zurück in die Skizzenebene drehen und dort die Seite suchen
+    const r = Math.hypot(...[0, 1, 2].map(i => q[i] - t * a[i])), Q = [0, 1, 2].map(i => A[i] + t * a[i] + sgn * r * w[i]);
+    return { face, o: side(f, ...sketchXY(f, Q)) };
   });
 }
 

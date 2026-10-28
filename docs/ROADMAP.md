@@ -54,7 +54,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Körper skalieren (um die Mitte, in %)
 - [x] Drehen (Revolve) einer Skizze um ihre x- oder y-Achse, Winkel einstellbar
 - [x] Drehkörper abziehen (Nut, Häkchen im Seitenfeld)
-- [ ] Um beliebige Kante drehen
+- [x] Um beliebige gerade Kante in der Skizzenebene drehen
 - [x] Schale: Wandstärke, eine Fläche offen (Werkzeug H)
 - [x] Schale mit mehreren offenen Flächen (H, Shift+Klick)
 - [x] Fläche versetzen (ebene Flächen, auch an Importen und Lofts)

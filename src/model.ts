@@ -19,6 +19,7 @@ export interface Extrude extends Frame {
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
+  axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
@@ -71,6 +72,12 @@ export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefP
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Flache Skizze: weder extrudiert noch gedreht
+// Drehachse eines Drehkörpers als Punkt + Einheitsrichtung und die Richtung w in der Skizzenebene quer dazu
+export function revAxis(f: Extrude) {
+  const p = f.axisLine?.p ?? f.o, d0 = f.axisLine?.d ?? f[f.axis ?? 'u'], L = Math.hypot(...d0), d = d0.map(x => x / L) as Vec;
+  const w = f.axisLine ? [f.n[1] * d[2] - f.n[2] * d[1], f.n[2] * d[0] - f.n[0] * d[2], f.n[0] * d[1] - f.n[1] * d[0]] as Vec : f.axis === 'v' ? f.u : f.v;
+  return { p, d, w };
+}
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | 'arc';

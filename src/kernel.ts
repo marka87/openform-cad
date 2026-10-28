@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { bodyOf, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -14,7 +14,8 @@ function sketchOf(f: Extrude) {
 
 export function solidOf(f: Extrude): Shape3D {
   const sk = sketchOf(f);
-  let s = (f.rev ? sk.revolve(f[f.axis ?? 'u'], { origin: f.o, angle: f.rev }) : sk.extrude(f.d)) as Shape3D;
+  const ax = f.rev ? revAxis(f) : null;
+  let s = (ax ? sk.revolve(ax.d, { origin: ax.p, angle: f.rev }) : sk.extrude(f.d)) as Shape3D;
   // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
   for (const c of [...f.and ?? [], ...f.not ?? []]) {
     const tool = solidOf({ ...c, o: c.o.map((x, i) => x - 1e4 * c.n[i]) as Vec, d: 2e4 });
