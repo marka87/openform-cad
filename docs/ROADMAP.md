@@ -31,7 +31,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Weitere Formen: regelmäßiges Vieleck (n Ecken), Langloch
 - [x] Ellipse (I), Bogen über 3 Punkte (A, wechselt mit der Linie L)
 - [x] Bemaßungen und Abhängigkeiten mit planegcs für Vielecke: Seitenlänge, waagrecht, senkrecht, parallel, rechtwinklig, gleich lang; Maßzahlen an den Seiten, gelten auch beim Ziehen
-- [ ] Weitere Abhängigkeiten: Winkel, Radius/Tangente an Bögen, Abstand Punkt–Punkt über Seiten hinweg, fester Punkt, Bezug zu anderen Skizzen
+- [x] Winkel zwischen Seiten, fester Punkt
+- [ ] Weitere Abhängigkeiten: Radius/Tangente an Bögen, Abstand Punkt–Punkt über Seiten hinweg, Bezug zu anderen Skizzen
 - [x] Waagrecht/senkrecht gezeichnete Seiten bekommen automatisch die Abhängigkeit
 - [ ] Weitere automatische Abhängigkeiten aus dem Einrasten (auf Linie, im Punkt)
 - [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3

@@ -637,3 +637,20 @@ test('Hilfslinien trimmen und verlängern (T5.2)', () => {
   expect(extendOpen(pts.slice(0, 2), 1, [[[30, -5], [30, 5]]])).toEqual([[0, 0], [30, 0]]);
   expect(extendOpen(pts.slice(0, 2), 0, [[[30, -5], [30, 5]]])).toBeNull();
 });
+
+test('Abhängigkeiten: Winkel zwischen Seiten und fester Punkt (T5.4)', async () => {
+  const { make_gcs_wrapper } = await import('@salusoft89/planegcs');
+  const { solveSketch } = await import('./sketchSolver');
+  const gcs = await make_gcs_wrapper();
+  const pts = [[0, 0], [20, 0], [18, 10], [0, 10]];                   // Seite 2 (1→2) leicht schräg
+  const ang = (p: number[][], i: number, j: number) => { const d = (k: number) => [p[(k + 1) % 4][0] - p[k][0], p[(k + 1) % 4][1] - p[k][1]], a = d(i), b = d(j);
+    return Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1])) * 180 / Math.PI; };
+  const out = solveSketch(gcs, pts, [{ t: 'ang', i: 0, j: 1, val: 60 }, { t: 'fix', i: 0, p: [0, 0] }, { t: 'fix', i: 1, p: [20, 0] }])!;
+  expect(out).not.toBeNull();
+  expect(ang(out, 0, 1)).toBeCloseTo(60, 3);
+  expect(out[0]).toEqual([0, 0]);                                     // feste Punkte bleiben
+  expect(out[1]).toEqual([20, 0]);
+  // fester Punkt hält auch, wenn er gezogen wird: Ziehen an Punkt 0 nach (5, 5) wird zurückgestellt
+  const pulled = solveSketch(gcs, [[5, 5], ...pts.slice(1)], [{ t: 'fix', i: 0, p: [0, 0] }], [0])!;
+  expect(pulled[0]).toEqual([0, 0]);
+});

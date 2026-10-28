@@ -1094,8 +1094,14 @@ function renderPanel() {
 // Maße und Abhängigkeiten eines Vielecks: je gerade Seite Länge (eingeben = festlegen), waagrecht, senkrecht;
 // zwei Seiten parallel, rechtwinklig, gleich lang; Liste der gesetzten Abhängigkeiten mit ✕
 const sideLen = (pts: number[][], i: number) => { const a = pts[i], b = pts[(i + 1) % pts.length]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
-const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=' };
-const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${len(c.val!, 2)}` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
+// Winkel zwischen Seite i und j (Grad, 0–180)
+const angleOf = (pts: number[][], i: number, j: number) => {
+  const d = (k: number) => [pts[(k + 1) % pts.length][0] - pts[k][0], pts[(k + 1) % pts.length][1] - pts[k][1]], a = d(i), b = d(j);
+  return Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1])) * 180 / Math.PI;
+};
+const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=', ang: '∠', fix: 'fest' };
+const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${len(c.val!, 2)}` : c.t === 'fix' ? `Punkt ${c.i + 1} fest`
+  : c.t === 'ang' ? `Seite ${c.i + 1} ∠ Seite ${c.j! + 1} = ${+c.val!.toFixed(2)}°` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
 function consHtml(f: Extrude) {
   const pts = f.pts!, sides = pts.map((_, i) => i).filter(i => !pts[i][2]), has = (t: Con['t'], i: number) => f.cons?.some(c => c.t === t && c.i === i);
   const opts = sides.map(i => `<option value="${i}">${i + 1}</option>`).join('');
@@ -1103,7 +1109,9 @@ function consHtml(f: Extrude) {
     sides.map(i => `<label>Seite ${i + 1} <span><input type="number" step="0.5" class="len${has('len', i) ? ' lock' : ''}" data-i="${i}" value="${uval(sideLen(pts, i))}">` +
       `<button class="hv${has('h', i) ? ' on' : ''}" data-t="h" data-i="${i}" title="waagrecht">—</button><button class="hv${has('v', i) ? ' on' : ''}" data-t="v" data-i="${i}" title="senkrecht">|</button></span></label>`).join('') +
     (sides.length > 1 ? `<label>Seiten <span><select class="sa">${opts}</select> <select class="sb">${opts}</select></span></label>
-      <div class="pair"><button data-t="par" title="parallel">∥</button><button data-t="perp" title="rechtwinklig">⟂</button><button data-t="eq" title="gleich lang">=</button></div>` : '') +
+      <div class="pair"><button data-t="par" title="parallel">∥</button><button data-t="perp" title="rechtwinklig">⟂</button><button data-t="eq" title="gleich lang">=</button>
+      <button data-t="ang" title="Winkel zwischen den Seiten">∠</button><input class="angv" type="number" step="1" value="${+angleOf(pts, 0, 1).toFixed(1)}" style="width:4.5em">°</div>` : '') +
+    `<label>Punkt <span><select class="fp">${pts.map((_, i) => `<option value="${i}">${i + 1}</option>`).join('')}</select> <button class="fix" title="Punkt an seiner Stelle festhalten">fest</button></span></label>` +
     (f.cons ?? []).map((c, k) => `<div class="con">${conText(c)}<button data-k="${k}" title="entfernen">✕</button></div>`).join('') + `</details>`;
 }
 function bindCons(f: Extrude) {
@@ -1130,8 +1138,18 @@ function bindCons(f: Extrude) {
   panel.querySelectorAll<HTMLButtonElement>('.cons .pair button').forEach(b => b.onclick = () => {
     const i = +panel.querySelector<HTMLSelectElement>('.sa')!.value, j = +panel.querySelector<HTMLSelectElement>('.sb')!.value;
     if (i === j) return showHint('Bitte zwei verschiedene Seiten wählen');
-    addCon({ t: b.dataset.t as Con['t'], i, j });
+    const t = b.dataset.t as Con['t'];
+    addCon(t === 'ang' ? { t, i, j, val: +panel.querySelector<HTMLInputElement>('.angv')!.value } : { t, i, j });
   });
+  panel.querySelector<HTMLButtonElement>('.cons .fix')?.addEventListener('click', () => {
+    const i = +panel.querySelector<HTMLSelectElement>('.fp')!.value;
+    if (f.cons?.some(c => c.t === 'fix' && c.i === i)) return remove(c => !(c.t === 'fix' && c.i === i)); // nochmal = lösen
+    addCon({ t: 'fix', i, p: f.pts![i].slice(0, 2) });
+  });
+  // Winkelfeld zeigt den aktuellen Winkel der gewählten Seiten
+  const showAng = () => { const v = panel.querySelector<HTMLInputElement>('.angv'); if (v) v.value = String(+angleOf(f.pts!, +panel.querySelector<HTMLSelectElement>('.sa')!.value, +panel.querySelector<HTMLSelectElement>('.sb')!.value).toFixed(1)); };
+  panel.querySelectorAll<HTMLSelectElement>('.cons .sa, .cons .sb').forEach(s => s.addEventListener('change', showAng));
+  showAng();
   panel.querySelectorAll<HTMLButtonElement>('.cons .con button').forEach(b => b.onclick = () => { const c = f.cons![+b.dataset.k!]; remove(d => d !== c); });
 }
 

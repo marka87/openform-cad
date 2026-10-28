@@ -120,11 +120,14 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
 - [x] T5.3 DONE — Körperkanten in die Skizzenebene projizieren (als
       Hilfslinien, an den Körper gebunden).
-- [ ] T5.4 TODO — Weitere Abhängigkeiten: Winkel zwischen Seiten, fester
+- [x] T5.4 DONE — Weitere Abhängigkeiten: Winkel zwischen Seiten, fester
       Punkt, Tangente Linie–Bogen, Radius eines Bogens.
 
 - [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen) und
       an den Körper gebunden, damit sie bei Änderungen mitwandert.
+
+- [ ] T5.6 TODO — Bögen im Löser als echte Kreisbögen (planegcs arc):
+      Radius-Maß und Tangente Linie–Bogen.
 
 ## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
 - [ ] T6.1 TODO — Fläche versetzen (Offset Face) und Fläche löschen
@@ -135,6 +138,11 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T5.4: Winkel zwischen zwei Seiten (planegcs l2l_angle_ll,
+  Drehsinn aus der aktuellen Form, damit nichts umklappt) und fester Punkt
+  (Lage im Con gespeichert, hält auch beim Ziehen). Panel: ∠ mit Winkelfeld
+  (zeigt den aktuellen Winkel), „fest“ je Punkt. Tangente und Bogenradius
+  verschoben: der Löser kennt Bögen nur als Sehne → T5.6.
 - 2026-10-28 T5.3: P bei aktivem Flächenraster projiziert alle Kanten des
   Körpers als Hilfslinien „Projektion“ in diese Ebene (deckungsgleiche nur
   einmal, von der Seite gesehene Kreise als eine Strecke). Abweichung vom
