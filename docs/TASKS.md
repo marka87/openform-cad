@@ -3,8 +3,7 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 
 ## Epic 1: Persistente topologische Referenzen
 
-Ansatz (vorgeschlagen, wird in T1.0 als docs/adr/0001-topo-naming.md
-festgehalten):
+Ansatz (entschieden, siehe docs/adr/0001-topo-naming.md):
 Identität einer Fläche/Kante = ihre Abstammung aus der Feature-Historie
 (OCCT Modified/Generated/IsDeleted), verankert an stabilen Skizzen- und
 Feature-IDs. Geometrischer Fingerabdruck dient nur als Plausibilitäts-
@@ -21,7 +20,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T1.1 DONE — Bestandsaufnahme: wo im Feature-JSON werden Flächen
       und Kanten referenziert? Welche Lookups nutzen OCCT-Indizes?
       Ergebnis nach docs/TOPO-NAMING.md. Kein Code.
-- [ ] T1.1b TODO — Stabile IDs sicherstellen: jede Skizzenkurve und
+- [x] T1.1b DONE — Stabile IDs sicherstellen: jede Skizzenkurve und
       jedes Feature bekommt eine ID, die Umbenennen und Umsortieren im
       Baum übersteht. Falls heute über Index oder Name identifiziert
       wird, hier umstellen — ohne das trägt die Abstammung nicht.
@@ -60,6 +59,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [ ] T1.10 TODO — Migration bestehender `.ofc`-Dateien: beim Laden
       Refs nachrüsten, alte Dateien dürfen nicht brechen.
 
+- [ ] T1.11 TODO — Sobald Vieleck-Punkte eingefügt/gelöscht werden können:
+      jede Seite bekommt eine eigene ID (statt Index), Con.i und Refs
+      darauf umstellen, Migration.
+
 ## Epic 2: Sweep
 - [ ] T2.1 TODO — Profil + offener Pfad, ohne UI, mit Test.
 - [ ] T2.2 TODO — geschlossener Pfad, Ecken/Verrundung am Knick.
@@ -79,6 +82,14 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.1b: kein Umbau nötig. Jede ID kommt aus `nextId` (mit
+  dem Modell gespeichert), Kopien/Muster/Spiegeln/Einfügen holen neue IDs,
+  Umbenennen ändert nur `name`, Umsortieren nur die Reihenfolge.
+  Skizzenkurven: Rechteckseiten heißen x0/x1/y0/y1, Kreis/Ellipse haben
+  eine, Vieleck-Seiten Index i – stabil, weil Punkte weder eingefügt noch
+  gelöscht werden können. Bereichs-Features (`and`/`not`) tragen Kopien
+  mit den IDs der Original-Skizzen; die sind innerhalb des Bereichs
+  eindeutig. Keine Migration. ADR 0001 vom Nutzer freigegeben.
 - 2026-10-28 T1.1: docs/TOPO-NAMING.md. Keine OCCT-Index-Bezüge; Skizze
   auf Fläche, Rundung/Fase und Schale hängen an kopierten Weltkoordinaten.
   Feature-, Körper-, Loft- und Split-Bezüge laufen über stabile IDs.
@@ -90,6 +101,3 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- ADR 0001 freigeben? Abstammung über eigene OCCT-Wrapper (mehr Code,
-  eindeutig) statt nur Fingerabdruck (weniger Code, rät bei gleichen
-  Flächen). Erst danach T1.1b/T1.2.

@@ -1,6 +1,6 @@
 # ADR 0001 – Stabile Flächen- und Kantenbezüge
 
-Status: vorgeschlagen (Spike T1.0 abgeschlossen, Entscheidung durch den Nutzer vor T1.2)
+Status: angenommen (vom Nutzer freigegeben am 2026-10-28)
 
 ## Frage
 
@@ -58,7 +58,7 @@ Probe-Code (Wegwerf, nicht im Repo): drei vitest-Fälle, je ca. 15 Zeilen.
   „Deckel“, „Rundung an Kante X“) + Kette der ändernden Feature-IDs.
 - STEP-Import hat keine Historie → dort nur Fingerabdruck.
 
-## Entscheidung (Vorschlag)
+## Entscheidung
 
 Abstammung aus der OCCT-Historie über eigene Wrapper, verankert an
 Feature-IDs. Fingerabdruck (Flächentyp, Normale, Schwerpunkt, Fläche)
