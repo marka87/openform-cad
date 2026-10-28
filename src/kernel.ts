@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
-import { anchorEdges, anchorFaces, anchorSketch, boolean, byIndex, edgeOp, nameLoft, nameSolid, originsOf, shell, type Named, type Origin } from './topo';
+import { draw, drawCircle, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { anchorEdges, anchorFaces, anchorSketch, boolean, byIndex, edgeOp, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -25,19 +25,23 @@ export function solidOf(f: Extrude): Shape3D {
   return s;
 }
 
-function polyDrawing(pts: number[][], smooth?: boolean) {
+function polyDrawing(pts: number[][], smooth?: boolean, open = false) {
   const pen = draw([pts[0][0], pts[0][1]]);
   if (smooth) {
     for (const [, c1, c2, e] of splineBeziers(pts)) pen.cubicBezierCurveTo(e as [number, number], c1 as [number, number], c2 as [number, number]);
     return pen.close();
   }
   pts.forEach((q, i) => {
+    if (open && i === pts.length - 1) return; // offen: kein Schlusssegment
     const next = pts[(i + 1) % pts.length], to: [number, number] = [next[0], next[1]];
     if (q[2]) pen.bulgeArcTo(to, q[2]);
-    else if (i < pts.length - 1) pen.lineTo(to); // gerades Schlusssegment erledigt close()
+    else if (open || i < pts.length - 1) pen.lineTo(to); // gerades Schlusssegment erledigt close()
   });
-  return pen.close();
+  return open ? pen.done() : pen.close();
 }
+
+// Pfad eines Sweeps als Draht in seiner Ebene
+export const pathWire = (f: Sweep) => (polyDrawing(f.pts, false, !f.closed).sketchOnPlane(new Plane(f.o, f.u, f.n)) as any).wire as Wire;
 
 // Features der Reihe nach in ihren Körper einrechnen (vereinigen, abziehen, Kanten bearbeiten), Körper verrechnen und bewegen.
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
@@ -115,6 +119,11 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!A || !B || !isExtrude(A) || !isExtrude(B)) throw new Error('Skizze für den Übergang fehlt');
         s = sketchOf(A).loftWith(sketchOf(B)) as Shape3D;
         nS = nameLoft(f.id, A, B, s);
+      } else if (f.type === 'sweep') {
+        const P = moved.get(f.profile) ?? features.find(g => g.id === f.profile);
+        if (!P || !isExtrude(P) || !isFlat(P)) throw new Error('Profil für den Zug fehlt');
+        if (f.sub && !body) continue;
+        [s, nS] = sweep(f, P, sketchOf(P).wire, pathWire(f));
       } else {
         if (!isExtrude(f)) continue;
         const g = anchor(f.id, anchorSketch(f, body, names.get(k) ?? [])).f; // Skizze auf ihre (vielleicht gewanderte) Fläche setzen
@@ -124,7 +133,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         nS = nameSolid(g, s);
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
-      done(...boolean(isExtrude(f) && isCut(f) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
+      done(...boolean((isExtrude(f) && isCut(f)) || (f.type === 'sweep' && f.sub) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
       s.delete(); // WASM-Speicher freigeben
     } catch (e) {
       console.warn('Feature', f.id, 'fehlgeschlagen', e);

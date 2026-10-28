@@ -322,6 +322,7 @@ function nameOf(f: Feature) {
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'loft') return 'Übergang';
+  if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
   if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
@@ -827,7 +828,7 @@ function renderPanel() {
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
+  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft' || f.type === 'sweep') {
     panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }

@@ -35,6 +35,10 @@ export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: nu
 export interface Split { id: number; type: 'split'; body: number; plane: number; hidden?: boolean }
 // Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
 export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: number; hidden?: boolean }
+// Profil (flache Skizze profile) entlang eines Pfads ziehen. Der Pfad ist ein Linienzug in eigener Ebene (Frame):
+// pts wie beim Vieleck [x, y, bulge?], offen oder geschlossen (closed). round = Knicke rund statt auf Gehrung.
+// Das Profil sollte am Pfadanfang liegen; es wird so mitgeführt, wie es gezeichnet ist.
+export interface Sweep extends Frame { id: number; type: 'sweep'; profile: number; pts: number[][]; closed?: boolean; round?: boolean; sub?: boolean; body?: number; hidden?: boolean }
 // Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
@@ -45,8 +49,8 @@ export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat
 export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, Aluminium: 2.7, Messing: 8.5, PLA: 1.24, ABS: 1.05, Holz: 0.6 };
 // Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft) & { name?: string }; // name = eigener Name im Baum
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Flache Skizze: weder extrudiert noch gedreht
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;

@@ -2,8 +2,8 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D } from 'replicad';
-import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type Shell, type Vec } from './model';
+import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
+import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type Shell, type Sweep, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -18,6 +18,7 @@ export interface Origin {
   i?: number;       // Seite bei seg/arc, Flächennummer bei import
   from?: number;    // Bereichs-Feature (and/not): ID der Original-Skizze, aus deren Rand die Seite stammt
   of?: Origin;      // Innenwand einer Schale: die Außenfläche, von der sie versetzt ist
+  j?: number;       // Sweep: Abschnitt des Pfads, entlang dessen die Seite läuft
 }
 
 // Prüfwert, gemessen beim Anlegen des Bezugs (Weltkoordinaten, mm)
@@ -61,7 +62,7 @@ export function fingerprint(s: Face | Edge): Fingerprint {
 }
 
 export const sameOrigin = (a?: Origin, b?: Origin): boolean => !a || !b ? a === b
-  : a.f === b.f && a.tag === b.tag && a.i === b.i && a.from === b.from && sameOrigin(a.of, b.of);
+  : a.f === b.f && a.tag === b.tag && a.i === b.i && a.j === b.j && a.from === b.from && sameOrigin(a.of, b.of);
 
 // Abstand zweier Fingerabdrücke; Infinity = passt nicht (anderer Typ oder andere Richtung)
 function mismatch(a: Fingerprint, b: Fingerprint) {
@@ -158,6 +159,30 @@ export function nameLoft(id: number, A: Extrude, B: Extrude, s: Shape3D): Named 
     const e = face.edges.map(e => e.pointAt(0.5).toTuple()).find(m => inPlane(A, m));
     return e ? [{ face, o: { ...side(A, ...sketchXY(A, e)), f: id } }] : [];
   });
+}
+
+// Profil P entlang des Pfads ziehen (wie replicads genericSweep, aber mit Historie). Seiten = Generated(Profilkante),
+// benannt nach der Profilseite (wie beim Extrudieren) und dem Pfadabschnitt j; Anfang/Ende = Deckel in bzw. außerhalb der Profilebene
+// shortcut: j = Reihenfolge der erzeugten Flächen (OCCT legt sie entlang des Pfads an); bei Pfaden mit Splines prüfen
+export function sweep(f: Sweep, P: Extrude, profile: Wire, spine: Wire): [Shape3D, Named] {
+  const oc = getOC() as any, b = new oc.BRepOffsetAPI_MakePipeShell(spine.wrapped);
+  try {
+    const T = oc.BRepBuilderAPI_TransitionMode;
+    b.SetTransitionMode(f.round ? T.BRepBuilderAPI_RoundCorner : T.BRepBuilderAPI_RightCorner);
+    b.Add(profile.wrapped, false, !!f.round);
+    b.Build(new oc.Message_ProgressRange());
+    if (!b.IsDone() || !b.MakeSolid()) throw new Error('Zug entlang des Pfads fehlgeschlagen');
+    const s = cast(b.Shape()) as Shape3D, faces = s.faces, idx = faceIndex(faces), named: Named = [], taken = new Set<number>();
+    const edges = profile.edges, side0 = edges.map(e => side(P, ...sketchXY(P, e.pointAt(0.5).toTuple())));
+    // mehrere Profilkanten auf derselben Seite (Kreis = zwei Bögen): über die Kantennummer k unterscheiden
+    const os = side0.map((o, k) => side0.filter(p => sameOrigin(p, o)).length > 1 ? { ...o, i: k } : o);
+    for (const [k, e] of edges.entries()) {
+      const o = os[k];
+      list(b.Generated(e.wrapped)).forEach((g, j) => { const i = idx(g); if (i >= 0 && !taken.has(i)) { taken.add(i); named.push({ face: faces[i], o: { ...o, f: f.id, j } }); } g.delete(); });
+    }
+    faces.forEach((face, i) => { if (!taken.has(i)) named.push({ face, o: { f: f.id, tag: inPlane(P, face.center.toTuple()) ? 'start' : 'end' } }); });
+    return [s, named];
+  } finally { b.delete(); }
 }
 
 // Schale wie replicad (gleiche OCCT-Aufrufe), mit Historie: Außenflächen bleiben, jede Innenwand ist aus ihrer

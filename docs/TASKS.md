@@ -84,7 +84,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       „Bezug übernehmen“ schreibt die gefundene Fläche als neuen Bezug.
 
 ## Epic 2: Sweep
-- [ ] T2.1 TODO — Profil + offener Pfad, ohne UI, mit Test.
+- [x] T2.1 DONE — Profil + offener Pfad, ohne UI, mit Test.
 - [ ] T2.2 TODO — geschlossener Pfad, Ecken/Verrundung am Knick.
 - [ ] T2.3 TODO — Pfadauswahl und Live-Vorschau im Viewport.
 
@@ -102,6 +102,14 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T2.1: Feature `sweep` (model.ts): Profil = ID einer flachen
+  Skizze, Pfad = Linienzug [x, y, bulge?] in eigener Ebene, offen oder
+  geschlossen, Knicke auf Gehrung (Standard) oder rund, auch als Abzug.
+  Kern: eigener MakePipeShell-Wrapper (wie replicads genericSweep) mit
+  Namen: Seite = Profilseite + Pfadabschnitt j, Deckel start/end.
+  Gelernt: replicads Kreis besteht aus zwei Bögen → zwei Mantelflächen je
+  Abschnitt, unterschieden über die Profilkante i. Volumen L-Pfad mit
+  Gehrung = π r² × Mittellinie (Test).
 - 2026-10-28 T1.7/T1.8: buildBody liefert `errors` (Grund je Feature),
   der Baum markiert fehlgeschlagene Schritte rot mit ⚠, unsicher aufgelöste
   gelb; Grund beim Überfahren und im Hinweis („Schritt #3: Kante nicht mehr
