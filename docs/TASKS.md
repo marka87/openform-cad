@@ -105,13 +105,23 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Klick sichtbar).
 
 ## Epic 4: Tauri-Desktop
-- [ ] T4.1 TODO — Tauri-Shell, WASM lädt im Build korrekt.
+- [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [ ] T4.2 TODO — Datei öffnen/speichern über System-Dialog, `.ofc`
       verknüpfen.
 - [ ] T4.3 TODO — Installer Windows, danach macOS/Linux.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T4.1: src-tauri/ (Tauri 2), `npm run desktop` = Entwicklung,
+  `npm run desktop:build` = App + Installer. Entscheidungen des Nutzers:
+  Toolchain gnullvm ohne Admin (Rust lag schon im Benutzerordner, LLVM-
+  MinGW über winget), Installer pro Benutzer (NSIS, unsigniert →
+  SmartScreen-Hinweis beim ersten Start), Kennung org.openform.cad,
+  Dateien .ofc + Autosave. Gelernt: die gnu-Toolchain mit LLVM-MinGW im
+  PATH stürzt in Build-Skripten ab (Zugriffsverletzung) → gnullvm über
+  src-tauri/rust-toolchain.toml. Geprüft in der echten App (WebView2-
+  Debugprotokoll): Kern-WASM lädt im Worker, Quader 2,00 cm³. Größe:
+  App 11,7 MB, Installer 7,5 MB. Symbol: eigener Würfel (icons/app-icon.png).
 - 2026-10-28 T3.1–T3.4 (ein Commit, Maßobjekt, Darstellung und Editor
   hängen eng zusammen): `Dim` im Modell (model.ts), gespeichert mit dem
   Modell (`dims`, nicht im Verlauf der Features). Bezug: Längen über

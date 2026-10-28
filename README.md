@@ -15,6 +15,16 @@ npm run dev
 
 Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erzeugt `npm run build`.
 
+### Als Desktop-App (Windows)
+
+Braucht zusätzlich Rust (rustup, im Benutzerordner) und LLVM-MinGW (`winget install MartinStorsjo.LLVM-MinGW.UCRT`); Admin-Rechte sind nicht nötig. Die passende Rust-Toolchain (`gnullvm`) legt `src-tauri/rust-toolchain.toml` fest und wird beim ersten Bau geholt.
+
+```bash
+npm run desktop
+```
+
+startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer nach `src-tauri/target/release/bundle/nsis/` (installiert nur für den aktuellen Benutzer; unsigniert, deshalb fragt Windows SmartScreen beim ersten Start nach).
+
 ## Bedienung
 
 | Aktion | Eingabe |

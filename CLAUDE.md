@@ -9,7 +9,7 @@ STEP/STL fertigungstauglich.
 
 ## Stack
 replicad / opencascade.js (WASM) · Three.js · TypeScript (ohne UI-Framework) · Vite · vitest ·
-Tauri (Desktop, noch offen) · planegcs (Constraints) ·
+Tauri 2 (Desktop, Toolchain gnullvm ohne Admin) · planegcs (Constraints) ·
 Feature-Historie als JSON · STEP, STL, OBJ, SVG, DXF
 (geplant: 3MF, eigenes Dateiformat `.ofc`)
 
