@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
+import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
-import { boolean, faceIndex, nameSolid, type Named, type Origin } from './topo';
+import { boolean, edgeOp, faceIndex, nameSolid, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -43,7 +43,7 @@ function polyDrawing(pts: number[][], smooth?: boolean) {
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
 // Ergebnis: bodies je Körpernummer; body = der einzige Körper bzw. alle als Verbund (für Export und Tests);
 // origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt
-// shortcut: Rundung/Fase, Schale, Drehkörper, Loft, Import, Bewegen, Teilen schreiben noch keine Namen (T1.3b/c) → danach unbekannt
+// shortcut: Schale, Drehkörper, Loft, Import, Bewegen, Teilen schreiben noch keine Namen (T1.3b/c) → danach unbekannt
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
@@ -91,8 +91,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       }
       if (f.type === 'fillet' || f.type === 'chamfer') {
         if (!body) continue;
-        const pick = (e: EdgeFinder) => e.withinDistance(0.1, f.at);
-        done(f.type === 'fillet' ? body.fillet(f.r, pick) : body.chamfer(f.r, pick));
+        done(...edgeOp(f.type, f.id, body, names.get(k) ?? [], f.at, f.r));
         continue;
       }
       let s: Shape3D, nS: Named = [];

@@ -32,7 +32,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T1.3a DONE — Extrudieren (inkl. Bereiche) benennen, Vereinigen/
       Abziehen/Schnittmenge und Körper verrechnen über eigenen
       BRepAlgoAPI-Wrapper mit Historie.
-- [ ] T1.3b TODO — Rundung/Fase: Modified für Nachbarflächen, Generated
+- [x] T1.3b DONE — Rundung/Fase: Modified für Nachbarflächen, Generated
       für die neue Fläche (tag fillet/chamfer).
 - [ ] T1.3c TODO — Drehkörper, Schale, Loft benennen (Seiten aus
       Profilkanten, Innenwand shell).
@@ -88,6 +88,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.3b: edgeOp in src/topo.ts ersetzt replicads fillet/chamfer
+  (gleiche Kantensuche über EdgeFinder, gleiche OCCT-Klassen). Neue Fläche
+  = Generated(Kante) mit tag fillet/chamfer, Nachbarn über Modified. Der
+  Fortschreib-Teil (carry) ist jetzt für alle Builder gemeinsam.
 - 2026-10-28 T1.3a: src/topo.ts nameSolid + boolean, buildBody liefert
   `origins` (Herkunft je Fläche, null = unbekannt). Neue Prismen werden
   geometrisch benannt (Boden/Deckel über Höhe, Seite über sideOf in

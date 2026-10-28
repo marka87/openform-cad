@@ -2,7 +2,7 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import { cast, getOC, type Face, type Shape3D } from 'replicad';
+import { cast, EdgeFinder, getOC, type Face, type Shape3D } from 'replicad';
 import { sideOf, type Extrude, type Part, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
@@ -91,16 +91,38 @@ export function boolean(op: 'fuse' | 'cut' | 'common', A: Shape3D, nA: Named, B:
     b.Build();
     if (!b.IsDone()) throw new Error('Boolesche Operation fehlgeschlagen');
     b.SimplifyResult(true, true, 1e-3);
-    const res = cast(b.Shape()) as Shape3D, out = res.faces, idx = faceIndex(out), named: Named = [], taken = new Set<number>();
-    for (const { face, o } of [...nA, ...nB]) {
-      if (b.IsDeleted(face.wrapped)) continue;
-      const mod = list(b.Modified(face.wrapped));
-      for (const t of mod.length ? mod : [face.wrapped]) {
-        const i = idx(t);
-        if (i >= 0 && !taken.has(i)) { taken.add(i); named.push({ face: out[i], o }); } // zusammengelegte Flächen: erster Name gewinnt
-      }
-      mod.forEach(m => m.delete());
-    }
-    return [res, named];
+    return carry(b, [...nA, ...nB]);
+  } finally { b.delete(); }
+}
+
+// Ergebnis des Builders b holen und die Namen fortschreiben: unverändert → gleicher Name,
+// verändert/aufgespalten → alle Teile erben ihn, gelöscht → weg. extra = Namen für neu erzeugte Flächen
+function carry(b: any, named: Named, extra: [any, Origin][] = []): [Shape3D, Named] {
+  const res = cast(b.Shape()) as Shape3D, out = res.faces, idx = faceIndex(out), next: Named = [], taken = new Set<number>();
+  const put = (t: any, o: Origin) => { const i = idx(t); if (i >= 0 && !taken.has(i)) { taken.add(i); next.push({ face: out[i], o }); } }; // zusammengelegte Flächen: erster Name gewinnt
+  for (const { face, o } of named) {
+    if (b.IsDeleted(face.wrapped)) continue;
+    const mod = list(b.Modified(face.wrapped));
+    (mod.length ? mod : [face.wrapped]).forEach(t => put(t, o));
+    mod.forEach(m => m.delete());
+  }
+  extra.forEach(([t, o]) => put(t, o));
+  return [res, next];
+}
+
+// Rundung/Fase an allen Kanten durch den Punkt at (wie replicad, aber mit Historie);
+// die neue Fläche heißt nach dem Feature, die Nachbarflächen behalten ihren Namen
+export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, at: Vec, r: number): [Shape3D, Named] {
+  const oc = getOC() as any, edges = new EdgeFinder().withinDistance(0.1, at).find(A);
+  if (!edges.length) throw new Error('Kante nicht gefunden');
+  const b = type === 'fillet' ? new oc.BRepFilletAPI_MakeFillet(A.wrapped, oc.ChFi3d_FilletShape.ChFi3d_Rational) : new oc.BRepFilletAPI_MakeChamfer(A.wrapped);
+  try {
+    edges.forEach(e => b.Add(r, e.wrapped));
+    b.Build(new oc.Message_ProgressRange());
+    if (!b.IsDone()) throw new Error(type === 'fillet' ? 'Rundung fehlgeschlagen' : 'Fase fehlgeschlagen');
+    const gen = edges.flatMap(e => list(b.Generated(e.wrapped))).map(t => [t, { f: id, tag: type }] as [any, Origin]);
+    const out = carry(b, nA, gen);
+    gen.forEach(([t]) => t.delete());
+    return out;
   } finally { b.delete(); }
 }

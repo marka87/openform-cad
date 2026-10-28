@@ -51,6 +51,10 @@ test('Rundung und Fase an einer Kante; fehlende Kante wird gemeldet', () => {
   expect(round.body!.faces.length).toBe(7);                          // 6 + Rundungsfläche
   expect(buildBody([box(), edge('chamfer', [20, 10, -5])]).body!.faces.length).toBe(7);
   expect(buildBody([box(), edge('fillet', [50, 50, 50])]).failed).toEqual([3]);
+  for (const t of ['fillet', 'chamfer'] as const) {                     // T1.3b: alle 7 Flächen benannt, die neue nach der Rundung/Fase
+    const o = buildBody([box(), edge(t, [20, 10, -5])]).origins.get(1)!;
+    expect(o.map(x => x && `${x.f}:${x.tag}`).sort()).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', `3:${t}`]);
+  }
 
   // Klick auf die Rundungsfläche findet die Rundung, Klick auf den Deckel weiterhin den Quader
   const fs = [box(), edge('fillet', [20, 10, -5])];
