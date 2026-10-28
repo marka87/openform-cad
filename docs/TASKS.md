@@ -115,6 +115,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 Wunsch des Nutzers: Doppelklick auf eine Fläche legt dort ein
+  Raster (Arbeitsebene) an; Skizzen ins Leere landen in dieser Ebene statt
+  auf dem Boden, gehören zum Körper der Fläche und hängen per Bezug an ihr
+  (wandern mit). Doppelklick ins Leere oder Esc hebt es auf. Leertaste
+  bleibt „letztes Werkzeug“. Im Browser geprüft: Raster auf der
+  Vorderseite, Rechteck daneben liegt in z = 15 mit Normale (0,0,1).
 - 2026-10-28 T4.2: .ofc = dasselbe JSON wie der Autosave (Features, Körper,
   Maße). Desktop: Öffnen/Speichern/Exporte über den Windows-Dialog
   (tauri-plugin-dialog), Lesen/Schreiben über zwei kleine Rust-Befehle

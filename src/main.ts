@@ -53,6 +53,11 @@ shadowFloor.rotation.x = -Math.PI / 2; shadowFloor.position.y = -0.03; shadowFlo
 scene.add(shadowFloor);
 const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
+// Raster auf einer Fläche (Doppelklick): dort weiterskizzieren, auch über den Rand der Fläche hinaus
+const faceGrid = new THREE.Group(); faceGrid.visible = false; scene.add(faceGrid);
+faceGrid.add(new THREE.GridHelper(200, 20, 0x4da3ff, 0x4d86c4), new THREE.GridHelper(200, 200, 0x4d86c4, 0x4d86c4));
+for (const [g, o] of faceGrid.children.map((g, i) => [g, i ? 0.12 : 0.55] as const)) Object.assign((g as THREE.GridHelper).material, { transparent: true, opacity: o, depthWrite: false }); // Körper bleibt sichtbar
+let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizzen ins Leere landen dort statt auf dem Boden
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
@@ -476,6 +481,17 @@ function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
 
 // Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
 const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
+// Ziel einer neuen Skizze: angeklickte Fläche, sonst das Flächenraster, sonst der Boden
+const sketchOn = (h: Hit | null) => h ?? workHit;
+function setWorkPlane(h: Hit | null) {
+  workHit = h && h.grip?.part !== 'plane' ? h : null;
+  faceGrid.visible = !!workHit && grid.visible;
+  if (!workHit) return;
+  const pl = planeFor(workHit); // Raster liegt im Ursprung der Skizzenebene, damit es zum Einrasten passt
+  faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v)).setPosition(V(pl.o).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
+  faceGrid.matrixAutoUpdate = false;
+  showHint('Raster auf der Fläche: hier weiterskizzieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
+}
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
   if (!h) return GROUND;
@@ -651,7 +667,8 @@ function onDown(e: PointerEvent) {
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'line' || tool === 'spline') {
-    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h && h.grip?.part !== 'plane', smooth: tool === 'spline', body: h?.body };
+    const t = sketchOn(h);
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -659,7 +676,8 @@ function onDown(e: PointerEvent) {
     if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
     else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
   } else if (tool === 'arc') { // Bogen durch drei Punkte: Anfang (nur beim ersten Mal), Ende, Punkt auf dem Bogen
-    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h && h.grip?.part !== 'plane', smooth: false, body: h?.body };
+    const t = sketchOn(h);
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: false, body: t?.body };
     const q = polyPoint(e);
     if (!q) return;
     drag = { kind: 'line', arc: false, sx: e.clientX, sy: e.clientY, started: false };
@@ -675,10 +693,10 @@ function onDown(e: PointerEvent) {
     }
     if (poly) showPoly(pts);
   } else if (tool === 'rect' || tool === 'circle' || tool === 'ngon' || tool === 'slot' || tool === 'ellipse') {
-    const pl = planeFor(h); // auf Boden oder Fläche skizzieren
+    const t = sketchOn(h), pl = planeFor(t); // auf Boden, Fläche oder Flächenraster skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!h && h.grip?.part !== 'plane', body: h?.body };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane', body: t?.body };
   } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
     const P = edge ? V(edge.at) : h?.point;
     if (!P) return;
@@ -727,7 +745,7 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   hideSnap();
-  if (!drag && ['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool)) sketchPoint(planeFor(pick().face), e); // Einrasten schon vor dem Klick zeigen
+  if (!drag && ['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool)) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
   if (poly && !drag) {
     const q = polyPoint(e);
     if (!q || !poly.pts.length) return;
@@ -1299,7 +1317,7 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(poly.path === undefined); // Zug-Pfad: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 // ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------
@@ -1417,11 +1435,12 @@ function fitView() {
   const dir = camera.position.clone().sub(controls.target).normalize();
   flyTo(c.clone().addScaledVector(dir, Math.max(r, 5) / Math.sin(camera.fov * Math.PI / 360) * 1.1), c);
 }
-// Doppelklick: Drehpunkt auf die angeklickte Stelle legen
+// Doppelklick: Drehpunkt auf die angeklickte Stelle legen und dort ein Raster zum Weiterskizzieren; ins Leere = Raster weg
 el.addEventListener('dblclick', e => {
   setRay(e as unknown as PointerEvent);
-  const h = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true).find(x => x.face);
-  if (!h) return;
+  const h = pick().face;
+  setWorkPlane(h);
+  if (!h) return showHint(HINTS[tool]);
   flyTo(camera.position.clone().add(h.point).sub(controls.target), h.point.clone());
 });
 
@@ -1458,6 +1477,7 @@ function applyDisplay() {
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   grid.visible = fine.visible = !display.render && !display.section; // Raster schiene durch die Schnittfläche
+  faceGrid.visible = !!workHit && grid.visible;
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
     const box = new THREE.Box3().setFromObject(bodyGroup), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
