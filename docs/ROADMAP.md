@@ -29,10 +29,11 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Skizzen nachträglich bearbeiten: Punkte von Vieleck/Spline ziehen (auch nach dem Extrudieren)
 - [x] Maße beim Zeichnen eintippen (Rechteck „20x10“, Radius, Linienlänge)
 - [x] Weitere Formen: regelmäßiges Vieleck (n Ecken), Langloch
-- [ ] Ellipse, Bogen über 3 Punkte
+- [x] Ellipse (I), Bogen über 3 Punkte (A, wechselt mit der Linie L)
 - [x] Bemaßungen und Abhängigkeiten mit planegcs für Vielecke: Seitenlänge, waagrecht, senkrecht, parallel, rechtwinklig, gleich lang; Maßzahlen an den Seiten, gelten auch beim Ziehen
 - [ ] Weitere Abhängigkeiten: Winkel, Radius/Tangente an Bögen, Abstand Punkt–Punkt über Seiten hinweg, fester Punkt, Bezug zu anderen Skizzen
-- [ ] Abhängigkeiten beim Zeichnen automatisch setzen (aus dem Einrasten: waagrecht, auf Linie, im Punkt)
+- [x] Waagrecht/senkrecht gezeichnete Seiten bekommen automatisch die Abhängigkeit
+- [ ] Weitere automatische Abhängigkeiten aus dem Einrasten (auf Linie, im Punkt)
 - [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
 - [ ] Hilfsgeometrie (Konstruktionslinien, die keine Fläche bilden)
@@ -41,38 +42,44 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 
 ## M3 – Modellieren
 - [x] Feature-Baum (Liste „Schritte“): anzeigen, auswählen/ändern, ein-/ausschalten, umsortieren
-- [ ] Feature-Baum: „bis hier“ zurückspulen, Schritte umbenennen, Ziehen statt ↑
+- [x] Feature-Baum: „bis hier“ zurückspulen (neue Schritte kommen dorthin), umbenennen (Doppelklick), per Ziehen umsortieren
 - [ ] Skizzen hängen an ihrer Fläche: wird die Fläche verschoben, wandert die Bohrung mit
 - [x] Mehrere Körper: Skizze auf dem Boden = neuer Körper, auf einer Fläche = dessen Körper; Körperliste
 - [x] Körper kopieren (Strg+D)
-- [ ] Körper benennen, ein-/ausblenden, Körper eines Features nachträglich ändern
+- [x] Körper benennen, ein-/ausblenden, eigene Farbe
+- [ ] Körper eines Features nachträglich ändern
 - [x] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, Schnittmenge
 - [x] Körper verschieben und drehen (Griffe mit 1 mm/15° Raster oder Zahleneingabe)
-- [ ] Körper skalieren
+- [x] Körper skalieren (um die Mitte, in %)
 - [x] Drehen (Revolve) einer Skizze um ihre x- oder y-Achse, Winkel einstellbar
 - [x] Drehkörper abziehen (Nut, Häkchen im Seitenfeld)
 - [ ] Um beliebige Kante drehen
 - [x] Schale: Wandstärke, eine Fläche offen (Werkzeug H)
-- [ ] Schale mit mehreren offenen Flächen
+- [x] Schale mit mehreren offenen Flächen (H, Shift+Klick)
 - [ ] Fläche versetzen (Offset Face) und Fläche löschen
-- [ ] Körper teilen (an Ebene oder Fläche)
+- [x] Körper an einer Hilfsebene teilen
+- [ ] Körper an einer Fläche teilen
 - [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung
 - [ ] Muster und Spiegeln an beliebiger Kante/Fläche, inklusive Rundungen
-- [ ] Sweep (Profil entlang Pfad) und Loft (Übergang zwischen Profilen)
-- [ ] Rundung/Fase an mehreren Kanten auf einmal, variable Rundung
-- [ ] Gewinde- und Bohrungsvorlagen (Senkung, Gewindebohrung als Maß)
+- [x] Loft: Übergang zwischen zwei flachen Skizzen (zweite mit Shift dazu wählen)
+- [ ] Sweep (Profil entlang Pfad)
+- [x] Rundung/Fase an mehreren Kanten auf einmal
+- [ ] Variable Rundung
+- [x] Bohrungsvorlagen: Kernloch für M3–M12, Senkung
+- [ ] Gewinde als echte Geometrie oder Kennzeichnung in der Zeichnung
 - [x] Werkzeugsuche (Strg+K) über alle Werkzeuge und Befehle
 
 ## M4 – Ansicht, Messen, Darstellung
 - [x] Ansichten Iso/Oben/Vorne/Rechts per Klick oder Taste 0–3, Einpassen (F)
 - [x] Ansichtswürfel zum Anklicken, Doppelklick zentriert
 - [x] Messen: Abstand zwischen zwei Punkten (M), Volumen und Oberfläche des Körpers
-- [ ] Messen: Winkel, einzelne Flächen, Masse mit Dichte/Material
+- [x] Messen: Winkel zwischen zwei Flächen, Masse aus Werkstoff
+- [ ] Messen: Fläche einer einzelnen Fläche
 - [x] Schnittansicht: Ebene durch die Körpermitte senkrecht zu X, Y oder Z
-- [ ] Schnittansicht: Ebene verschieben, Schnittfläche gefüllt
+- [x] Schnittansicht: Ebene verschieben (Regler), Schnittfläche gefüllt
 - [x] Drahtmodell, transparent, Kanten an/aus
 - [x] Körperfarbe (Anzeige)
-- [ ] Materialien mit Dichte, Farbe je Körper im Modell gespeichert
+- [x] Werkstoffe mit Dichte, Farbe je Körper im Modell gespeichert
 - [x] Rendermodus: Umgebungslicht (RoomEnvironment), glänzenderes Material, ohne Raster
 
 ## M4b – Bedienkomfort (Feinschliff nach Vorbild Fusion, Onshape, SketchUp) ✅
@@ -87,15 +94,16 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Hilfsebenen (Werkzeug E)
 - [ ] Kanten eines Körpers in die Skizze projizieren
 - [ ] Zeitleiste unten (wie Fusion) statt Liste
-- [ ] Einheiten mm/inch
+- [x] Einheiten mm/Zoll (Anzeige und Eingabe)
 - [ ] Umgebungsverdeckung (AO) im Rendermodus
 
 ## M5 – Technische Zeichnungen
 - [x] Erste Zeichnung als SVG: Vorder-, Drauf-, Seitenansicht mit verdeckten Kanten
-- [ ] Iso-Ansicht, Blattformat, Schriftfeld
-- [ ] Maße und Beschriftungen in der Zeichnung
+- [x] Iso-Ansicht, Blatt A4/A3 mit Normmaßstab, Schriftfeld
+- [x] Gesamtmaße je Ansicht
+- [ ] Einzelmaße (Bohrungen, Abstände) und Beschriftungen
 - [ ] Schnitt- und Detailansichten
-- [ ] Export als PDF und DXF
+- [x] PDF über Drucken („Als PDF speichern“), Ansichten als DXF (Bögen als kurze Strecken)
 
 ## M6 – KI-Assistent
 - [ ] Eingabefeld „Beschreibe dein Teil“, eigener API-Schlüssel, abschaltbar
@@ -108,7 +116,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 ## M7 – Desktop-Release v1.0
 - [ ] Tauri-Build für Windows, macOS, Linux; Installer, Auto-Update
 - [ ] Eigenes Dateiformat `.ofc` (Feature-Liste + eingebettete Importe), Zuletzt-geöffnet-Liste
-- [ ] Weitere Formate: IGES-Import/-Export, OBJ- und 3MF-Export
+- [x] OBJ-Export
+- [ ] Weitere Formate: IGES-Import/-Export, 3MF-Export
 - [ ] Touch- und Stift-Bedienung, SpaceMouse, eigene Tastenkürzel
 - [ ] Einsteiger-Tour und kurze Lernvideos
 - [ ] Doku, Website, öffentliches GitHub-Repo

@@ -24,7 +24,8 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Vieleck (n-Eck) / Langloch | `N` (beim Ziehen `+`/`-` = Ecken) / `O` (Rechteck aufziehen) |
 | Maße eintippen | Beim Aufziehen oder Linienzeichnen Zahl tippen, `Enter`: Rechteck/Langloch `20x10`, Kreis/n-Eck Radius, Linie Länge in Mausrichtung |
 | Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
-| Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) |
+| Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) – oder `A`: Anfang, Ende, Punkt auf dem Bogen klicken; `L`/`A` wechseln mitten in der Form |
+| Ellipse | `I`, vom Mittelpunkt aus ziehen; Halbachsen im Seitenfeld |
 | Spline | `S`, Punkte klicken – die Kurve läuft glatt hindurch; Klick auf den ersten Punkt oder `Enter` schließt |
 | Bereiche | Überschneiden sich flache Skizzen, zieht man nur den angeklickten Bereich (z. B. die Schnittmenge) |
 | Versatz | Flache Skizze anklicken, im Seitenfeld Abstand eingeben (minus = nach innen) → „Versatz anlegen“ |
@@ -38,14 +39,14 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | STEP-Import | „Öffnen“ und eine .step/.stp-Datei wählen |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |
-| Feature-Baum | Liste „Schritte“ rechts unten: anklicken = auswählen, `↑` = früher ausführen, `●`/`○` = ein-/ausschalten |
+| Feature-Baum | Liste „Schritte“ rechts unten: anklicken = auswählen, ziehen = umsortieren, Doppelklick = umbenennen, `⏮` = bis hier zurückspulen (neue Schritte kommen dorthin), `●`/`○` = ein-/ausschalten |
 | Drehkörper / Nut | Flache Skizze anklicken → Seitenfeld „Drehen um“ x- oder y-Achse der Skizze; Winkel und „Abziehen (Nut)“ im Seitenfeld |
-| Schale | `H`, Fläche des Körpers anklicken, die offen bleiben soll; Wandstärke im Seitenfeld |
+| Schale | `H`, Fläche des Körpers anklicken, die offen bleiben soll; nochmal `H` + Shift+Klick = weitere offene Fläche; Wandstärke im Seitenfeld |
 | Werkzeugsuche | `Strg+K`, tippen, `Enter` |
 | Ansichten | Kasten unten links oder Tasten `0` Iso, `1` Vorne, `2` Oben, `3` Rechts, `F` Einpassen |
-| Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ; Volumen und Oberfläche stehen über der Schrittliste |
-| Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z, durch die Mitte), Render, Farbe |
-| Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge |
+| Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ, bei zwei Flächen auch deren Winkel; Volumen und Oberfläche stehen über der Schrittliste |
+| Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z; Regler verschiebt die Ebene, Schnittfläche gefüllt), Render, Farbe, Einheit mm/Zoll |
+| Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge; Name, Farbe, Werkstoff (→ Masse), skalieren, an einer Hilfsebene teilen; `●`/`○` blendet aus |
 | Maße und Abhängigkeiten | Vieleck anklicken → Seitenfeld „Maße und Abhängigkeiten“: Länge je Seite eintippen (festgelegt = orange), `—` waagrecht, `\|` senkrecht, zwei Seiten ∥ parallel / ⟂ rechtwinklig / = gleich lang; ✕ entfernt. Die Skizze hält die Abhängigkeiten auch beim Ziehen |
 | Auswahl | Fläche/Kante leuchtet beim Überfahren; Shift+Klick wählt weitere Schritte oder Kanten (mehrere Kanten auf einmal runden/fasen) |
 | Rechtsklick | Menü mit den passenden Befehlen (Löschen, Ausschalten, Duplizieren, Körper wählen …); rechts ziehen = verschieben |
@@ -54,7 +55,9 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Letztes Werkzeug | `Leertaste` |
 | Ansichtswürfel | Oben links: Seite anklicken; Mausrad zoomt zur Mausposition, Doppelklick zentriert |
 | Hilfsebene | `E`, Fläche anklicken = Ebene 10 mm davor (ziehen = Abstand), darauf skizzieren |
-| Zeichnung | „Zeichnung (SVG)“: Vorder-, Drauf- und Seitenansicht, verdeckte Kanten gestrichelt |
+| Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld; Ansichten als DXF; Körper als OBJ |
+| Übergang (Loft) | Flache Skizze anklicken, zweite mit Shift dazu → Seitenfeld „Übergang (Loft)“ |
+| Gewinde / Senkung | Bohrung anklicken → Seitenfeld: Kernloch M3–M12, „Senkung anlegen“ |
 | Raster | Unten links: 0,1 bis 10 mm |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |
