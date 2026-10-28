@@ -37,14 +37,15 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
 - [ ] Hilfsgeometrie (Konstruktionslinien, die keine Fläche bilden)
 - [x] Raster auf Flächen beginnt am Lotpunkt des Ursprungs (nicht mehr am Klickpunkt)
-- [ ] Versetzte Skizzenebenen (Ebene im Abstand zu einer Fläche)
+- [x] Versetzte Skizzenebenen (Hilfsebene, Werkzeug E)
 
 ## M3 – Modellieren
 - [x] Feature-Baum (Liste „Schritte“): anzeigen, auswählen/ändern, ein-/ausschalten, umsortieren
 - [ ] Feature-Baum: „bis hier“ zurückspulen, Schritte umbenennen, Ziehen statt ↑
 - [ ] Skizzen hängen an ihrer Fläche: wird die Fläche verschoben, wandert die Bohrung mit
 - [x] Mehrere Körper: Skizze auf dem Boden = neuer Körper, auf einer Fläche = dessen Körper; Körperliste
-- [ ] Körper benennen, ein-/ausblenden, kopieren, Körper eines Features nachträglich ändern
+- [x] Körper kopieren (Strg+D)
+- [ ] Körper benennen, ein-/ausblenden, Körper eines Features nachträglich ändern
 - [x] Boolesche Operationen zwischen Körpern: vereinigen, abziehen, Schnittmenge
 - [x] Körper verschieben und drehen (Griffe mit 1 mm/15° Raster oder Zahleneingabe)
 - [ ] Körper skalieren
@@ -64,7 +65,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 
 ## M4 – Ansicht, Messen, Darstellung
 - [x] Ansichten Iso/Oben/Vorne/Rechts per Klick oder Taste 0–3, Einpassen (F)
-- [ ] Echter Ansichtswürfel zum Anklicken, auf Auswahl zentrieren
+- [x] Ansichtswürfel zum Anklicken, Doppelklick zentriert
 - [x] Messen: Abstand zwischen zwei Punkten (M), Volumen und Oberfläche des Körpers
 - [ ] Messen: Winkel, einzelne Flächen, Masse mit Dichte/Material
 - [x] Schnittansicht: Ebene durch die Körpermitte senkrecht zu X, Y oder Z
@@ -74,8 +75,24 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Materialien mit Dichte, Farbe je Körper im Modell gespeichert
 - [x] Rendermodus: Umgebungslicht (RoomEnvironment), glänzenderes Material, ohne Raster
 
+## M4b – Bedienkomfort (Feinschliff nach Vorbild Fusion, Onshape, SketchUp) ✅
+- [x] Fläche/Kante beim Überfahren hervorheben; Zieh-Vorschau grün (dazu) / rot (abziehen)
+- [x] Einrast-Beschriftung (Punkt, Schnittpunkt, auf Kante, Ursprung, ausgerichtet), Hilfslinien in Achsfarben
+- [x] Eingabefelder am Zeiger (Tab wechselt), Maß beim Ziehen einer Fläche eintippen
+- [x] Rechtsklick-Menü, Mehrfachauswahl (Shift), mehrere Kanten auf einmal runden/fasen
+- [x] Kopieren/Einfügen/Duplizieren von Features und ganzen Körpern, Leertaste = letztes Werkzeug
+- [x] Ansichtswürfel, weiche Kamerafahrten, Zoom zur Maus, Doppelklick zentriert
+- [x] Weiche Schatten, Umgebungslicht, dicke glatte Kanten
+- [x] Symbole und Tooltips, einstellbare Rastergröße
+- [x] Hilfsebenen (Werkzeug E)
+- [ ] Kanten eines Körpers in die Skizze projizieren
+- [ ] Zeitleiste unten (wie Fusion) statt Liste
+- [ ] Einheiten mm/inch
+- [ ] Umgebungsverdeckung (AO) im Rendermodus
+
 ## M5 – Technische Zeichnungen
-- [ ] 2D-Zeichnung aus dem Modell: Vorder-, Seiten-, Draufsicht, Iso
+- [x] Erste Zeichnung als SVG: Vorder-, Drauf-, Seitenansicht mit verdeckten Kanten
+- [ ] Iso-Ansicht, Blattformat, Schriftfeld
 - [ ] Maße und Beschriftungen in der Zeichnung
 - [ ] Schnitt- und Detailansichten
 - [ ] Export als PDF und DXF

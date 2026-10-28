@@ -47,5 +47,14 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z, durch die Mitte), Render, Farbe |
 | Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge |
 | Maße und Abhängigkeiten | Vieleck anklicken → Seitenfeld „Maße und Abhängigkeiten“: Länge je Seite eintippen (festgelegt = orange), `—` waagrecht, `\|` senkrecht, zwei Seiten ∥ parallel / ⟂ rechtwinklig / = gleich lang; ✕ entfernt. Die Skizze hält die Abhängigkeiten auch beim Ziehen |
+| Auswahl | Fläche/Kante leuchtet beim Überfahren; Shift+Klick wählt weitere Schritte oder Kanten (mehrere Kanten auf einmal runden/fasen) |
+| Rechtsklick | Menü mit den passenden Befehlen (Löschen, Ausschalten, Duplizieren, Körper wählen …); rechts ziehen = verschieben |
+| Kopieren / Duplizieren | `Strg+C` / `Strg+V` / `Strg+D` – Skizzen, Features oder ganze Körper, um 10 mm versetzt |
+| Maß beim Ziehen | Beim Ziehen einer Fläche Zahl tippen + `Enter` = genaue Höhe/Breite/Radius |
+| Letztes Werkzeug | `Leertaste` |
+| Ansichtswürfel | Oben links: Seite anklicken; Mausrad zoomt zur Mausposition, Doppelklick zentriert |
+| Hilfsebene | `E`, Fläche anklicken = Ebene 10 mm davor (ziehen = Abstand), darauf skizzieren |
+| Zeichnung | „Zeichnung (SVG)“: Vorder-, Drauf- und Seitenansicht, verdeckte Kanten gestrichelt |
+| Raster | Unten links: 0,1 bis 10 mm |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |
