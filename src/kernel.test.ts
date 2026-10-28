@@ -546,7 +546,7 @@ test('Zug: Kreisprofil entlang eines offenen L-Pfads (T2.1)', () => {
   expect(measureVolume(groove.bodies.get(3)!)).toBeCloseTo(2000 - Math.PI * 4 / 2 * 20, 0);
 });
 
-test('Zug: geschlossener Pfad, Knicke auf Gehrung oder als Bogen im Pfad (T2.2)', () => {
+test('Zug: geschlossener Pfad, Knicke auf Gehrung oder als Bogen im Pfad (T2.2)', async () => {
   const prof = sketchFeature('circle', { o: [0, 0, 0], n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] }, [0, 0], [2, 0], 1, false)!;
   const ring: Sweep = { id: 2, type: 'sweep', profile: 1, ...GROUND, pts: [[0, 0], [20, 0], [20, 20], [0, 20]], closed: true, body: 2 };
   const mitre = buildBody([prof, ring]);
@@ -562,4 +562,6 @@ test('Zug: geschlossener Pfad, Knicke auf Gehrung oder als Bogen im Pfad (T2.2)'
   const bent = buildBody([prof2, arcs]);
   expect(bent.failed).toEqual([]);
   expect(measureVolume(bent.bodies.get(2)!)).toBeCloseTo(Math.PI * 4 * (40 + 2 * Math.PI * 5), 0);
+  const back = await loadStep(await forExport(bent.body!).blobSTEP().text());     // STEP hin und zurück: gleicher Körper
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(bent.body!), 0);
 });

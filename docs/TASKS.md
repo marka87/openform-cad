@@ -86,7 +86,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 ## Epic 2: Sweep
 - [x] T2.1 DONE — Profil + offener Pfad, ohne UI, mit Test.
 - [x] T2.2 DONE — geschlossener Pfad, Ecken/Verrundung am Knick.
-- [ ] T2.3 TODO — Pfadauswahl und Live-Vorschau im Viewport.
+- [x] T2.3 DONE — Pfadauswahl und Live-Vorschau im Viewport.
+
+- [ ] T2.4 TODO — Pfad eines Zugs nachträglich bearbeiten (Punkte ziehen,
+      anzeigen, wenn der Zug ausgewählt ist); heute nur löschen und neu.
+- [ ] T2.5 TODO — Pfad aus vorhandenen Körperkanten übernehmen (Kante
+      anklicken statt zeichnen).
 
 ## Epic 3: Einzelbemaßung Zeichnung
 - [ ] T3.1 TODO — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
@@ -102,6 +107,17 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T2.3: Seitenfeld einer flachen Skizze: „Zug: Pfad zeichnen“
+  bzw. „quer dazu“ (Pfadebene = Profilnormale + x- bzw. y-Achse der Skizze,
+  Start in der Profilmitte). Gezeichnet wird mit dem Linien-Werkzeug
+  (Einrasten, getippte Längen, Bögen durch Ziehen); jede Mausbewegung
+  rechnet den Zug als Vorschau im Kern mit. Enter = offen, Klick auf den
+  Anfang = geschlossen. Seitenfeld des Zugs: Abziehen, Löschen. Gelernt:
+  im Browser räumt replicads GC die temporäre Skizze weg, während ihr
+  Draht noch gebraucht wird („object has been deleted“) – in Node nicht
+  sichtbar. Skizzen jetzt bis zum Ende festhalten und danach freigeben.
+  Im Browser geprüft: Kreisprofil, Pfad hoch/quer, Vorschau, Enter.
+  STEP hin und zurück ergibt das gleiche Volumen (Test).
 - 2026-10-28 T2.2: geschlossener Pfad (Rahmen, keine Deckel) und Bögen im
   Pfad als runde Ecken funktionieren, Volumen exakt (Tests). Gelernt:
   OCCTs RoundCorner ergibt hier ungültige Körper (BRepCheck), offen wie

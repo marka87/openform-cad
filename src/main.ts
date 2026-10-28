@@ -7,7 +7,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
-import { bulge3, ellipseFeature, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { bulge3, ellipseFeature, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -199,10 +199,11 @@ function disposeGroup(gr: THREE.Object3D) {
 const worker = new Worker(new URL('./kernel.worker.ts', import.meta.url), { type: 'module' });
 const send = (m: ToWorker) => worker.postMessage(m);
 let busy = false, pending = false;
+let pathPreview: Sweep | null = null; // Zug, dessen Pfad gerade gezeichnet wird: wird zur Vorschau mitberechnet
 function requestBuild() {
   if (!ready || busy) { pending = true; return; }
   busy = true; pending = false;
-  send({ type: 'build', features: live() });
+  send({ type: 'build', features: pathPreview ? [...live(), pathPreview] : live() });
 }
 worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   if (data.type === 'ready') { ready = true; setTool(tool); requestBuild(); }
@@ -220,7 +221,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     problems = new Map(data.unsure.map(id => [id, { bad: false, why: 'Bezug nur unsicher wiedergefunden – bitte prüfen' }]));
     for (const [id, why] of data.errors) problems.set(id, { bad: true, why });
     renderTree();
-    showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || HINTS[tool]);
+    showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || (poly?.path !== undefined ? PATH_HINT : HINTS[tool]));
     notice = '';
     busy = false;
     // Vom Kern nachgetragene Bezüge und mitgewanderte Lagen übernehmen (kein Rückgängig-Schritt, ergibt sich aus dem Modell).
@@ -532,7 +533,8 @@ function applyTyped() {
 }
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[] } | null = null;
+// path = ID der Profilskizze: der Linienzug wird Pfad eines Zugs (Sweep) statt Skizze
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number } | null = null;
 function polyPoint(e: PointerEvent) {
   return poly && sketchPoint(poly.pl, e);
 }
@@ -596,7 +598,32 @@ function arcPts(q: number[]) {
   return [...pts.slice(0, -1), [b[0], b[1], bulge], q];
 }
 const nearPt = (q: number[] | null, p?: number[]) => !!q && !!p && Math.hypot(q[0] - p[0], q[1] - p[1]) < 8 * pxSize();
-function finishPoly() {
+// Pfad für einen Zug zeichnen: Ebene durch die Mitte des Profils, aufgespannt von seiner Normalen und einer seiner Achsen;
+// der Pfad beginnt in der Profilmitte und läuft zuerst senkrecht vom Profil weg
+function startPath(f: Extrude, ax: 'u' | 'v') {
+  const p = f.p, c2 = f.type === 'rect' ? [p.x + p.w / 2, p.y + p.h / 2] : f.type === 'circle' ? [p.cx, p.cy]
+    : [0, 1].map(k => f.pts!.reduce((s, q) => s + q[k], 0) / f.pts!.length);
+  const o = V(f.o).addScaledVector(V(f.u), c2[0]).addScaledVector(V(f.v), c2[1]), u = V(f.n), v = V(f[ax]);
+  setTool('line');
+  poly = { pl: { o: o.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec, n: u.clone().cross(v).toArray() as Vec }, pts: [[0, 0]], onFace: false, smooth: false, path: f.id };
+  showPoly(poly.pts);
+  showHint(PATH_HINT);
+}
+const PATH_HINT = 'Zug: Pfad Punkt für Punkt klicken (vom Profil weg) · Enter = offen fertig · Klick auf den Anfang = geschlossen · Esc = abbrechen';
+// Zug-Pfad als Feature; closed = über Klick auf den Anfang geschlossen
+function sweepOf(pts: number[][], closed: boolean): Sweep | null {
+  const P = poly?.path !== undefined ? getById(poly.path) : undefined;
+  if (!P || !isExtrude(P) || pts.length < (closed ? 3 : 2)) return null;
+  return { id: nextId, type: 'sweep', profile: P.id, ...structuredClone(poly!.pl), pts: structuredClone(pts), ...closed && { closed }, body: P.body ?? nextId };
+}
+function previewPath(pts: number[][]) { pathPreview = sweepOf(pts, false); requestBuild(); }
+function finishPoly(closed = true) {
+  if (poly?.path !== undefined) { // Zug anlegen
+    const s = sweepOf(poly.pts, closed);
+    cancelPoly();
+    if (s) { pushHistory(); nextId++; add(s); selId = s.id; setTool('select'); refresh(); }
+    return;
+  }
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
   if (f) f.body = poly!.body ?? f.id;
   if (f && !f.smooth) { // genau waagrechte/senkrechte Seiten (durch Einrasten) bleiben es: Abhängigkeit setzen
@@ -609,7 +636,7 @@ function finishPoly() {
   cancelPoly();
   if (f) { pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); refresh(); }
 }
-function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 'none'; }
+function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 'none'; if (pathPreview) { pathPreview = null; requestBuild(); } }
 
 // ---------- Werkzeuge ----------
 function onDown(e: PointerEvent) {
@@ -708,6 +735,7 @@ function onMove(e: PointerEvent) {
       return showHud(e, b ? 'Punkt auf dem Bogen' : 'auf einer Linie');
     }
     showPoly([...poly.pts, q]);
+    if (poly.path !== undefined) previewPath([...poly.pts, q]);
     if (typed) return showTyped();
     return showHud(e, `${len(Math.hypot(q[0] - last[0], q[1] - last[1]))} · Zahl tippen`);
   }
@@ -828,7 +856,13 @@ function renderPanel() {
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft' || f.type === 'sweep') {
+  if (f.type === 'sweep') {
+    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Profil #${f.profile} · Pfad ${f.closed ? 'geschlossen' : 'offen'}, ${f.closed ? f.pts.length : f.pts.length - 1} Abschnitte</p>` +
+      `<label>Abziehen <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label><button class="del">Löschen</button>`;
+    panel.querySelector<HTMLInputElement>('.sub')!.onchange = e => { pushHistory(); f.sub = (e.target as HTMLInputElement).checked || undefined; refresh(); };
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
+  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
     panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
@@ -854,6 +888,7 @@ function renderPanel() {
     (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="${uval(2)}" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
+    (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>
       <button class="act cb">Senkung anlegen</button>` : '') +
@@ -890,6 +925,7 @@ function renderPanel() {
       refresh();
     };
   }
+  panel.querySelectorAll<HTMLButtonElement>('.sw').forEach(b => b.onclick = () => startPath(f, b.dataset.ax as 'u' | 'v'));
   panel.querySelector<HTMLButtonElement>('.loft')?.addEventListener('click', () => {
     pushHistory(); const id = nextId++; add({ id, type: 'loft', a: f.id, b: loftTo!.id, body: f.body ?? id }); clearSel(); selId = id; refresh();
   });
@@ -1226,7 +1262,7 @@ addEventListener('keydown', e => {
   else if (k in { 0: 1, 1: 1, 2: 1, 3: 1 }) setView(['iso', 'front', 'top', 'right'][+k]);
   else if (k === 'l') setTool('line');
   else if (k === 's') setTool('spline');
-  else if (k === 'enter' && poly) finishPoly();
+  else if (k === 'enter' && poly) finishPoly(poly.path === undefined); // Zug-Pfad: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') { typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });

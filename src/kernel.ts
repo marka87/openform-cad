@@ -40,8 +40,8 @@ function polyDrawing(pts: number[][], smooth?: boolean, open = false) {
   return open ? pen.done() : pen.close();
 }
 
-// Pfad eines Sweeps als Draht in seiner Ebene
-export const pathWire = (f: Sweep) => (polyDrawing(f.pts, false, !f.closed).sketchOnPlane(new Plane(f.o, f.u, f.n)) as any).wire as Wire;
+// Pfad eines Sweeps als Skizze in seiner Ebene (.wire = Draht); die Skizze muss leben, solange der Draht gebraucht wird
+export const pathSketch = (f: Sweep) => polyDrawing(f.pts, false, !f.closed).sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch & { wire: Wire };
 
 // Features der Reihe nach in ihren Körper einrechnen (vereinigen, abziehen, Kanten bearbeiten), Körper verrechnen und bewegen.
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
@@ -123,7 +123,8 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const P = moved.get(f.profile) ?? features.find(g => g.id === f.profile);
         if (!P || !isExtrude(P) || !isFlat(P)) throw new Error('Profil für den Zug fehlt');
         if (f.sub && !body) continue;
-        [s, nS] = sweep(f, P, sketchOf(P).wire, pathWire(f));
+        const prof = sketchOf(P) as Sketch & { wire: Wire }, path = pathSketch(f); // beide festhalten: replicads GC löscht sonst die Drähte
+        try { [s, nS] = sweep(f, P, prof.wire, path.wire); } finally { prof.delete(); path.delete(); }
       } else {
         if (!isExtrude(f)) continue;
         const g = anchor(f.id, anchorSketch(f, body, names.get(k) ?? [])).f; // Skizze auf ihre (vielleicht gewanderte) Fläche setzen

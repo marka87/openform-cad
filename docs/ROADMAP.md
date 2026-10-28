@@ -62,7 +62,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung
 - [ ] Muster und Spiegeln an beliebiger Kante/Fläche, inklusive Rundungen
 - [x] Loft: Übergang zwischen zwei flachen Skizzen (zweite mit Shift dazu wählen)
-- [ ] Sweep (Profil entlang Pfad)
+- [x] Sweep (Profil entlang Pfad, offen/geschlossen, mit Vorschau, auch als Abzug)
 - [x] Rundung/Fase an mehreren Kanten auf einmal
 - [ ] Variable Rundung
 - [x] Bohrungsvorlagen: Kernloch für M3–M12, Senkung
