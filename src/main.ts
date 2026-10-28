@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import { bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -64,6 +65,7 @@ function showSnapTip(p: THREE.Vector3, text: string) {
 el.addEventListener('pointerdown', onDown);
 const controls = new OrbitControls(camera, el);
 controls.enableDamping = true;
+controls.zoomToCursor = true; // Mausrad zoomt dorthin, wo die Maus steht
 controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
 function resetView() { camera.position.set(140, 110, 160); controls.target.set(0, 0, 0); }
 resetView();
@@ -1059,11 +1061,23 @@ function showMeasure() {
 }
 
 // ---------- Ansichten ----------
-const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], front: [0, 0, 1], right: [1, 0, 0] };
+const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], bottom: [0, -1, 1e-4], front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0] };
+// Kamera weich zu neuer Lage fahren (300 ms), statt zu springen
+let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number } | null = null;
+function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
+  fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now() };
+}
+function stepFly() {
+  if (!fly) return;
+  const t = Math.min(1, (performance.now() - fly.start) / 300), s = t * t * (3 - 2 * t);
+  camera.position.lerpVectors(fly.p0, fly.p1, s);
+  controls.target.lerpVectors(fly.t0, fly.t1, s);
+  if (t === 1) fly = null;
+}
 function setView(name: string) {
   if (name === 'fit') return fitView();
   const dist = camera.position.distanceTo(controls.target);
-  camera.position.copy(controls.target).addScaledVector(V(VIEWS[name]).normalize(), dist);
+  flyTo(controls.target.clone().addScaledVector(V(VIEWS[name]).normalize(), dist), controls.target.clone());
 }
 // Kamera so setzen, dass Körper und Skizzen ganz zu sehen sind
 function fitView() {
@@ -1071,8 +1085,34 @@ function fitView() {
   if (box.isEmpty()) return resetView();
   const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
   const dir = camera.position.clone().sub(controls.target).normalize();
-  controls.target.copy(c);
-  camera.position.copy(c).addScaledVector(dir, Math.max(r, 5) / Math.sin(camera.fov * Math.PI / 360) * 1.1);
+  flyTo(c.clone().addScaledVector(dir, Math.max(r, 5) / Math.sin(camera.fov * Math.PI / 360) * 1.1), c);
+}
+// Doppelklick: Drehpunkt auf die angeklickte Stelle legen
+el.addEventListener('dblclick', e => {
+  setRay(e as unknown as PointerEvent);
+  const h = ray.intersectObjects([...bodyGroup.children, ...group.children], true).find(x => x.face);
+  if (!h) return;
+  flyTo(camera.position.clone().add(h.point).sub(controls.target), h.point.clone());
+});
+
+// ---------- Ansichtswürfel oben links: Seite anklicken = Ansicht, dreht sich mit der Kamera ----------
+const cubeRenderer = new CSS3DRenderer(), cubeScene = new THREE.Scene(), cubeCam = new THREE.PerspectiveCamera(30, 1, 1, 1000);
+cubeRenderer.setSize(96, 96);
+$('cube').append(cubeRenderer.domElement);
+for (const [view, label, rot] of [['front', 'VORNE', [0, 0, 0]], ['back', 'HINTEN', [0, Math.PI, 0]], ['right', 'RECHTS', [0, Math.PI / 2, 0]],
+  ['left', 'LINKS', [0, -Math.PI / 2, 0]], ['top', 'OBEN', [-Math.PI / 2, 0, 0]], ['bottom', 'UNTEN', [Math.PI / 2, 0, 0]]] as const) {
+  const d = document.createElement('div');
+  d.className = 'face'; d.textContent = label; d.title = `Ansicht ${label.toLowerCase()}`;
+  d.onclick = () => setView(view);
+  const o = new CSS3DObject(d);
+  o.rotation.set(rot[0], rot[1], rot[2]);
+  o.position.copy(V(VIEWS[view]).normalize().multiplyScalar(28));
+  cubeScene.add(o);
+}
+function renderCube() {
+  cubeCam.position.copy(camera.position).sub(controls.target).normalize().multiplyScalar(220);
+  cubeCam.quaternion.copy(camera.quaternion);
+  cubeRenderer.render(cubeScene, cubeCam);
 }
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
@@ -1145,7 +1185,9 @@ palIn.onblur = () => setTimeout(closePalette, 150);
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => {
+  stepFly();
   controls.update(); renderer.render(scene, camera);
+  renderCube();
   updateScale();
   updateDims();
 });

@@ -56,6 +56,10 @@
   #ctx button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
   #ctx button:hover { background:#353a42; }
   #ctx hr { border:0; border-top:1px solid var(--line); margin:3px 0; }
+  #cube { position:fixed; left:12px; top:12px; width:96px; height:96px; }
+  #cube .face { width:56px; height:56px; display:flex; align-items:center; justify-content:center; font:600 10px system-ui; color:var(--text);
+    background:rgba(53,58,66,.92); border:1px solid #5a606b; box-sizing:border-box; cursor:pointer; user-select:none; }
+  #cube .face:hover { background:var(--accent); color:#1e2126; }
   #dims { position:fixed; inset:0; pointer-events:none; }
   #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:var(--text); background:rgba(42,46,53,.85);
     border-radius:4px; padding:1px 4px; white-space:nowrap; }
@@ -102,6 +106,7 @@
 <div id="hud"></div>
 <div id="snapTip"></div>
 <div id="ctx"></div>
+<div id="cube"></div>
 <div id="tree"></div>
 <div id="dims"></div>
 <div id="views">
