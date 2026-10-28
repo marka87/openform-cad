@@ -46,5 +46,6 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ; Volumen und Oberfläche stehen über der Schrittliste |
 | Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z, durch die Mitte), Render, Farbe |
 | Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge |
+| Maße und Abhängigkeiten | Vieleck anklicken → Seitenfeld „Maße und Abhängigkeiten“: Länge je Seite eintippen (festgelegt = orange), `—` waagrecht, `\|` senkrecht, zwei Seiten ∥ parallel / ⟂ rechtwinklig / = gleich lang; ✕ entfernt. Die Skizze hält die Abhängigkeiten auch beim Ziehen |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |

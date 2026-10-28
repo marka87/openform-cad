@@ -12,6 +12,7 @@ export interface Extrude extends Frame {
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
+  cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
@@ -20,6 +21,8 @@ export interface Extrude extends Frame {
 }
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
+// Abhängigkeit einer Vieleck-Seite i (von Punkt i zu i+1): Länge val, waagrecht, senkrecht; mit Seite j parallel, rechtwinklig, gleich lang
+export interface Con { t: 'len' | 'h' | 'v' | 'par' | 'perp' | 'eq'; i: number; j?: number; val?: number }
 export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; hidden?: boolean; body?: number }
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)

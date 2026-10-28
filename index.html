@@ -48,6 +48,18 @@
   #views button:hover { background:#353a42; }
   #views input[type=color] { width:26px; height:24px; border:0; padding:0; background:transparent; cursor:pointer; vertical-align:middle; }
   #views button.on { border-color:var(--accent); color:var(--accent); }
+  #dims { position:fixed; inset:0; pointer-events:none; }
+  #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:var(--text); background:rgba(42,46,53,.85);
+    border-radius:4px; padding:1px 4px; white-space:nowrap; }
+  #dims span.lock { background:var(--accent); color:#1e2126; font-weight:600; }
+  #panel .cons input { width:58px; }
+  #panel .cons input.lock { border-color:var(--accent); }
+  #panel .cons span { display:flex; gap:2px; align-items:center; }
+  #panel .cons .hv, #panel .cons .pair button, #panel .cons .con button { background:#353a42; color:var(--text); border:1px solid transparent; border-radius:5px;
+    padding:2px 6px; cursor:pointer; font:inherit; width:auto; margin:0; display:inline-block; }
+  #panel .cons .hv.on { border-color:var(--accent); color:var(--accent); }
+  #panel .cons .pair { display:flex; gap:4px; justify-content:flex-end; margin:4px 0; }
+  #panel .cons .con { display:flex; justify-content:space-between; align-items:center; margin:3px 0; color:var(--text); }
   #hint { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); color:var(--muted); background:var(--panel);
     border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 540px); }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
@@ -81,6 +93,7 @@
 <div id="panel"></div>
 <div id="hud"></div>
 <div id="tree"></div>
+<div id="dims"></div>
 <div id="views">
   <button data-view="iso" title="Taste 0">Iso</button><button data-view="top" title="Taste 2">Oben</button>
   <button data-view="front" title="Taste 1">Vorne</button><button data-view="right" title="Taste 3">Rechts</button>

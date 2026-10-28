@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
+import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
+import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
+import { solveSketch } from './sketchSolver';
 
 type Tool = 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
@@ -72,6 +75,9 @@ function save() {
   catch { saveWarning = ' · ⚠ Automatisches Speichern fehlgeschlagen (Modell zu groß), bitte „Speichern“ benutzen'; }
 }
 function showHint(text: string) { $('hint').textContent = text + saveWarning; }
+// Warnung, die auch die nächste Kern-Meldung überdauert
+let notice = '';
+function showNotice(text: string) { notice = text; showHint(text); }
 const getSel = () => features.find(f => f.id === selId);
 
 function shapeOf(f: Extrude) {
@@ -159,7 +165,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     applyDisplay();
     bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area / 100).toFixed(1)} cm²` : '';
     renderTree();
-    showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : HINTS[tool]);
+    showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : notice || HINTS[tool]);
+    notice = '';
     busy = false;
     if (pending) requestBuild();
   } else if (data.blob) download(`modell.${data.format}`, data.blob);
@@ -191,6 +198,7 @@ function rebuild() {
     handles.add(m);
   });
   handles.updateMatrixWorld(true);
+  buildDims();
 }
 // Bewegungen als Matrix: x' = R(q)·(x − c) + c + t, in Reihenfolge
 function moveMatrix(moves: Move[]) {
@@ -203,6 +211,18 @@ function moveMatrix(moves: Move[]) {
   }
   return M;
 }
+// ---------- Abhängigkeiten: Löser (planegcs, WASM) einmal laden, danach synchron ----------
+let gcs: GcsWrapper | null = null;
+init_planegcs_module({ locateFile: () => gcsWasm }).then((m: any) => { gcs = new GcsWrapper(new m.GcsSystem()); },
+  (e: unknown) => console.warn('Skizzen-Löser nicht geladen', e));
+// Abhängigkeiten der Skizze f erfüllen, fixed bleiben stehen. false = widerspricht sich, f bleibt unverändert
+function constrain(f: Extrude, fixed: number[]) {
+  if (!f.cons?.length || !gcs) return true;
+  const out = solveSketch(gcs, f.pts!, f.cons, fixed);
+  if (out) f.pts = out;
+  return !!out;
+}
+
 function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
@@ -534,12 +554,16 @@ function onMove(e: PointerEvent) {
       if (!p) return;
       const q = toLocal(drag.f, p).map(x => snap(x, e));
       movePoint(drag.f, drag.f0, drag.i, q);
+      if (constrain(drag.f, [drag.i])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts; // gezogener Punkt bleibt, Rest folgt
       rebuild();
       return showHud(e, `Punkt ${q[0].toFixed(1)} / ${q[1].toFixed(1)} mm`);
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
     const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, 0.5), drag.i);
+    if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
+      if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
+    }
     rebuild();
     showHud(e, `${label}: ${val.toFixed(1)} mm${isCut(drag.f) ? ' (Schnitt)' : ''}`);
   }
@@ -596,6 +620,7 @@ function renderPanel() {
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
     (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
+    (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
@@ -619,6 +644,7 @@ function renderPanel() {
   panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, ax) =>
     Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, [0, 0, 0], ax, 2 * Math.PI * (i + 1) / n)));
   panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, ax) => [mirroredCopy(f, nextId++, ax)]);
+  if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
   if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
     revAx.value = f.rev ? f.axis ?? 'u' : '';
@@ -633,7 +659,7 @@ function renderPanel() {
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);
-    if (!g) return showHint('Versatz zu groß: von der Skizze bleibt nichts übrig');
+    if (!g) return showNotice('Versatz zu groß: von der Skizze bleibt nichts übrig');
     pushHistory(); nextId++; features.push(g); selId = g.id; refresh();
   };
   panel.querySelectorAll<HTMLInputElement>('input[data-k]').forEach(inp => inp.onchange = () => {
@@ -647,6 +673,77 @@ function renderPanel() {
   });
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
+// Maße und Abhängigkeiten eines Vielecks: je gerade Seite Länge (eingeben = festlegen), waagrecht, senkrecht;
+// zwei Seiten parallel, rechtwinklig, gleich lang; Liste der gesetzten Abhängigkeiten mit ✕
+const sideLen = (pts: number[][], i: number) => { const a = pts[i], b = pts[(i + 1) % pts.length]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
+const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=' };
+const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${c.val} mm` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
+function consHtml(f: Extrude) {
+  const pts = f.pts!, sides = pts.map((_, i) => i).filter(i => !pts[i][2]), has = (t: Con['t'], i: number) => f.cons?.some(c => c.t === t && c.i === i);
+  const opts = sides.map(i => `<option value="${i}">${i + 1}</option>`).join('');
+  return `<details open class="cons"><summary>Maße und Abhängigkeiten</summary>` +
+    sides.map(i => `<label>Seite ${i + 1} <span><input type="number" step="0.5" class="len${has('len', i) ? ' lock' : ''}" data-i="${i}" value="${+sideLen(pts, i).toFixed(2)}">` +
+      `<button class="hv${has('h', i) ? ' on' : ''}" data-t="h" data-i="${i}" title="waagrecht">—</button><button class="hv${has('v', i) ? ' on' : ''}" data-t="v" data-i="${i}" title="senkrecht">|</button></span></label>`).join('') +
+    (sides.length > 1 ? `<label>Seiten <span><select class="sa">${opts}</select> <select class="sb">${opts}</select></span></label>
+      <div class="pair"><button data-t="par" title="parallel">∥</button><button data-t="perp" title="rechtwinklig">⟂</button><button data-t="eq" title="gleich lang">=</button></div>` : '') +
+    (f.cons ?? []).map((c, k) => `<div class="con">${conText(c)}<button data-k="${k}" title="entfernen">✕</button></div>`).join('') + `</details>`;
+}
+function bindCons(f: Extrude) {
+  // Abhängigkeit setzen (gleiche ersetzen), Seite i bleibt stehen; widerspricht sie, bleibt alles wie vorher
+  const addCon = (c: Con) => {
+    const pts0 = f.pts!, cons0 = f.cons ?? [];
+    pushHistory();
+    f.cons = [...cons0.filter(d => !(d.t === c.t && d.i === c.i && d.j === c.j)), c];
+    if (!constrain(f, [c.i])) { undoStack.pop(); f.pts = pts0; f.cons = cons0; showNotice('Diese Abhängigkeit widerspricht den anderen'); }
+    refresh();
+  };
+  const remove = (keep: (c: Con) => boolean) => { pushHistory(); f.cons = f.cons!.filter(keep); refresh(); };
+  panel.querySelectorAll<HTMLInputElement>('.cons input.len').forEach(inp => inp.onchange = () => {
+    const i = +inp.dataset.i!, v = parseFloat(inp.value);
+    if (isFinite(v) && v > 0) addCon({ t: 'len', i, val: v });
+    else if (f.cons) remove(c => !(c.t === 'len' && c.i === i)); // leer = Maß lösen
+  });
+  panel.querySelectorAll<HTMLButtonElement>('.cons .hv').forEach(b => b.onclick = () => {
+    const t = b.dataset.t as Con['t'], i = +b.dataset.i!;
+    if (f.cons?.some(c => c.t === t && c.i === i)) remove(c => !(c.t === t && c.i === i)); else addCon({ t, i });
+  });
+  const sb = panel.querySelector<HTMLSelectElement>('.sb');
+  if (sb) sb.selectedIndex = 1; // zweite Seite vorwählen
+  panel.querySelectorAll<HTMLButtonElement>('.cons .pair button').forEach(b => b.onclick = () => {
+    const i = +panel.querySelector<HTMLSelectElement>('.sa')!.value, j = +panel.querySelector<HTMLSelectElement>('.sb')!.value;
+    if (i === j) return showHint('Bitte zwei verschiedene Seiten wählen');
+    addCon({ t: b.dataset.t as Con['t'], i, j });
+  });
+  panel.querySelectorAll<HTMLButtonElement>('.cons .con button').forEach(b => b.onclick = () => { const c = f.cons![+b.dataset.k!]; remove(d => d !== c); });
+}
+
+// Maßzahlen an den Seiten der ausgewählten Skizze; festgelegte Maße orange, waagrecht/senkrecht als — / |
+const dims = $('dims');
+let dimLabels: { el: HTMLElement; p: THREE.Vector3 }[] = [];
+function buildDims() {
+  dims.replaceChildren();
+  dimLabels = [];
+  const f = getSel();
+  if (!f || !isExtrude(f) || f.type !== 'poly' || f.smooth) return;
+  const M = moveMatrix(movesAfter(features, features.indexOf(f))), pts = f.pts!, world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
+  pts.forEach((a, i) => {
+    if (a[2]) return;
+    const el = document.createElement('span'), c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i);
+    el.textContent = `${sideLen(pts, i).toFixed(1)}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`;
+    if (c('len')) el.className = 'lock';
+    dims.append(el);
+    dimLabels.push({ el, p: world(a).add(world(pts[(i + 1) % pts.length])).multiplyScalar(0.5).applyMatrix4(M) });
+  });
+}
+function updateDims() {
+  for (const { el, p } of dimLabels) {
+    const s = p.clone().project(camera);
+    el.style.display = s.z > 1 ? 'none' : '';
+    el.style.left = `${(s.x + 1) / 2 * el.parentElement!.clientWidth}px`;
+    el.style.top = `${(1 - s.y) / 2 * el.parentElement!.clientHeight}px`;
+  }
+}
+
 function renderImportPanel(f: Import) {
   panel.innerHTML = `<h3>Import #${f.id}</h3><p></p><button class="del">Löschen</button>`;
   panel.querySelector('p')!.textContent = f.name; // Dateiname nicht als HTML einsetzen
@@ -884,6 +981,7 @@ addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => {
   controls.update(); renderer.render(scene, camera);
   updateScale();
+  updateDims();
 });
 
 try { const s = localStorage.getItem('openform'); if (s) ({ features, nextId } = JSON.parse(s)); } catch {}

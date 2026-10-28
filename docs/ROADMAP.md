@@ -30,7 +30,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Maße beim Zeichnen eintippen (Rechteck „20x10“, Radius, Linienlänge)
 - [x] Weitere Formen: regelmäßiges Vieleck (n Ecken), Langloch
 - [ ] Ellipse, Bogen über 3 Punkte
-- [ ] Bemaßungen und Abhängigkeiten mit planegcs (Länge, Abstand, Winkel, Radius; parallel, senkrecht, tangential, gleich, fest)
+- [x] Bemaßungen und Abhängigkeiten mit planegcs für Vielecke: Seitenlänge, waagrecht, senkrecht, parallel, rechtwinklig, gleich lang; Maßzahlen an den Seiten, gelten auch beim Ziehen
+- [ ] Weitere Abhängigkeiten: Winkel, Radius/Tangente an Bögen, Abstand Punkt–Punkt über Seiten hinweg, fester Punkt, Bezug zu anderen Skizzen
 - [ ] Abhängigkeiten beim Zeichnen automatisch setzen (aus dem Einrasten: waagrecht, auf Linie, im Punkt)
 - [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)

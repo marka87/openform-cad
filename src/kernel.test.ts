@@ -281,3 +281,21 @@ test('Mehrere Körper: getrennt, verrechnen, bewegen', () => {
   const fs2 = [a, b, { id: 3, type: 'combine' as const, op: 'fuse' as const, a: 1, b: 2 }, { ...fs[2], body: 1 }];
   expect(ownerOf(fs2, [70, 10, 0], [0, 1, 0])?.f).toBe(b);
 });
+
+test('Bemaßungen und Abhängigkeiten mit planegcs', async () => {
+  const { make_gcs_wrapper } = await import('@salusoft89/planegcs');
+  const { solveSketch } = await import('./sketchSolver');
+  const gcs = await make_gcs_wrapper();
+  const pts = [[0, 0], [18, 2], [20, 13], [1, 11, 0.3]];                // schiefes Viereck, letzte Seite gebogen
+  const out = solveSketch(gcs, pts, [
+    { t: 'len', i: 0, val: 30 }, { t: 'h', i: 0 }, { t: 'perp', i: 0, j: 1 }, { t: 'eq', i: 1, j: 0 }, { t: 'par', i: 2, j: 0 },
+  ], [0])!;
+  const len = (i: number) => Math.hypot(out[(i + 1) % 4][0] - out[i][0], out[(i + 1) % 4][1] - out[i][1]);
+  expect(out[0]).toEqual([0, 0]);                                        // fester Punkt bleibt
+  expect(len(0)).toBeCloseTo(30); expect(out[1][1]).toBeCloseTo(0);      // 30 mm, waagrecht
+  expect(out[2][0]).toBeCloseTo(30); expect(len(1)).toBeCloseTo(30);     // rechtwinklig, gleich lang
+  expect(out[3][1]).toBeCloseTo(out[2][1]); expect(out[3][2]).toBe(0.3); // parallel, Bogen bleibt
+  expect(solveSketch(gcs, pts, [{ t: 'h', i: 0 }, { t: 'v', i: 0 }])).toBeNull();                 // fällt zur Linie zusammen
+  expect(solveSketch(gcs, pts, [{ t: 'len', i: 0, val: 30 }, { t: 'len', i: 0, val: 20 }])).toBeNull(); // Widerspruch
+  gcs.destroy_gcs_module();
+});
