@@ -426,6 +426,12 @@ function planeHit(pl: Frame) {
 }
 function toLocal(pl: Frame, p: THREE.Vector3) { const d = p.clone().sub(V(pl.o)); return [d.dot(V(pl.u)), d.dot(V(pl.v))]; }
 let gridStep = 1; // Rastergröße in mm (Auswahl unten links)
+// Einheit nur für Anzeige und Eingabe; das Modell rechnet immer in mm
+const U = () => display.unit === 'in' ? 25.4 : 1;
+const fmt = (mm: number, d = 1) => (mm / U()).toFixed(U() > 1 ? d + 2 : d);      // Zahl in der Anzeigeeinheit
+const len = (mm: number, d = 1) => `${fmt(mm, d)} ${display.unit}`;              // mit Einheit
+const uval = (mm: number) => +(mm / U()).toFixed(U() > 1 ? 4 : 2);               // Wert für Eingabefelder
+const mmOf = (inp: HTMLInputElement) => parseFloat(inp.value) * U();             // Eingabe → mm
 const snap = (x: number, e: PointerEvent, s = gridStep) => e.shiftKey ? x : Math.round(x / s) * s;
 // Parameter s auf der Geraden P0 + s*D, der dem Mausstrahl am nächsten liegt
 function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
@@ -471,8 +477,8 @@ function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extr
   return sketchFeature(tool as 'rect' | 'circle', pl, a, b, nextId, onFace);
 }
 function hudText(f: Extrude) {
-  return f.type === 'rect' ? `${f.p.w.toFixed(1)} × ${f.p.h.toFixed(1)} mm` : f.p.ry ? `${f.p.r.toFixed(1)} × ${f.p.ry.toFixed(1)} mm` : f.type === 'circle' ? `R ${f.p.r.toFixed(1)} mm`
-    : tool === 'ngon' ? `${sides}-Eck R ${Math.hypot(f.pts![0][0] - drag.a[0], f.pts![0][1] - drag.a[1]).toFixed(1)} mm` : 'Langloch';
+  return f.type === 'rect' ? `${fmt(f.p.w)} × ${len(f.p.h)}` : f.p.ry ? `${fmt(f.p.r)} × ${len(f.p.ry)}` : f.type === 'circle' ? `R ${len(f.p.r)}`
+    : tool === 'ngon' ? `${sides}-Eck R ${len(Math.hypot(f.pts![0][0] - drag.a[0], f.pts![0][1] - drag.a[1]))}` : 'Langloch';
 }
 function finishSketch(b?: number[]) {
   if (b) drag.b = b;
@@ -485,11 +491,11 @@ function showTyped() {
   const two = drag?.kind === 'sketch' && (tool === 'rect' || tool === 'slot' || tool === 'ellipse'), parts = typed.split('x');
   const field = (v: string | undefined, on: boolean) => `<b class="${on ? 'on' : ''}">${v || '…'}</b>`;
   hud.style.display = 'block';
-  hud.innerHTML = (two ? `B ${field(parts[0], parts.length === 1)} × T ${field(parts[1], parts.length === 2)}` : field(parts[0], true)) + ' mm ⏎';
+  hud.innerHTML = (two ? `B ${field(parts[0], parts.length === 1)} × T ${field(parts[1], parts.length === 2)}` : field(parts[0], true)) + ` ${display.unit} ⏎`;
 }
 // Eingetippte Maße anwenden: Rechteck/Langloch „B x T“, Kreis/n-Eck Radius (Richtung der Maus), Linie Länge in Mausrichtung
 function applyTyped() {
-  const v = typed.split(/[x*; ]+/).map(Number).filter(n => isFinite(n) && n > 0);
+  const v = typed.split(/[x*; ]+/).map(Number).filter(n => isFinite(n) && n > 0).map(n => n * U());
   typed = '';
   hud.style.display = 'none';
   if (!v.length) return;
@@ -691,7 +697,7 @@ function onMove(e: PointerEvent) {
     }
     showPoly([...poly.pts, q]);
     if (typed) return showTyped();
-    return showHud(e, `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm · Zahl tippen`);
+    return showHud(e, `${len(Math.hypot(q[0] - last[0], q[1] - last[1]))} · Zahl tippen`);
   }
   if (!drag) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
@@ -708,7 +714,7 @@ function onMove(e: PointerEvent) {
     if (!q) return;
     const pts = arcPts(nearPt(q, poly.pts[0]) ? poly.pts[0] : q), b = pts.at(-2)!, L = Math.hypot(q[0] - b[0], q[1] - b[1]);
     showPoly(pts);
-    return showHud(e, `Bogen R ${(L / 2 / Math.abs(Math.sin(2 * Math.atan(b[2])) || 1e-9)).toFixed(1)} mm`);
+    return showHud(e, `Bogen R ${len(L / 2 / Math.abs(Math.sin(2 * Math.atan(b[2])) || 1e-9))}`);
   }
   if (drag.kind === 'sketch') {
     const b = sketchPoint(drag.pl, e);
@@ -737,14 +743,14 @@ function onMove(e: PointerEvent) {
       }
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep)));
       rebuild();
-      return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
+      return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${len(drag.f.r)}`);
     }
     if (drag.kind === 'plane') { // Ebene entlang ihrer Normalen verschieben
       const s = lineParam(drag.P0, drag.D);
       if (s === null) return;
       drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep));
       rebuild();
-      return showHud(e, `Abstand: ${drag.f.off.toFixed(1)} mm`);
+      return showHud(e, `Abstand: ${len(drag.f.off)}`);
     }
     if (drag.kind === 'point') {
       const p = planeHit(drag.f);
@@ -753,7 +759,7 @@ function onMove(e: PointerEvent) {
       movePoint(drag.f, drag.f0, drag.i, q);
       if (constrain(drag.f, [drag.i])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts; // gezogener Punkt bleibt, Rest folgt
       rebuild();
-      return showHud(e, `Punkt ${q[0].toFixed(1)} / ${q[1].toFixed(1)} mm`);
+      return showHud(e, `Punkt ${fmt(q[0])} / ${len(q[1])}`);
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
@@ -762,7 +768,7 @@ function onMove(e: PointerEvent) {
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
     rebuild();
-    if (typed) showTyped(); else showHud(e, `${label}: ${val.toFixed(1)} mm${isCut(drag.f) ? ' (Schnitt)' : ''} · Zahl tippen`);
+    if (typed) showTyped(); else showHud(e, `${label}: ${len(val)}${isCut(drag.f) ? ' (Schnitt)' : ''} · Zahl tippen`);
   }
 }
 
@@ -817,9 +823,9 @@ function renderPanel() {
   if (f.type === 'import') return renderImportPanel(f);
   if (f.type === 'shell') return renderShellPanel(f);
   if (f.type === 'plane') {
-    panel.innerHTML = `<h3>Ebene #${f.id}</h3><label>Abstand <input type="number" step="0.5" value="${+f.off.toFixed(2)}"></label><button class="del">Löschen</button>`;
+    panel.innerHTML = `<h3>Ebene #${f.id}</h3><label>Abstand <input type="number" step="0.5" value="${uval(f.off)}"></label><button class="del">Löschen</button>`;
     const inp = panel.querySelector('input')!;
-    inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v)) { pushHistory(); f.off = v; refresh(); } };
+    inp.onchange = () => { const v = mmOf(inp); if (isFinite(v)) { pushHistory(); f.off = v; refresh(); } };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (!isExtrude(f)) return renderEdgePanel(f);
@@ -832,8 +838,8 @@ function renderPanel() {
   const name = nameOf(f);
   const other = multi.size === 1 ? getById([...multi][0]) : undefined, loftTo = isFlat(f) && other && isExtrude(other) && isFlat(other) ? other : null;
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
-    fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${+get(k).toFixed(2)}"></label>`).join('') +
-    (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="2" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
+    fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
+    (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="${uval(2)}" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
     (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option></select></label>` : '') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
@@ -843,7 +849,7 @@ function renderPanel() {
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
-      <label>Abstand <input class="dist" type="number" step="0.5" value="20"></label>
+      <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}"></label>
       <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
     `<button class="del">Löschen</button>`;
@@ -858,7 +864,7 @@ function renderPanel() {
     add(...cs); selId = cs.at(-1)!.id; refresh();
   };
   panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, ax) =>
-    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, ax.map(x => x * num('.dist') * (i + 1)) as Vec)));
+    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, ax.map(x => x * num('.dist') * U() * (i + 1)) as Vec)));
   panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, ax) =>
     Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, [0, 0, 0], ax, 2 * Math.PI * (i + 1) / n)));
   panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, ax) => [mirroredCopy(f, nextId++, ax)]);
@@ -888,12 +894,12 @@ function renderPanel() {
   if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; refresh(); };
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
-    const g = offsetFeature(f, parseFloat(panel.querySelector<HTMLInputElement>('.off')!.value) || 0, nextId);
+    const g = offsetFeature(f, mmOf(panel.querySelector<HTMLInputElement>('.off')!) || 0, nextId);
     if (!g) return showNotice('Versatz zu groß: von der Skizze bleibt nichts übrig');
     pushHistory(); nextId++; add(g); selId = g.id; refresh();
   };
   panel.querySelectorAll<HTMLInputElement>('input[data-k]').forEach(inp => inp.onchange = () => {
-    const v = parseFloat(inp.value);
+    const v = inp.dataset.k === 'rev' ? parseFloat(inp.value) : mmOf(inp);
     if (!isFinite(v)) return;
     pushHistory();
     const ks = inp.dataset.k!.split('.'), key = ks.at(-1)!;
@@ -907,12 +913,12 @@ function renderPanel() {
 // zwei Seiten parallel, rechtwinklig, gleich lang; Liste der gesetzten Abhängigkeiten mit ✕
 const sideLen = (pts: number[][], i: number) => { const a = pts[i], b = pts[(i + 1) % pts.length]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
 const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=' };
-const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${c.val} mm` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
+const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${len(c.val!, 2)}` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
 function consHtml(f: Extrude) {
   const pts = f.pts!, sides = pts.map((_, i) => i).filter(i => !pts[i][2]), has = (t: Con['t'], i: number) => f.cons?.some(c => c.t === t && c.i === i);
   const opts = sides.map(i => `<option value="${i}">${i + 1}</option>`).join('');
   return `<details open class="cons"><summary>Maße und Abhängigkeiten</summary>` +
-    sides.map(i => `<label>Seite ${i + 1} <span><input type="number" step="0.5" class="len${has('len', i) ? ' lock' : ''}" data-i="${i}" value="${+sideLen(pts, i).toFixed(2)}">` +
+    sides.map(i => `<label>Seite ${i + 1} <span><input type="number" step="0.5" class="len${has('len', i) ? ' lock' : ''}" data-i="${i}" value="${uval(sideLen(pts, i))}">` +
       `<button class="hv${has('h', i) ? ' on' : ''}" data-t="h" data-i="${i}" title="waagrecht">—</button><button class="hv${has('v', i) ? ' on' : ''}" data-t="v" data-i="${i}" title="senkrecht">|</button></span></label>`).join('') +
     (sides.length > 1 ? `<label>Seiten <span><select class="sa">${opts}</select> <select class="sb">${opts}</select></span></label>
       <div class="pair"><button data-t="par" title="parallel">∥</button><button data-t="perp" title="rechtwinklig">⟂</button><button data-t="eq" title="gleich lang">=</button></div>` : '') +
@@ -929,7 +935,7 @@ function bindCons(f: Extrude) {
   };
   const remove = (keep: (c: Con) => boolean) => { pushHistory(); f.cons = f.cons!.filter(keep); refresh(); };
   panel.querySelectorAll<HTMLInputElement>('.cons input.len').forEach(inp => inp.onchange = () => {
-    const i = +inp.dataset.i!, v = parseFloat(inp.value);
+    const i = +inp.dataset.i!, v = mmOf(inp);
     if (isFinite(v) && v > 0) addCon({ t: 'len', i, val: v });
     else if (f.cons) remove(c => !(c.t === 'len' && c.i === i)); // leer = Maß lösen
   });
@@ -959,7 +965,7 @@ function buildDims() {
   pts.forEach((a, i) => {
     if (a[2]) return;
     const el = document.createElement('span'), c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i);
-    el.textContent = `${sideLen(pts, i).toFixed(1)}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`;
+    el.textContent = `${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`;
     if (c('len')) el.className = 'lock';
     dims.append(el);
     dimLabels.push({ el, p: world(a).add(world(pts[(i + 1) % pts.length])).multiplyScalar(0.5).applyMatrix4(M) });
@@ -982,31 +988,31 @@ function renderImportPanel(f: Import) {
 function renderEdgePanel(f: EdgeOp) {
   panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}</h3>
     <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
-    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" min="0.5" value="${+f.r.toFixed(2)}"></label>
+    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" value="${uval(f.r)}"></label>
     <button class="del">Löschen</button>`;
   const sel = panel.querySelector('select')!, inp = panel.querySelector('input')!;
   sel.value = f.type;
   sel.onchange = () => { pushHistory(); f.type = sel.value as EdgeOp['type']; refresh(); };
   inp.onchange = () => {
-    const v = parseFloat(inp.value);
+    const v = mmOf(inp);
     if (!isFinite(v)) return;
     pushHistory(); f.r = Math.max(0.5, v); refresh();
   };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function renderShellPanel(f: Shell) {
-  panel.innerHTML = `<h3>Schale #${f.id}</h3><p style="color:var(--muted);margin:0 0 6px">${1 + (f.more?.length ?? 0)} offene Fläche(n) · weitere: H, dann Shift+Klick</p><label>Wandstärke <input type="number" step="0.5" min="0.1" value="${+f.t.toFixed(2)}"></label><button class="del">Löschen</button>`;
+  panel.innerHTML = `<h3>Schale #${f.id}</h3><p style="color:var(--muted);margin:0 0 6px">${1 + (f.more?.length ?? 0)} offene Fläche(n) · weitere: H, dann Shift+Klick</p><label>Wandstärke <input type="number" step="0.5" value="${uval(f.t)}"></label><button class="del">Löschen</button>`;
   const inp = panel.querySelector('input')!;
-  inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
+  inp.onchange = () => { const v = mmOf(inp); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 // Mehrere Kanten auf einmal runden oder fasen (Shift+Klick auf Kanten)
 function renderEdgeSetPanel() {
   panel.innerHTML = `<h3>${edgeSel.length} Kante${edgeSel.length > 1 ? 'n' : ''}</h3><p style="color:var(--muted);margin:0 0 6px">Shift+Klick = weitere Kanten</p>
-    <label>Maß <input type="number" step="0.5" min="0.5" value="2" class="r"></label>
+    <label>Maß <input type="number" step="0.5" value="${uval(2)}" class="r"></label>
     <button class="act" data-t="fillet">Runden</button><button class="act" data-t="chamfer">Fasen</button>`;
   panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => {
-    const r = Math.max(0.5, parseFloat(panel.querySelector<HTMLInputElement>('.r')!.value) || 2);
+    const r = Math.max(0.5, mmOf(panel.querySelector<HTMLInputElement>('.r')!) || 2);
     pushHistory();
     for (const a of edgeSel) add({ id: nextId++, type: b.dataset.t as EdgeOp['type'], at: a.at, dir: a.dir, r, body: a.body });
     selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
@@ -1275,7 +1281,7 @@ function renderBodyPanel(b: number) {
     addMove(new THREE.Quaternion(), new THREE.Vector3(), s);
   };
   // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
-  q<HTMLButtonElement>('.mv').onclick = () => { attachGizmo('translate'); addMove(new THREE.Quaternion(), new THREE.Vector3(num('.dx'), num('.dz'), -num('.dy'))); };
+  q<HTMLButtonElement>('.mv').onclick = () => { attachGizmo('translate'); addMove(new THREE.Quaternion(), new THREE.Vector3(num('.dx'), num('.dz'), -num('.dy')).multiplyScalar(U())); };
   q<HTMLButtonElement>('.rt').onclick = () => {
     attachGizmo('rotate');
     const ax = V({ X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }[q<HTMLSelectElement>('.ax').value]!);
@@ -1298,7 +1304,7 @@ function showMeasure() {
   preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false })));
   // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
   const [n1, n2] = measureN, ang = n1 && n2 ? ` · Winkel der Flächen ${(Math.acos(Math.max(-1, Math.min(1, n1.dot(n2)))) * 180 / Math.PI).toFixed(1)}°` : '';
-  showHint(`Abstand ${d.length().toFixed(2)} mm · ΔX ${d.x.toFixed(2)} · ΔY ${(-d.z).toFixed(2)} · ΔZ ${d.y.toFixed(2)}${ang}`);
+  showHint(`Abstand ${len(d.length(), 2)} · ΔX ${fmt(d.x, 2)} · ΔY ${fmt(-d.z, 2)} · ΔZ ${fmt(d.y, 2)}${ang}`);
 }
 
 // ---------- Ansichten ----------
@@ -1358,7 +1364,7 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 1 };
+const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 1, unit: 'mm' as 'mm' | 'in' };
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
@@ -1400,8 +1406,10 @@ function applyDisplay() {
   $('secOff').style.display = display.section ? '' : 'none';
   $<HTMLInputElement>('secOff').value = String(display.secOff);
   gridStep = display.grid; $<HTMLSelectElement>('gridStep').value = String(display.grid);
+  $<HTMLSelectElement>('unit').value = display.unit;
 }
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
+$<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); buildDims(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
 
 // Symbole und Tooltips für die Werkzeugleiste
@@ -1463,8 +1471,8 @@ refresh();
 // Maßstab: runde Länge (1, 2 oder 5 × 10ⁿ mm), die auf Höhe des Drehpunkts etwa 100 Pixel lang ist
 const scaleBar = $('scale');
 function updateScale() {
-  const mm = 100 * pxSize(), e = 10 ** Math.floor(Math.log10(mm)), nice = [5, 2, 1].find(k => k * e <= mm)! * e;
-  const label = nice >= 1 ? `${nice} mm` : `${+nice.toFixed(3)} mm`;
-  (scaleBar.firstElementChild as HTMLElement).style.width = `${nice / pxSize()}px`;
+  const u = 100 * pxSize() / U(), e = 10 ** Math.floor(Math.log10(u)), nice = [5, 2, 1].find(k => k * e <= u)! * e; // in Anzeigeeinheit
+  const label = `${+nice.toFixed(4)} ${display.unit}`;
+  (scaleBar.firstElementChild as HTMLElement).style.width = `${nice * U() / pxSize()}px`;
   if (scaleBar.lastElementChild!.textContent !== label) scaleBar.lastElementChild!.textContent = label;
 }
