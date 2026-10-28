@@ -4,7 +4,7 @@ export interface Frame { o: Vec; n: Vec; u: Vec; v: Vec } // Ursprung, Normale, 
 export interface Extrude extends Frame {
   id: number;
   type: 'rect' | 'circle' | 'poly';
-  p: Record<string, number>; // rect: x y w h · circle: cx cy r · poly: leer
+  p: Record<string, number>; // rect: x y w h · circle: cx cy r (+ ry = Ellipse mit Halbachsen r, ry) · poly: leer
   pts?: number[][];          // poly: Eckpunkte [x, y, bulge?] in Skizzenkoordinaten, geschlossen gedacht;
                              // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
@@ -70,6 +70,23 @@ export function sketchFeature(type: Extrude['type'], pl: Frame, a: number[], b: 
   }
   const r = Math.hypot(bx - ax, by - ay);
   return r < 0.5 ? null : { ...base, type, p: { cx: ax, cy: ay, r } };
+}
+// Ellipse um Mittelpunkt a, Halbachsen bis zur Ecke b
+export function ellipseFeature(pl: Frame, a: number[], b: number[], id: number, onFace: boolean): Extrude | null {
+  const r = Math.abs(b[0] - a[0]), ry = Math.abs(b[1] - a[1]);
+  return r < 0.5 || ry < 0.5 ? null : { id, d: 0, onFace, ...structuredClone(pl), type: 'circle', p: { cx: a[0], cy: a[1], r, ry } };
+}
+
+// Bulge des Bogens von a nach b durch den Punkt m (Kreis durch drei Punkte); 0 = auf einer Linie
+export function bulge3(a: number[], b: number[], m: number[]) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), cr = dx * (m[1] - a[1]) - dy * (m[0] - a[0]);
+  if (L < 1e-9 || Math.abs(cr) < 1e-9 * L * L) return 0;
+  const am = Math.hypot(m[0] - a[0], m[1] - a[1]), bm = Math.hypot(m[0] - b[0], m[1] - b[1]);
+  const r = L * am * bm / (2 * Math.abs(cr)), d = Math.sqrt(Math.max(0, r * r - L * L / 4));
+  // m und Mittelpunkt auf derselben Seite der Sehne = großer Bogen; Winkel bei m stumpf ↔ kleiner Bogen
+  const obtuse = (a[0] - m[0]) * (b[0] - m[0]) + (a[1] - m[1]) * (b[1] - m[1]) < 0;
+  const s = obtuse ? r - d : r + d;
+  return (cr < 0 ? 1 : -1) * 2 * s / L; // m rechts der Sehne a→b = gegen den Uhrzeigersinn
 }
 
 // Regelmäßiges n-Eck um Mittelpunkt a, erste Ecke in Richtung b
@@ -158,7 +175,7 @@ export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: bool
 export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null {
   const p = f.p, base = { ...structuredClone(f), id, d: 0 };
   if (f.type === 'rect') return p.w + 2 * d < 0.5 || p.h + 2 * d < 0.5 ? null : { ...base, p: { x: p.x - d, y: p.y - d, w: p.w + 2 * d, h: p.h + 2 * d } };
-  if (f.type === 'circle') return p.r + d < 0.5 ? null : { ...base, p: { ...p, r: p.r + d } };
+  if (f.type === 'circle') return p.r + d < 0.5 || p.ry + d < 0.5 ? null : { ...base, p: { ...p, r: p.r + d, ...p.ry && { ry: p.ry + d } } }; // Ellipse: nur angenähert
   if (f.smooth) return null; // shortcut: kein Versatz für Splines → Kern-Offset (replicad)
   const pts = f.pts!, n = pts.length, s = Math.sign(area(outline(pts)));
   const normal = (t: number[]) => [s * t[1], -s * t[0]];
@@ -280,13 +297,13 @@ export function area(pts: number[][]) {
 function insideShape(f: Extrude, x: number, y: number, eps: number) {
   const p = f.p, pts = f.pts ?? [];
   return f.type === 'rect' ? x > p.x - eps && x < p.x + p.w + eps && y > p.y - eps && y < p.y + p.h + eps
-    : f.type === 'circle' ? Math.hypot(x - p.cx, y - p.cy) < p.r + eps
+    : f.type === 'circle' ? Math.hypot((x - p.cx) / (p.r + eps), (y - p.cy) / ((p.ry ?? p.r) + eps)) < 1
     : insidePoly(contour(pts, f.smooth), x, y) || !f.smooth && pts.some((q, i) => !q[2] && segment(pts, i, x, y).dist < eps);
 }
 
 // Achsenparalleler Quader um die Skizze in Weltkoordinaten
 function bounds(f: Extrude) {
-  const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - p.r, p.cx + p.r, p.cy + p.r];
+  const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - (p.ry ?? p.r), p.cx + p.r, p.cy + (p.ry ?? p.r)];
   const pts = f.type === 'poly' ? contour(f.pts!, f.smooth) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   const w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]));
   return [0, 1, 2].map(k => [Math.min(...w.map(q => q[k])), Math.max(...w.map(q => q[k]))]);
@@ -407,6 +424,7 @@ function extrudeOwner(features: Feature[], P0: ArrayLike<number>, N0: ArrayLike<
       continue;
     }
     if (f.type === 'circle') {
+      if (p.ry) continue; // shortcut: Ellipsenwand lässt sich nicht ziehen → Halbachsen im Seitenfeld
       const dx = x - p.cx, dy = y - p.cy, l = Math.hypot(dx, dy);
       if (Math.abs(l - p.r) < eps) return { f, part: 'r', k: Math.sign((nu * dx + nv * dy) / l) };
       continue;

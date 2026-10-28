@@ -1,12 +1,12 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, type Drawing, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
+import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, type Drawing, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
   const p = f.p;
   const drawing = f.type === 'rect' ? drawRectangle(p.w, p.h).translate(p.x + p.w / 2, p.y + p.h / 2)
-    : f.type === 'circle' ? drawCircle(p.r).translate(p.cx, p.cy)
+    : f.type === 'circle' ? (p.ry ? drawEllipse(Math.max(p.r, p.ry), Math.min(p.r, p.ry)).rotate(p.ry > p.r ? 90 : 0) : drawCircle(p.r)).translate(p.cx, p.cy)
     : polyDrawing(f.pts!, f.smooth);
   return drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch;
 }

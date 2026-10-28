@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep } from './kernel';
-import { alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -341,4 +341,19 @@ test('Körper an Ebene teilen, Übergang zwischen Skizzen, Schale mit zwei offen
   const one = measureVolume(buildBody([b, { id: 7, type: 'shell', at: [10, 10, -5], t: 1, body: 1 }]).body!);
   const two = measureVolume(buildBody([b, { id: 7, type: 'shell', at: [10, 10, -5], more: [[20, 5, -5]], t: 1, body: 1 }]).body!);
   expect(two).toBeLessThan(one);
+});
+
+test('Ellipse und Bogen durch drei Punkte', () => {
+  const e = { ...ellipseFeature(GROUND, [0, 0], [10, 4], 1, false)!, d: 5 };
+  expect(measureVolume(buildBody([e]).body!)).toBeCloseTo(Math.PI * 10 * 4 * 5, 0);
+  const tall = { ...ellipseFeature(GROUND, [0, 0], [3, 8], 1, false)!, d: 1 }; // längere Achse in y
+  const [lo, hi] = buildBody([tall]).body!.boundingBox.bounds;
+  expect(hi[0] - lo[0]).toBeCloseTo(6); expect(hi[2] - lo[2]).toBeCloseTo(16);
+  expect(bulge3([0, 0], [2, 0], [1, -1])).toBeCloseTo(1);    // Halbkreis rechts der Sehne
+  expect(bulge3([0, 0], [2, 0], [1, 1])).toBeCloseTo(-1);    // links
+  expect(bulge3([0, 0], [2, 0], [1, 0])).toBe(0);            // gerade
+  const pts = arcPoints([0, 0], [2, 0], bulge3([0, 0], [2, 0], [1, -0.4]));
+  expect(Math.min(...pts.map(p => p[1]))).toBeCloseTo(-0.4, 1); // Bogen läuft durch den Punkt
+  const big = bulge3([0, 0], [2, 0], [1, -3]);                // großer Bogen über den Halbkreis hinaus
+  expect(Math.abs(big)).toBeGreaterThan(1);
 });
