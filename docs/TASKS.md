@@ -39,7 +39,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T1.3d DONE — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
       (Schnittfläche split), Import (Fläche i). Danach ist die Kette
       lückenlos; shortcut-Kommentar in buildBody entfernen.
-- [ ] T1.4 TODO — Resolver: Ref + Shape → Fläche/Kante.
+- [x] T1.4 DONE — Resolver: Ref + Shape → Fläche/Kante.
       Erst Abstammung. Genau ein Treffer → übernehmen, Fingerabdruck
       nur als Warnung prüfen. Mehrere Treffer (aufgespaltene Fläche)
       oder keiner (Kette gerissen) → Fingerabdruck entscheidet unter den
@@ -93,6 +93,14 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.4: Resolver in src/topo.ts (faceRef/edgeRef anlegen,
+  resolveFace/resolveEdge auflösen), buildBody liefert dazu `names`.
+  Fingerabdruck-Abstand = Schwerpunktabstand + Unterschied √Fläche,
+  anderer Typ oder andere Richtung = passt nicht; zwei fast gleich gute
+  Kandidaten = mehrdeutig. Tests: verschoben, skaliert, aufgespalten,
+  vier Eckbohrungen, ohne Abstammung mehrdeutig, verschwunden, STEP-Import,
+  Kante. Gelernt: Nut genau mittig über den Deckel ergibt zwei gleich gute
+  Hälften → korrekt „mehrdeutig“, nicht geraten.
 - 2026-10-28 T1.3d: Bewegen/Drehen/Skalieren übertragen die Namen über
   die Flächenreihenfolge (Topologie bleibt gleich, IsSame greift wegen der
   neuen Location nicht), Teilen über boolean mit dem Halbraum (Schnitt-

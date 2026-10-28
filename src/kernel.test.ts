@@ -2,6 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, sheetSVG } from './kernel';
+import { edgeRef, faceRef, resolveEdge, resolveFace } from './topo';
 import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -416,4 +417,65 @@ test('Bewegen, Skalieren, Teilen und Import benennen ihre Flächen (T1.3d)', asy
   const step = await forExport(buildBody([box()]).body!).blobSTEP().text();
   const imp = { id: 6, type: 'import' as const, name: 'q.step', step };
   expect(tags(buildBody([imp], new Map([[6, await loadStep(step)]])).origins.get(1)!)).toEqual([0, 1, 2, 3, 4, 5].map(i => `6:import${i}`));
+});
+
+test('Resolver: Bezug findet seine Fläche/Kante wieder (T1.4)', async () => {
+  const at = (r: ReturnType<typeof buildBody>, f: number, tag: string, k = 1) => // Fläche nach Herkunft holen
+    r.bodies.get(k)!.faces[r.origins.get(k)!.findIndex(o => o?.f === f && o.tag === tag)];
+  const near = (v: any, w: number[]) => v.toTuple().every((x: number, i: number) => Math.abs(x - w[i]) < 1e-3);
+
+  // verschoben: Bohrung wandert 4 mm, Bezug auf ihre Wand folgt
+  let r = buildBody([box(), hole(-4)]);
+  const wall = faceRef(r.names.get(1)!, at(r, 2, 'r'))!;
+  const h = hole(-4); h.p.cy = 4;
+  r = buildBody([box(), h]);
+  let res = resolveFace(wall, r.bodies.get(1)!, r.names.get(1)!);
+  expect(res.ok && res.sure && res.shape.center.x).toBeCloseTo(6, 3);
+
+  // skaliert: Quader doppelt so breit, Deckel bleibt Deckel
+  r = buildBody([box()]);
+  const top = faceRef(r.names.get(1)!, at(r, 1, 'end'))!;
+  const wide = box(); wide.p.w = 40;
+  r = buildBody([wide]);
+  res = resolveFace(top, r.bodies.get(1)!, r.names.get(1)!);
+  expect(res.ok && res.sure && near(res.shape.center, [20, 10, -5])).toBe(true);
+
+  // aufgespalten: Nut quer über den Deckel (x 6..8) teilt ihn; Fingerabdruck wählt die passendere Hälfte, unsicher
+  const slot: Extrude = { ...sketchFeature('rect', TOP, [-6, 2], [6, 4], 3, true)!, d: -2 };
+  r = buildBody([box(), slot]);
+  res = resolveFace(top, r.bodies.get(1)!, r.names.get(1)!);
+  expect(res.ok && !res.sure && near(res.shape.center, [14, 10, -5])).toBe(true);
+  expect(r.origins.get(1)!.filter(o => o?.f === 1 && o.tag === 'end').length).toBe(2);
+
+  // vier gleiche Eckbohrungen: Bezug auf Bohrung 4 bleibt bei Bohrung 4, auch wenn der Quader breiter wird
+  const corners = ([[-2, 7], [-2, -7], [2, 7], [2, -7]] as const).map(([cx, cy], i) => ({ ...sketchFeature('circle', TOP, [cx, cy], [cx + 1.5, cy], 10 + i, true)!, d: -4 }));
+  r = buildBody([box(), ...corners]);
+  const third = faceRef(r.names.get(1)!, at(r, 12, 'r'))!;
+  r = buildBody([wide, ...corners]);
+  res = resolveFace(third, r.bodies.get(1)!, r.names.get(1)!);
+  expect(res.ok && res.sure && near(res.shape.center, [3, 8, -7])).toBe(true);
+  // ohne Abstammung (fremde Feature-ID) und mittig zwischen zwei Bohrungen: mehrdeutig statt geraten
+  const orphan = { o: { f: 99, tag: 'r' as const }, fp: { ...third.fp, c: [10, 8, -3] as Vec } };
+  expect(resolveFace(orphan, r.bodies.get(1)!, r.names.get(1)!)).toEqual({ ok: false, why: 'ambiguous' });
+
+  // verschwunden: Bohrung ausgeschaltet → kein Zylinder mehr → verloren
+  r = buildBody([box(), { ...hole(-4), hidden: true }]);
+  expect(resolveFace(wall, r.bodies.get(1)!, r.names.get(1)!)).toEqual({ ok: false, why: 'lost' });
+
+  // STEP-Import ohne Historie: Fläche i der Datei
+  const step = await forExport(buildBody([box()]).body!).blobSTEP().text();
+  const imp = { id: 6, type: 'import' as const, name: 'q.step', step }, im = new Map([[6, await loadStep(step)]]);
+  r = buildBody([imp], im);
+  const f3 = r.bodies.get(1)!.faces[3], ref = faceRef(r.names.get(1)!, f3)!;
+  r = buildBody([imp, hole(-4)], im);
+  res = resolveFace(ref, r.bodies.get(1)!, r.names.get(1)!);
+  expect(res.ok && res.sure && near(res.shape.center, f3.center.toTuple())).toBe(true);
+
+  // Kante zwischen Deckel und rechter Seite folgt, wenn der Quader breiter wird
+  r = buildBody([box()]);
+  const s0 = r.bodies.get(1)!, e0 = s0.edges.find(e => near(e.pointAt(0.5), [20, 10, -5]))!;
+  const eref = edgeRef(r.names.get(1)!, e0, s0)!;
+  r = buildBody([wide]);
+  const er = resolveEdge(eref, r.bodies.get(1)!, r.names.get(1)!);
+  expect(er.ok && er.sure && near(er.shape.pointAt(0.5), [40, 10, -5])).toBe(true);
 });

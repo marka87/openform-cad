@@ -122,7 +122,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
   const origins = new Map<number, (Origin | null)[]>([...bodies].map(([k, s]) => [k, originsOf(s, names.get(k))]));
-  return { body, bodies, failed, origins };
+  return { body, bodies, failed, origins, names };
 }
 
 // Blickrichtungen: replicad benennt top/bottom und left/right aus Sicht der Ebene, also umgekehrt (im Test geprüft):

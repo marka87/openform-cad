@@ -2,7 +2,7 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import { cast, EdgeFinder, FaceFinder, getOC, type Face, type Shape3D } from 'replicad';
+import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D } from 'replicad';
 import { sideOf, type Extrude, type Part, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
@@ -22,7 +22,7 @@ export interface Origin {
 
 // Prüfwert, gemessen beim Anlegen des Bezugs (Weltkoordinaten, mm)
 export interface Fingerprint {
-  kind: 'plane' | 'cylinder' | 'cone' | 'sphere' | 'torus' | 'bspline' | 'other'; // Flächen- bzw. Kurventyp
+  kind: 'plane' | 'cylinder' | 'cone' | 'sphere' | 'torus' | 'bspline' | 'line' | 'circle' | 'ellipse' | 'other'; // Flächen- bzw. Kurventyp
   c: Vec;           // Schwerpunkt
   n?: Vec;          // Fläche: Normale (eben) bzw. Achse (Zylinder …); Kante: Richtung, wenn gerade
   size: number;     // Flächeninhalt bzw. Kantenlänge
@@ -44,6 +44,65 @@ export interface EdgeRef {
 
 // Ergebnis des Auflösens: sicher = genau ein Treffer über die Herkunft und Fingerabdruck passt
 export type Resolved<T> = { ok: true; shape: T; sure: boolean } | { ok: false; why: 'lost' | 'ambiguous' };
+
+// ── Bezüge anlegen und auflösen ──
+const KIND: Record<string, Fingerprint['kind']> = { PLANE: 'plane', CYLINDRE: 'cylinder', CONE: 'cone', SPHERE: 'sphere', TORUS: 'torus',
+  BEZIER_SURFACE: 'bspline', BSPLINE_SURFACE: 'bspline', LINE: 'line', CIRCLE: 'circle', ELLIPSE: 'ellipse', BEZIER_CURVE: 'bspline', BSPLINE_CURVE: 'bspline' };
+const isFace = (s: Face | Edge): s is Face => 'pointOnSurface' in s;
+
+export function fingerprint(s: Face | Edge): Fingerprint {
+  const kind = KIND[s.geomType] ?? 'other';
+  if (isFace(s)) {
+    const c = s.center.toTuple();
+    return { kind, c, size: measureArea(s), ...kind === 'plane' && { n: s.normalAt(c).toTuple() } };
+  }
+  const a = s.startPoint.toTuple(), b = s.endPoint.toTuple(), L = measureLength(s);
+  return { kind, c: s.pointAt(0.5).toTuple(), size: L, ...kind === 'line' && { n: [0, 1, 2].map(i => (b[i] - a[i]) / L) as Vec } };
+}
+
+export const sameOrigin = (a?: Origin, b?: Origin): boolean => !a || !b ? a === b
+  : a.f === b.f && a.tag === b.tag && a.i === b.i && a.from === b.from && sameOrigin(a.of, b.of);
+
+// Abstand zweier Fingerabdrücke; Infinity = passt nicht (anderer Typ oder andere Richtung)
+function mismatch(a: Fingerprint, b: Fingerprint) {
+  if (a.kind !== b.kind || (a.n && b.n && Math.abs(dot(a.n, b.n)) < 0.99)) return Infinity;
+  return Math.hypot(...[0, 1, 2].map(i => a.c[i] - b.c[i])) + Math.abs(Math.sqrt(a.size) - Math.sqrt(b.size));
+}
+
+// Unter den Kandidaten den mit dem nächsten Fingerabdruck; zwei gleich gute = mehrdeutig
+function pick<T extends Face | Edge>(fp: Fingerprint, cands: T[], sure: boolean): Resolved<T> {
+  const scored = cands.map(c => ({ c, d: mismatch(fp, fingerprint(c)) })).filter(x => x.d < Infinity).sort((x, y) => x.d - y.d);
+  if (!scored.length) return { ok: false, why: 'lost' };
+  if (scored.length > 1 && scored[1].d - scored[0].d < 1e-3 * (1 + scored[0].d)) return { ok: false, why: 'ambiguous' };
+  return { ok: true, shape: scored[0].c, sure };
+}
+
+export function faceRef(named: Named, face: Face): FaceRef | null {
+  const n = named.find(x => x.face.wrapped.IsSame(face.wrapped));
+  return n ? { o: n.o, fp: fingerprint(face) } : null;
+}
+
+// Erst die Abstammung; genau ein Treffer mit passendem Fingerabdruck = sicher.
+// Aufgespalten (mehrere) oder Kette gerissen (keiner): Fingerabdruck entscheidet, Ergebnis unsicher.
+export function resolveFace(ref: FaceRef, s: Shape3D, named: Named): Resolved<Face> {
+  const hits = named.filter(n => sameOrigin(n.o, ref.o)).map(n => n.face);
+  if (hits.length === 1) return { ok: true, shape: hits[0], sure: mismatch(ref.fp, fingerprint(hits[0])) < Infinity };
+  return pick(ref.fp, hits.length ? hits : s.faces, false);
+}
+
+// Kante über ihre zwei Nachbarflächen benennen
+export function edgeRef(named: Named, edge: Edge, s: Shape3D): EdgeRef | null {
+  const [a, b] = s.faces.filter(f => f.edges.some(e => e.wrapped.IsSame(edge.wrapped))).map(f => faceRef(named, f)?.o);
+  return a && b ? { a, b, fp: fingerprint(edge) } : null;
+}
+
+export function resolveEdge(ref: EdgeRef, s: Shape3D, named: Named): Resolved<Edge> {
+  const fa = named.filter(n => sameOrigin(n.o, ref.a)).map(n => n.face), fb = named.filter(n => sameOrigin(n.o, ref.b)).map(n => n.face);
+  const eb = fb.flatMap(f => f.edges);
+  const shared = fa.flatMap(f => f.edges).filter(e => eb.some(x => x.wrapped.IsSame(e.wrapped)));
+  if (shared.length === 1) return { ok: true, shape: shared[0], sure: mismatch(ref.fp, fingerprint(shared[0])) < Infinity };
+  return pick(ref.fp, shared.length ? shared : s.edges, false);
+}
 
 // ── Abstammung während eines Rebuilds ──
 // Flächen eines Körpers mit ihrer Herkunft. Gilt nur, solange der Körper lebt (TopoDS-Identität).
