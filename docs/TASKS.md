@@ -108,7 +108,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [x] T4.2 DONE — Datei öffnen/speichern über System-Dialog, `.ofc`
       verknüpfen.
-- [ ] T4.3 TODO — Installer Windows, danach macOS/Linux.
+- [ ] T4.3 DOING — Windows-Installer gebaut (pro Benutzer, NSIS, deutsch,
+      7,6 MB, src-tauri/target/release/bundle/nsis/), Installation durch den
+      Nutzer steht aus. macOS/Linux: BLOCKED (hier nicht baubar, braucht
+      einen Mac/Linux-Rechner oder GitHub Actions – Entscheidung des Nutzers).
 
 ## Log
 (neueste oben)
