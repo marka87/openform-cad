@@ -90,7 +90,7 @@ function shapeOf(f: Extrude) {
 }
 
 // Skizzen, Vorschau und Auswahlrahmen kommen aus Three.js; der eigentliche Körper aus dem Kern
-function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline') {
+function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline' | 'add' | 'cut') {
   let g: THREE.BufferGeometry;
   if (Math.abs(f.d) < 1e-6) g = new THREE.ShapeGeometry(shapeOf(f), 64);
   else {
@@ -99,7 +99,8 @@ function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline') {
   }
   const sel = f.id === selId;
   const mat = new THREE.MeshStandardMaterial({
-    color: sel ? 0xff9a3c : 0x4da3ff, transparent: true, opacity: kind === 'outline' ? 0 : 0.4, depthWrite: false,
+    color: kind === 'add' ? 0x4cd964 : kind === 'cut' ? 0xff4d4d : sel ? 0xff9a3c : 0x4da3ff, transparent: true,
+    opacity: kind === 'outline' ? 0 : kind === 'add' || kind === 'cut' ? 0.3 : 0.4, depthWrite: false, depthTest: kind !== 'cut',
     side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
   const mesh = new THREE.Mesh(g, mat);
@@ -126,7 +127,14 @@ function bodyMesh(m: BodyMesh) {
   const eg = new THREE.BufferGeometry();
   eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
   mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }))); // Kanten sind anklickbar
-  mesh.userData.body = m.body;
+  // Hervorheben beim Überfahren: teilen sich die Puffer des Körpers, zeigen per drawRange nur eine Fläche bzw. Kante
+  const hf = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+    color: 0xff9a3c, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  hf.geometry.setAttribute('position', g.attributes.position); hf.geometry.setIndex(g.index);
+  const he = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+  he.geometry.setAttribute('position', eg.attributes.position);
+  for (const o of [hf, he]) { o.visible = false; o.raycast = () => {}; o.renderOrder = 3; mesh.add(o); }
+  Object.assign(mesh.userData, { body: m.body, faces: m.faces, edges: m.edges, hf, he });
   return mesh;
 }
 
@@ -180,7 +188,9 @@ function rebuild() {
     if (f.type === 'import' || f.hidden) return;
     const M = moveMatrix(movesAfter(features, i));
     const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
-      : isFlat(f) ? buildMesh(f, 'sketch') : f.id === selId ? buildMesh(f, 'outline') : null;
+      : isFlat(f) ? buildMesh(f, 'sketch')
+      : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
+      : f.id === selId ? buildMesh(f, 'outline') : null;
     if (!o) return;
     if (o.matrixAutoUpdate) o.updateMatrix();
     o.matrixAutoUpdate = false;
@@ -269,6 +279,26 @@ function setRay(e: PointerEvent) {
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
 type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number };
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
+let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
+// Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
+let hoverSketch: THREE.Mesh | null = null;
+function setHover(on: boolean) {
+  for (const m of bodyGroup.children) m.userData.hf.visible = m.userData.he.visible = false;
+  if (hoverSketch) { (hoverSketch.material as THREE.MeshStandardMaterial).opacity = 0.4; hoverSketch = null; }
+  const { fh, eh } = lastPick;
+  if (!on) return;
+  const range = (groups: Int32Array, i: number) => { for (let k = 0; k < groups.length; k += 2) if (i >= groups[k] && i < groups[k] + groups[k + 1]) return [groups[k], groups[k + 1]]; };
+  if (eh) {
+    const m = eh.object.parent!, r = m.userData.edges && range(m.userData.edges, eh.index!);
+    if (r) { m.userData.he.geometry.setDrawRange(r[0], r[1]); m.userData.he.visible = true; }
+  } else if (fh?.object.userData.hf) {
+    const r = range(fh.object.userData.faces, fh.faceIndex! * 3);
+    if (r) { fh.object.userData.hf.geometry.setDrawRange(r[0], r[1]); fh.object.userData.hf.visible = true; }
+  } else if (fh?.object.userData.id) {
+    hoverSketch = fh.object as THREE.Mesh;
+    (hoverSketch.material as THREE.MeshStandardMaterial).opacity = 0.6;
+  }
+}
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
@@ -276,6 +306,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
   const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
   let face: Hit | null = null, edge: EdgeHit | null = null;
+  lastPick = { fh, eh: eh && (!fh || eh.distance < fh.distance + 12 * px) ? eh : undefined };
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
@@ -506,10 +537,12 @@ function onMove(e: PointerEvent) {
     return showHud(e, typed ? `Länge: ${typed}` : `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm`);
   }
   if (!drag) {
-    const h = tool === 'select' && pick();
+    const h = ['select', 'shell', 'measure'].includes(tool) && pick();
+    setHover(!!h && (tool !== 'shell' || !!h.face));
     el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     return;
   }
+  setHover(false);
   if (drag.kind === 'line') {
     if (!drag.arc || !poly) return;
     if (!drag.started && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
