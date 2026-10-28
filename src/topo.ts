@@ -3,7 +3,7 @@
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
 import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D } from 'replicad';
-import { sideOf, type Extrude, type Part, type Vec } from './model';
+import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type Shell, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -162,8 +162,8 @@ export function nameLoft(id: number, A: Extrude, B: Extrude, s: Shape3D): Named 
 
 // Schale wie replicad (gleiche OCCT-Aufrufe), mit Historie: Außenflächen bleiben, jede Innenwand ist aus ihrer
 // Außenfläche erzeugt (tag shell, of = deren Name), geöffnete Flächen werden zum Rand und behalten ihren Namen
-export function shell(id: number, A: Shape3D, nA: Named, at: Vec[], t: number): [Shape3D, Named] {
-  const oc = getOC() as any, open = new FaceFinder().either(at.map(p => (x: FaceFinder) => x.withinDistance(0.1, p))).find(A);
+export function shell(id: number, A: Shape3D, nA: Named, open: Face[], t: number): [Shape3D, Named] {
+  const oc = getOC() as any;
   const L = new oc.NCollection_List_TopoDS_Shape(), b = new oc.BRepOffsetAPI_MakeThickSolid();
   try {
     open.forEach(f => L.Append(f.wrapped));
@@ -235,11 +235,10 @@ function carry(b: any, named: Named, extra: [any, Origin][] = []): [Shape3D, Nam
   return [res, next];
 }
 
-// Rundung/Fase an allen Kanten durch den Punkt at (wie replicad, aber mit Historie);
+// Rundung/Fase an den Kanten (wie replicad, aber mit Historie);
 // die neue Fläche heißt nach dem Feature, die Nachbarflächen behalten ihren Namen
-export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, at: Vec, r: number): [Shape3D, Named] {
-  const oc = getOC() as any, edges = new EdgeFinder().withinDistance(0.1, at).find(A);
-  if (!edges.length) throw new Error('Kante nicht gefunden');
+export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number): [Shape3D, Named] {
+  const oc = getOC() as any;
   const b = type === 'fillet' ? new oc.BRepFilletAPI_MakeFillet(A.wrapped, oc.ChFi3d_FilletShape.ChFi3d_Rational) : new oc.BRepFilletAPI_MakeChamfer(A.wrapped);
   try {
     edges.forEach(e => b.Add(r, e.wrapped));
@@ -250,4 +249,62 @@ export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: N
     gen.forEach(([t]) => t.delete());
     return out;
   } finally { b.delete(); }
+}
+
+// ── Anker: Features, die an einer Fläche/Kante hängen, beim Rebuild darauf auflösen ──
+// Ohne Bezug (neu angelegt oder alte Datei) wird er über die gespeicherte Lage gefunden und als patch zurückgegeben;
+// mit Bezug wird aufgelöst und die gespeicherte Lage nachgeführt. Verloren/mehrdeutig = Fehler, nie still raten.
+type Anchor<T> = T & { patch?: Record<string, unknown>; sure: boolean };
+const sub3 = (a: ArrayLike<number>, b: ArrayLike<number>) => [0, 1, 2].map(i => a[i] - b[i]);
+const fail = (r: { why: 'lost' | 'ambiguous' }, what: string) => new Error(`${what} ${r.why === 'lost' ? 'nicht mehr vorhanden' : 'nicht eindeutig'}`);
+
+// Skizze auf einer Fläche: verschiebt sich die Fläche entlang ihrer Normalen, wandert die Skizze mit
+// shortcut: nur Verschieben entlang der Normalen; kippt die Fläche, wird abgebrochen → Skizzenebene neu aus der Fläche ableiten
+export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Anchor<{ f: Extrude }> {
+  if (!f.onFace || !s) return { f, sure: true };
+  if (!f.face) {
+    const b = bounds(f), mid = b.map(([lo, hi]) => (lo + hi) / 2);
+    const cands = s.faces.filter(x => x.geomType === 'PLANE' && Math.abs(dot(x.normalAt(x.center).toTuple(), f.n)) > 0.999
+      && Math.abs(dot(sub3(x.center.toTuple(), f.o), f.n)) < 1e-4);
+    // shortcut: mehrere Flächen in der Ebene → die mit dem nächsten Schwerpunkt; ungenau bei verschachtelten Flächen → Abstand Punkt–Fläche
+    const face = cands.sort((x, y) => Math.hypot(...sub3(x.center.toTuple(), mid)) - Math.hypot(...sub3(y.center.toTuple(), mid)))[0];
+    const ref = face && faceRef(named, face);
+    return { f, sure: true, ...ref && { patch: { face: ref } } };
+  }
+  const r = resolveFace(f.face, s, named);
+  if (!r.ok) throw fail(r, 'Fläche der Skizze');
+  if (Math.abs(dot(r.shape.normalAt(r.shape.center).toTuple(), f.n)) < 0.999) throw new Error('Fläche der Skizze hat sich gedreht');
+  const d = dot(sub3(r.shape.center.toTuple(), f.o), f.n);
+  if (Math.abs(d) < 1e-6) return { f, sure: r.sure };
+  const g = movedCopy(f, f.id, f.n.map(x => x * d) as Vec);
+  return { f: g, sure: r.sure, patch: { o: g.o, ...g.and && { and: g.and }, ...g.not && { not: g.not } } };
+}
+
+// Rundung/Fase: Kante über den Bezug, sonst über den Punkt at; at/dir werden an die Kante nachgeführt
+export function anchorEdges(f: EdgeOp, s: Shape3D, named: Named): Anchor<{ edges: Edge[] }> {
+  if (!f.edge) {
+    const edges = new EdgeFinder().withinDistance(0.1, f.at).find(s);
+    if (!edges.length) throw new Error('Kante nicht gefunden');
+    const ref = edges.length === 1 ? edgeRef(named, edges[0], s) : null;
+    return { edges, sure: true, ...ref && { patch: { edge: ref } } };
+  }
+  const r = resolveEdge(f.edge, s, named);
+  if (!r.ok) throw fail(r, 'Kante');
+  const e = r.shape, m = e.pointAt(0.5).toTuple(), t = e.tangentAt(0.5).toTuple(), q = sub3(f.at, m), along = dot(q, t);
+  const onIt = Math.hypot(...q.map((x, i) => x - along * t[i])) < 1e-4 && Math.abs(along) <= measureLength(e) / 2 + 1e-4; // at liegt noch auf der Kante
+  return { edges: [e], sure: r.sure, ...!onIt && { patch: { at: m, dir: t } } };
+}
+
+// Schale: offene Flächen über die Bezüge, sonst über die Punkte at/more
+// shortcut: at/more werden nicht nachgeführt (nur der Bezug zählt); erst nötig, wenn die Oberfläche sie anzeigt
+export function anchorFaces(f: Shell, s: Shape3D, named: Named): Anchor<{ faces: Face[] }> {
+  const pts = [f.at, ...f.more ?? []];
+  if (!f.faces) {
+    const per = pts.map(p => new FaceFinder().withinDistance(0.1, p).find(s));
+    const refs = per.every(x => x.length === 1) ? per.map(x => faceRef(named, x[0])) : [];
+    return { faces: per.flat(), sure: true, ...refs.length && refs.every(Boolean) && { patch: { faces: refs } } };
+  }
+  const rs = f.faces.map(ref => resolveFace(ref, s, named)), bad = rs.find(r => !r.ok);
+  if (bad && !bad.ok) throw fail(bad, 'Offene Fläche der Schale');
+  return { faces: rs.map(r => r.ok ? r.shape : null!), sure: rs.every(r => r.ok && r.sure) };
 }

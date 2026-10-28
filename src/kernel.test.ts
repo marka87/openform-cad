@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, sheetSVG } from './kernel';
 import { edgeRef, faceRef, resolveEdge, resolveFace } from './topo';
-import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature, type Vec } from './model';
+import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -478,4 +478,38 @@ test('Resolver: Bezug findet seine Fläche/Kante wieder (T1.4)', async () => {
   r = buildBody([wide]);
   const er = resolveEdge(eref, r.bodies.get(1)!, r.names.get(1)!);
   expect(er.ok && er.sure && near(er.shape.pointAt(0.5), [40, 10, -5])).toBe(true);
+});
+
+test('Bezüge werden nachgetragen und Abhängige wandern mit (T1.5/T1.6/T1.9)', () => {
+  const settle = (fs: Feature[]) => { // bauen und die Korrekturen des Kerns übernehmen wie main.ts, bis keine mehr kommen
+    let r = buildBody(fs);
+    for (let n = 0; r.fixes.size && n < 3; n++) { for (const [id, p] of r.fixes) Object.assign(fs.find(f => f.id === id)!, p); r = buildBody(fs); }
+    expect(r.fixes.size).toBe(0);
+    return r;
+  };
+  // Skizze auf dem Deckel + Bohrung, Rundung an der Deckelkante
+  const b = box(), h = hole(-4), edge: EdgeOp = { id: 3, type: 'fillet', at: [20, 10, -5], dir: [0, 0, 1], r: 2 };
+  const fs: Feature[] = [b, h, edge];
+  const r0 = buildBody(fs);
+  expect(r0.fixes.get(2)).toHaveProperty('face');                           // T1.5: Bezug wird beim ersten Bau nachgetragen
+  expect(r0.fixes.get(3)).toHaveProperty('edge');
+  settle(fs);
+  b.d = 20;                                                                 // Grundkörper deutlich höher
+  const r = settle(fs);
+  expect(r.failed).toEqual([]);
+  expect(h.o[1]).toBeCloseTo(20);                                           // Skizze ist mit dem Deckel hochgewandert
+  expect(edge.at.map(v => +v.toFixed(3) + 0)).toEqual([20, 20, -5]);       // Rundung hängt weiter an der Deckelkante
+  expect(measureVolume(r.body!)).toBeCloseTo(4000 - Math.PI * 9 * 4 - (4 - Math.PI) * 10, 0);
+
+  // Platte mit vier Eckbohrungen, Fase an genau einer (Bohrung 12) → Platte höher: Fase bleibt an Bohrung 12
+  const p = box();
+  const corners = ([[-2, 7], [-2, -7], [2, 7], [2, -7]] as const).map(([cx, cy], i) => ({ ...sketchFeature('circle', TOP, [cx, cy], [cx + 1.5, cy], 10 + i, true)!, d: -4 }));
+  const ch: EdgeOp = { id: 20, type: 'chamfer', at: [4.5, 10, -7], dir: [0, 0, 1], r: 0.5 };
+  const gs: Feature[] = [p, ...corners, ch];
+  settle(gs);
+  p.d = 15;
+  expect(settle(gs).failed).toEqual([]);
+  const c = ch.at;                                                           // Fasenkante liegt auf dem Rand von Bohrung 12, jetzt auf y = 15
+  expect(c[1]).toBeCloseTo(15);
+  expect(Math.hypot(c[0] - 3, c[2] + 7)).toBeCloseTo(1.5, 3);
 });

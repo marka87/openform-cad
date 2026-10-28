@@ -10,7 +10,7 @@ export type ToWorker =
   | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; info?: SheetInfo };
 export type FromWorker =
   | { type: 'ready' }
-  | { type: 'built'; failed: number[]; volume: number; area: number; meshes: BodyMesh[] }
+  | { type: 'built'; failed: number[]; unsure: number[]; fixes: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string };
 
@@ -45,7 +45,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     const volume = meshes.reduce((v, m) => v + m.volume, 0);
     let area = 0;
     for (const s of bodies.values()) area += measureArea(s);
-    post({ type: 'built', failed: r.failed, volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
+    post({ type: 'built', failed: r.failed, unsure: r.unsure, fixes: [...r.fixes], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
     if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!)], { type: 'image/svg+xml' }) });

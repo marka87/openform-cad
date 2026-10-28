@@ -221,7 +221,13 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     showHint(data.failed.length ? `Features ${data.failed.join(', ')} konnten nicht berechnet werden` : notice || HINTS[tool]);
     notice = '';
     busy = false;
-    if (pending) requestBuild();
+    // Vom Kern nachgetragene Bezüge und mitgewanderte Lagen übernehmen (kein Rückgängig-Schritt, ergibt sich aus dem Modell).
+    // Liegt schon eine neuere Änderung an, verwerfen: der nächste Lauf rechnet sie neu.
+    // shortcut: danach rechnet der Kern einmal mehr (ohne neue Korrekturen); erst bei langsamen Modellen spürbar → Netz direkt behalten
+    if (data.fixes.length && !pending) {
+      for (const [id, p] of data.fixes) { const f = features.find(g => g.id === id); if (f) Object.assign(f, p); }
+      rebuild(); save();
+    } else if (pending) requestBuild();
   } else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);

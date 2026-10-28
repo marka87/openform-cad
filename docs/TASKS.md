@@ -47,9 +47,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Unit-Tests: verschoben, skaliert, aufgespalten, mehrdeutig
       (vier gleiche Eckbohrungen), verschwunden, STEP-Import ohne
       Historie.
-- [ ] T1.5 TODO — Schreibpfad: neue Features schreiben Refs mit, alte
+- [x] T1.5 DONE — Schreibpfad: neue Features schreiben Refs mit, alte
       Index-Referenzen bleiben vorerst parallel bestehen.
-- [ ] T1.6 TODO — Rebuild auf Resolver umstellen, Feature für Feature.
+- [x] T1.6 DONE — Rebuild auf Resolver umstellen, Feature für Feature.
       Reihenfolge: Fase/Rundung zuerst, dann Skizze-auf-Fläche.
 - [ ] T1.7 TODO — Fehlerfall sichtbar machen: unsichere oder verlorene
       Referenz markiert das Feature im Baum als defekt und bricht
@@ -57,12 +57,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [ ] T1.8 TODO — Gelöschtes oder umsortiertes Feature: Abstammung
       zeigt ins Leere. Verhalten festlegen (Rückfall auf Fingerabdruck
       vs. Feature als defekt markieren) und testen.
-- [ ] T1.9 TODO — Regressionstest: Grundkörper mit Skizze auf einer
+- [x] T1.9 DONE — Regressionstest: Grundkörper mit Skizze auf einer
       Fläche, Grundkörper-Maß deutlich ändern, Rebuild → Skizze und
       Folgefeatures wandern mit. Zusätzlich: Platte mit vier
       Eckbohrungen, Fase an genau einer davon, Breite ändern → Fase
       bleibt an derselben Bohrung.
-- [ ] T1.10 TODO — Migration bestehender `.ofc`-Dateien: beim Laden
+- [x] T1.10 DONE — Migration bestehender `.ofc`-Dateien: beim Laden
       Refs nachrüsten, alte Dateien dürfen nicht brechen.
 
 - [ ] T1.11 TODO — Sobald Vieleck-Punkte eingefügt/gelöscht werden können:
@@ -73,6 +73,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       < 2000 (Quader 20×10×10, Bohrung R3 tief 4 von oben, Schale 1 mm,
       Boden offen). Prüfen, ob der Körper gültig ist (BRepCheck), sonst
       Feature als fehlgeschlagen melden.
+
+- [ ] T1.13 TODO — Skizze auf gekippter Fläche: Ebene aus der aufgelösten
+      Fläche neu ableiten statt abbrechen (heute nur Verschieben entlang
+      der Normalen).
+- [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen
+      (heute zählt nur der Bezug).
 
 ## Epic 2: Sweep
 - [ ] T2.1 TODO — Profil + offener Pfad, ohne UI, mit Test.
@@ -93,6 +99,21 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.5/T1.6/T1.9/T1.10 (ein Commit, weil Schreib- und Lesepfad
+  nur zusammen testbar sind): Skizze auf Fläche (`face`), Rundung/Fase
+  (`edge`) und Schale (`faces`) tragen Bezüge. Entscheidung: nicht die
+  Oberfläche legt sie an, sondern der Kern beim ersten Bau aus der
+  gespeicherten Lage (at, Skizzenebene) und meldet sie als `fixes`;
+  main.ts übernimmt sie ohne Rückgängig-Schritt. Vorteil: kein neuer
+  Weg Oberfläche→Worker, und alte Modelle bekommen ihre Bezüge beim Laden
+  von selbst (T1.10, im Browser mit einem alten Modell geprüft). Mit Bezug
+  löst der Kern auf und führt die Lage nach (Skizzenebene entlang der
+  Normalen, at/dir auf die Kante). Verloren/mehrdeutig = Feature schlägt
+  fehl (Meldung wie bisher), unsicher = Liste `unsure` (Anzeige T1.7).
+  Regressionstest T1.9: Quader höher → Bohrungsskizze und Rundung wandern
+  mit; vier Eckbohrungen, Fase an einer, Platte höher → Fase bleibt dort.
+  Im Browser: Höhe 10→20 über das Seitenfeld, Skizze und Rundung folgen,
+  Rückgängig/Wiederholen stimmen.
 - 2026-10-28 T1.4: Resolver in src/topo.ts (faceRef/edgeRef anlegen,
   resolveFace/resolveEdge auflösen), buildBody liefert dazu `names`.
   Fingerabdruck-Abstand = Schwerpunktabstand + Unterschied √Fläche,

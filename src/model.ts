@@ -1,4 +1,5 @@
 // Datenmodell und Geometrie-Logik ohne Three.js/OpenCascade, damit sie testbar bleibt.
+import type { EdgeRef, FaceRef } from './topo';
 export type Vec = [number, number, number];
 export interface Frame { o: Vec; n: Vec; u: Vec; v: Vec } // Ursprung, Normale, Skizzenachsen (v = n × u)
 export interface Extrude extends Frame {
@@ -9,6 +10,7 @@ export interface Extrude extends Frame {
                              // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
   d: number;                 // Extrusionshöhe entlang n, 0 = flache Skizze
   onFace?: boolean;          // auf einer Körperfläche skizziert
+  face?: FaceRef;            // … auf welcher (vom Kern nachgetragen); wandert die Fläche, wandert die Skizze mit
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
@@ -23,12 +25,12 @@ export interface Extrude extends Frame {
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
 // Abhängigkeit einer Vieleck-Seite i (von Punkt i zu i+1): Länge val, waagrecht, senkrecht; mit Seite j parallel, rechtwinklig, gleich lang
 export interface Con { t: 'len' | 'h' | 'v' | 'par' | 'perp' | 'eq'; i: number; j?: number; val?: number }
-export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; hidden?: boolean; body?: number }
+export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; edge?: EdgeRef; hidden?: boolean; body?: number } // edge: Bezug, vom Kern nachgetragen
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
 export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean; body?: number }
 // Schale: Körper aushöhlen (Wandstärke t), die Flächen durch at und more werden geöffnet
-export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; hidden?: boolean; body?: number }
+export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; faces?: FaceRef[]; hidden?: boolean; body?: number } // faces: Bezüge zu at, more
 // Körper an der Hilfsebene plane teilen: der Teil auf der Seite der Normalen wird ein neuer Körper (Nummer = id)
 export interface Split { id: number; type: 'split'; body: number; plane: number; hidden?: boolean }
 // Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
@@ -302,7 +304,7 @@ function insideShape(f: Extrude, x: number, y: number, eps: number) {
 }
 
 // Achsenparalleler Quader um die Skizze in Weltkoordinaten
-function bounds(f: Extrude) {
+export function bounds(f: Extrude) {
   const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - (p.ry ?? p.r), p.cx + p.r, p.cy + (p.ry ?? p.r)];
   const pts = f.type === 'poly' ? contour(f.pts!, f.smooth) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   const w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]));

@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
-import { boolean, byIndex, edgeOp, nameLoft, nameSolid, originsOf, shell, type Named, type Origin } from './topo';
+import { anchorEdges, anchorFaces, anchorSketch, boolean, byIndex, edgeOp, nameLoft, nameSolid, originsOf, shell, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -42,9 +42,16 @@ function polyDrawing(pts: number[][], smooth?: boolean) {
 // Features der Reihe nach in ihren Körper einrechnen (vereinigen, abziehen, Kanten bearbeiten), Körper verrechnen und bewegen.
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
 // Ergebnis: bodies je Körpernummer; body = der einzige Körper bzw. alle als Verbund (für Export und Tests);
-// origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt
+// origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt;
+// fixes: nachgetragene Bezüge und nachgeführte Lagen je Feature-ID (übernimmt main.ts ins Modell); unsure: unsicher aufgelöst
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
+  const fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
+  const anchor = <T extends { patch?: Record<string, unknown>; sure: boolean }>(id: number, a: T) => {
+    if (a.patch) fixes.set(id, { ...fixes.get(id), ...a.patch });
+    if (!a.sure) unsure.push(id);
+    return a;
+  };
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
   for (const f of features) {
     if (f.hidden || f.type === 'plane') continue;
@@ -87,12 +94,14 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       const done = (next: Shape3D, nm: Named = []) => { body?.delete(); bodies.set(k, next); names.set(k, nm); };
       if (f.type === 'shell') {
         if (!body) continue;
-        done(...shell(f.id, body, names.get(k) ?? [], [f.at, ...f.more ?? []], f.t)); // positive Dicke = Wand nach innen
+        const nm = names.get(k) ?? [];
+        done(...shell(f.id, body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces, f.t)); // positive Dicke = Wand nach innen
         continue;
       }
       if (f.type === 'fillet' || f.type === 'chamfer') {
         if (!body) continue;
-        done(...edgeOp(f.type, f.id, body, names.get(k) ?? [], f.at, f.r));
+        const nm = names.get(k) ?? [];
+        done(...edgeOp(f.type, f.id, body, nm, anchor(f.id, anchorEdges(f, body, nm)).edges, f.r));
         continue;
       }
       let s: Shape3D, nS: Named = [];
@@ -102,17 +111,20 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         s = shape.clone();
         nS = s.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'import', i } })); // Reihenfolge aus der STEP-Datei
       } else if (f.type === 'loft') {
-        const [A, B] = [f.a, f.b].map(id => features.find(g => g.id === id));
+        const [A, B] = [f.a, f.b].map(id => moved.get(id) ?? features.find(g => g.id === id));
         if (!A || !B || !isExtrude(A) || !isExtrude(B)) throw new Error('Skizze für den Übergang fehlt');
         s = sketchOf(A).loftWith(sketchOf(B)) as Shape3D;
         nS = nameLoft(f.id, A, B, s);
       } else {
-        if (!isExtrude(f) || isFlat(f) || (isCut(f) && !body)) continue;
-        s = solidOf(f);
-        nS = nameSolid(f, s);
+        if (!isExtrude(f)) continue;
+        const g = anchor(f.id, anchorSketch(f, body, names.get(k) ?? [])).f; // Skizze auf ihre (vielleicht gewanderte) Fläche setzen
+        if (g !== f) moved.set(f.id, g);
+        if (isFlat(g) || (isCut(g) && !body)) continue;
+        s = solidOf(g);
+        nS = nameSolid(g, s);
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
-      done(...boolean(isCut(f) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
+      done(...boolean(isExtrude(f) && isCut(f) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
       s.delete(); // WASM-Speicher freigeben
     } catch (e) {
       console.warn('Feature', f.id, 'fehlgeschlagen', e);
@@ -122,7 +134,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
   const origins = new Map<number, (Origin | null)[]>([...bodies].map(([k, s]) => [k, originsOf(s, names.get(k))]));
-  return { body, bodies, failed, origins, names };
+  return { body, bodies, failed, origins, names, fixes, unsure };
 }
 
 // Blickrichtungen: replicad benennt top/bottom und left/right aus Sicht der Ebene, also umgekehrt (im Test geprüft):
