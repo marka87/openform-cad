@@ -2,8 +2,8 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
-import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
+import { basicFaceExtrusion, cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, Vector, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
+import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Offset, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -370,4 +370,36 @@ export function circleOf(e: Edge): { c: Vec; n: Vec; r: number } | null {
   const out = { c: [l.X(), l.Y(), l.Z()] as Vec, n: [d.X(), d.Y(), d.Z()] as Vec, r: ci.Radius() };
   ad.delete();
   return out;
+}
+
+// Eben, auch wenn OCCT sie als B-Spline speichert (z. B. Seiten eines Lofts): Normalen an mehreren Stellen gleich
+const flat = (x: Face) => {
+  if (x.geomType === 'PLANE') return true;
+  const n = [[0.2, 0.2], [0.8, 0.2], [0.5, 0.8]].map(([u, v]) => x.normalAt(x.pointOnSurface(u, v)).toTuple());
+  return n.every(m => dot(m, n[0]) > 0.99999);
+};
+
+// Fläche versetzen: ebene Fläche über den Bezug, sonst über Klickpunkt und Normale finden; dann ihr Prisma anfügen bzw. abziehen.
+// Die versetzte Fläche behält den Namen der alten, damit Skizzen und Kanten daran mitwandern.
+export function offsetFace(f: Offset, A: Shape3D, nA: Named): Anchor<{ out: [Shape3D, Named] }> {
+  let face: Face | undefined, patch: Record<string, unknown> | undefined, sure = true;
+  if (f.face) {
+    const r = resolveFace(f.face, A, nA);
+    if (!r.ok) throw fail(r, 'Versetzte Fläche');
+    face = r.shape; sure = r.sure;
+  } else {
+    face = new FaceFinder().withinDistance(0.1, f.at).find(A).find(x => flat(x) && Math.abs(dot(x.normalAt(f.at).toTuple(), f.n)) > 0.999);
+    const ref = face && faceRef(nA, face);
+    if (ref) patch = { face: ref };
+  }
+  if (!face) throw new Error('Fläche nicht gefunden');
+  if (!flat(face)) throw new Error('Nur ebene Flächen lassen sich versetzen');
+  // B-Spline-Flächen liefern die Normale nicht normiert
+  const N0 = face.normalAt(face.center).toTuple(), N = N0.map(x => x / Math.hypot(...N0)) as Vec, c0 = face.center.toTuple(), o0 = nA.find(n => n.face.wrapped.IsSame(face!.wrapped))?.o;
+  const prism = basicFaceExtrusion(face, new Vector(N.map(x => x * f.d) as Vec)) as unknown as Shape3D;
+  const named: Named = prism.faces.map((x, i) => { // Deckel in Versatzrichtung = die versetzte Fläche
+    const h = dot(sub3(x.center.toTuple(), c0), N);
+    return { face: x, o: Math.abs(h - f.d) < 1e-6 && o0 ? o0 : Math.abs(h) < 1e-6 ? { f: f.id, tag: 'start' } : { f: f.id, tag: 'seg', i } };
+  });
+  return { out: boolean(f.d > 0 ? 'fuse' : 'cut', A, nA, prism, named), sure, ...patch && { patch } };
 }

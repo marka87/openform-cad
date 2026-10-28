@@ -73,6 +73,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Hilfslinie | `G`, Punkte klicken, Enter = offen fertig: gestrichelt, bildet keine Fläche, andere Werkzeuge rasten daran ein |
 | Trimmen | `T`, Hilfslinie anklicken = Stück bis zu den Schnittpunkten weg; Shift+Klick nahe einem Ende = bis zur nächsten Linie verlängern |
 | Kanten projizieren | Raster auf eine Fläche legen (Doppelklick/Leertaste), dann `P`: Kanten des Körpers werden Hilfslinien in dieser Ebene |
+| Fläche versetzen | Ebene Fläche ohne eigene Skizze (STEP-Import, Loft, nach Booleschen Operationen) anfassen und ziehen; Abstand im Seitenfeld |
 | Raster | Unten links: 0,1 bis 10 mm |
 | Raster auf einer Fläche | Doppelklick auf eine Fläche oder Leertaste mit der Maus darüber: dort erscheint ein Raster, neue Skizzen landen in dieser Ebene, auch neben der Fläche; Doppelklick ins Leere oder Esc = zurück zum Boden |
 | Löschen | `Entf` |

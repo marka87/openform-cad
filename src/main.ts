@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -412,6 +412,7 @@ function nameOf(f: Feature) {
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'loft') return 'Übergang';
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
+  if (f.type === 'offset') return 'Fläche versetzen';
   if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
@@ -828,12 +829,18 @@ function onDown(e: PointerEvent) {
   } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
     drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
+    // Fläche ohne eigenes Feature (STEP-Import, nach Booleschen Operationen …): ziehen = Fläche versetzen
+    if (h && (!h.grip || h.grip.part === 'import') && h.body !== undefined) {
+      if (h.grip) { selId = h.grip.f.id; refresh(); }
+      drag = { kind: 'offset', f: null, at: h.point.toArray() as Vec, n: h.n.toArray() as Vec, body: h.body, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
+      controls.enabled = false; el.setPointerCapture(e.pointerId); return;
+    }
     if (!h?.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; } // Leere: Orbit
     const g = h.grip;
     if (e.shiftKey && selId !== null && selId !== g.f.id) { multi.has(g.f.id) ? multi.delete(g.f.id) : multi.add(g.f.id); refresh(); return; }
     if (!multi.has(g.f.id)) multi.clear();
     selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
-    if (g.part === 'import') return; // importierte Körper nur auswählen
+    if (g.part === 'import') return; // Import ohne Körpernummer: nur auswählen
     if (g.part === 'plane') { drag = { kind: 'plane', f: g.f, off0: g.f.off, P0: h.point, D: V(g.f.n), sx: e.clientX, sy: e.clientY, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; }
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
@@ -898,6 +905,14 @@ function onMove(e: PointerEvent) {
       const r = drag.kind === 'push' && Math.abs(drag.f.d) < 1e-6 && regionFeature(features, drag.f, drag.P0.toArray(), nextId);
       if (r) { nextId++; add(r); drag.f = r; drag.f0 = structuredClone(r); selId = r.id; } // nur den Bereich ziehen
     }
+    if (drag.kind === 'offset') { // Fläche versetzen: Abstand entlang der Normalen, Feature entsteht beim ersten Ziehen
+      if (!drag.f) { drag.f = { id: nextId++, type: 'offset', at: drag.at, n: drag.n, d: 0, body: drag.body } satisfies Offset; add(drag.f); selId = drag.f.id; }
+      const s = lineParam(drag.P0, drag.D);
+      if (s === null) return;
+      drag.f.d = snap(s, e, Math.min(0.5, gridStep));
+      rebuild();
+      return showHud(e, `Versatz: ${len(drag.f.d)}`);
+    }
     if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
       if (!drag.f) {
         // Erste Bewegung entscheidet: vom Körper weg = Rundung, in den Körper hinein = Fase
@@ -960,6 +975,7 @@ el.addEventListener('pointerup', e => {
   hideSnap();
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push' && drag.f.and && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f); // flacher Bereich bringt nichts
+  if (drag.kind === 'offset' && drag.f && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f);  // Versatz 0 bringt nichts
   drag = null;
   controls.enabled = true;
   if (!wasLine) refresh();
@@ -1006,6 +1022,12 @@ function renderPanel() {
     panel.innerHTML = `<h3>Ebene #${f.id}</h3><label>Abstand <input type="number" step="0.5" value="${uval(f.off)}"></label><button class="del">Löschen</button>`;
     const inp = panel.querySelector('input')!;
     inp.onchange = () => { const v = mmOf(inp); if (isFinite(v)) { pushHistory(); f.off = v; refresh(); } };
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
+  if (f.type === 'offset') {
+    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><label>Versatz <input type="number" step="0.5" value="${uval(f.d)}"></label><button class="del">Löschen</button>`;
+    const inp = panel.querySelector('input')!;
+    inp.onchange = () => { const v = mmOf(inp); if (isFinite(v)) { pushHistory(); f.d = v; refresh(); } };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (!isExtrude(f)) return renderEdgePanel(f);

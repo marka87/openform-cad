@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type Vec } from './model';
-import { anchorEdges, anchorFaces, anchorSketch, boolean, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
+import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -100,6 +100,11 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!body) continue;
         const nm = names.get(k) ?? [];
         done(...shell(f.id, body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces, f.t)); // positive Dicke = Wand nach innen
+        continue;
+      }
+      if (f.type === 'offset') {
+        if (!body || Math.abs(f.d) < 1e-6) continue;
+        done(...anchor(f.id, offsetFace(f, body, names.get(k) ?? [])).out);
         continue;
       }
       if (f.type === 'fillet' || f.type === 'chamfer') {

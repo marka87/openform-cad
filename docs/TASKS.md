@@ -130,14 +130,25 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Radius-Maß und Tangente Linie–Bogen.
 
 ## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
-- [ ] T6.1 TODO — Fläche versetzen (Offset Face) und Fläche löschen
-      (Körper heilt die Lücke), mit Bezug auf die Fläche.
+- [x] T6.1 DONE (Versetzen) — Fläche versetzen für ebene Flächen.
+- [ ] T6.1b BLOCKED — Fläche löschen: die mitgelieferte OpenCascade-WASM
+      enthält BRepAlgoAPI_Defeaturing nicht; bräuchte einen eigenen
+      opencascade.js-Build (Entscheidung des Nutzers, siehe Offene Fragen).
 - [ ] T6.2 TODO — Drehkörper um eine beliebige gerade Kante.
 - [ ] T6.3 TODO — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
       Rundungen und ganze Körper.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T6.1: Feature `offset` (Fläche versetzen): Ziehen an einer
+  Fläche ohne eigenes Feature (STEP-Import, Loft, nach Booleschen
+  Operationen) versetzt sie entlang der Normalen; Kern legt das Prisma der
+  Fläche an bzw. zieht es ab, die versetzte Fläche behält ihren Namen
+  (Skizzen darauf wandern mit, Test). Bezug wird nachgetragen. Gelernt:
+  ebene Loft-Seiten sind in OCCT B-Splines und liefern die Normale nicht
+  normiert → Ebenheit geometrisch prüfen, Normale normieren. Gekrümmte
+  Flächen: sichtbarer Fehler. Fläche löschen ist BLOCKED (T6.1b).
+  Im Browser geprüft: Loft-Seite +5 mm = +4,74 cm³.
 - 2026-10-28 T5.4: Winkel zwischen zwei Seiten (planegcs l2l_angle_ll,
   Drehsinn aus der aktuellen Form, damit nichts umklappt) und fester Punkt
   (Lage im Con gespeichert, hält auch beim Ziehen). Panel: ∠ mit Winkelfeld
@@ -320,3 +331,6 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
+- T6.1b Fläche löschen: eigenen opencascade.js-Build mit
+  BRepAlgoAPI_Defeaturing erstellen (größerer Aufwand, Docker/emsdk) oder
+  vorerst weglassen?

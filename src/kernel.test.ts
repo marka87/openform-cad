@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -653,4 +653,43 @@ test('Abhängigkeiten: Winkel zwischen Seiten und fester Punkt (T5.4)', async ()
   // fester Punkt hält auch, wenn er gezogen wird: Ziehen an Punkt 0 nach (5, 5) wird zurückgestellt
   const pulled = solveSketch(gcs, [[5, 5], ...pts.slice(1)], [{ t: 'fix', i: 0, p: [0, 0] }], [0])!;
   expect(pulled[0]).toEqual([0, 0]);
+});
+
+test('Fläche versetzen: nach außen, nach innen, auch am STEP-Import; Skizze darauf wandert mit (T6.1)', async () => {
+  const up: Feature = { id: 5, type: 'offset', at: [5, 10, -5], n: [0, 1, 0], d: 5 };     // Deckel des Quaders um 5 mm hoch
+  let r = buildBody([box(), up]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(3000, 3);
+  expect(r.fixes.get(5)).toHaveProperty('face');                                        // Bezug wird nachgetragen
+  r = buildBody([box(), { ...up, d: -3 }]);
+  expect(measureVolume(r.body!)).toBeCloseTo(1400, 3);                                  // 20 × 10 × 7
+  // Bohrung auf dem versetzten Deckel (y = 15), dann Versatz auf 8 mm: die Bohrung wandert mit auf y = 18
+  const settle = (fs: Feature[]) => { for (let n = 0; n < 3; n++) { const x = buildBody(fs); for (const [id, p] of x.fixes) Object.assign(fs.find(f => f.id === id)!, p); } return buildBody(fs); };
+  const off: Offset = { ...up, id: 6, d: 5 } as Offset, h = { ...hole(-4), id: 7, o: [10, 15, -5] as Vec };
+  const fs: Feature[] = [box(), off, h];
+  settle(fs);
+  expect(h.face).toBeTruthy();
+  off.d = 8;
+  r = settle(fs);
+  expect(r.failed).toEqual([]);
+  expect(h.o[1]).toBeCloseTo(18);
+  // STEP-Import: Seite x = 20 um 10 mm nach außen
+  const step = await forExport(buildBody([box()]).body!).blobSTEP().text();
+  const imp = { id: 8, type: 'import' as const, name: 'q.step', step }, im = new Map([[8, await loadStep(step)]]);
+  r = buildBody([imp, { id: 9, type: 'offset', at: [20, 5, -5], n: [1, 0, 0], d: 10 }], im);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(3000, 3);
+  // gekrümmte Fläche: sichtbarer Fehler statt Unsinn
+  r = buildBody([box(), hole(-4), { id: 10, type: 'offset', at: [13, 8, -5], n: [-1, 0, 0], d: 1 }]);
+  expect(r.errors.get(10)).toMatch(/ebene Flächen|nicht gefunden/);
+});
+
+test('Fläche versetzen an einer ebenen Loft-Seite (als B-Spline gespeichert)', () => {
+  const a = sketchFeature('rect', GROUND, [-20, -20], [20, 20], 1, false)!, b = sketchFeature('rect', { ...GROUND, o: [0, 30, 0] }, [-10, -10], [10, 10], 2, false)!;
+  const loft = { id: 3, type: 'loft' as const, a: 1, b: 2, body: 3 };
+  const v0 = measureVolume(buildBody([a, b, loft]).bodies.get(3)!);
+  const n = [-3, 1, 0].map(x => x / Math.hypot(3, 1)) as Vec;               // linke Seite: Normale schräg nach außen/oben
+  const r = buildBody([a, b, loft, { id: 4, type: 'offset', at: [-15, 15, 0], n, d: 2, body: 3 }]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.bodies.get(3)!)).toBeCloseTo(v0 + (40 + 20) / 2 * Math.hypot(10, 30) * 2, 0); // genau Fläche × Versatz dazu
 });

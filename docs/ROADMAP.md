@@ -57,7 +57,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [ ] Um beliebige Kante drehen
 - [x] Schale: Wandstärke, eine Fläche offen (Werkzeug H)
 - [x] Schale mit mehreren offenen Flächen (H, Shift+Klick)
-- [ ] Fläche versetzen (Offset Face) und Fläche löschen
+- [x] Fläche versetzen (ebene Flächen, auch an Importen und Lofts)
+- [ ] Fläche löschen (braucht Defeaturing im OCCT-Build)
 - [x] Körper an einer Hilfsebene teilen
 - [ ] Körper an einer Fläche teilen
 - [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung
