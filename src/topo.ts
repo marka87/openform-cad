@@ -2,7 +2,8 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import type { Part, Vec } from './model';
+import { cast, getOC, type Face, type Shape3D } from 'replicad';
+import { sideOf, type Extrude, type Part, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -42,3 +43,64 @@ export interface EdgeRef {
 
 // Ergebnis des Auflösens: sicher = genau ein Treffer über die Herkunft und Fingerabdruck passt
 export type Resolved<T> = { ok: true; shape: T; sure: boolean } | { ok: false; why: 'lost' | 'ambiguous' };
+
+// ── Abstammung während eines Rebuilds ──
+// Flächen eines Körpers mit ihrer Herkunft. Gilt nur, solange der Körper lebt (TopoDS-Identität).
+export type Named = { face: Face; o: Origin }[];
+
+const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+// Frisch extrudierten Körper benennen: Boden/Deckel über die Höhe, Seiten über die nächste Skizzenseite
+// (bei Bereichen auch die Seiten der beteiligten Skizzen, dann mit from)
+export function nameSolid(f: Extrude, s: Shape3D): Named {
+  return s.faces.map(face => {
+    const P = face.pointOnSurface(0.5, 0.5).toTuple(), q = [0, 1, 2].map(i => P[i] - f.o[i]);
+    const z = dot(q, f.n), flat = face.geomType === 'PLANE' && Math.abs(dot(face.normalAt(P).toTuple(), f.n)) > 0.999;
+    if (flat && Math.abs(z) < 1e-4) return { face, o: { f: f.id, tag: 'start' } };
+    if (flat && Math.abs(z - f.d) < 1e-4) return { face, o: { f: f.id, tag: 'end' } };
+    const best = [f, ...f.and ?? [], ...f.not ?? []].map(g => {
+      const r = [0, 1, 2].map(i => P[i] - g.o[i]);
+      return { g, ...sideOf(g, dot(r, g.u), dot(r, g.v)) };
+    }).reduce((a, b) => b.dist < a.dist ? b : a);
+    return { face, o: { f: f.id, tag: best.part, ...best.i !== undefined && { i: best.i }, ...best.g !== f && { from: best.g.id } } };
+  });
+}
+
+// Liste aus OCCT in ein Array (Kopie, die Originalliste bleibt dem Builder)
+function list(l: any): any[] {
+  const c = new (getOC() as any).NCollection_List_TopoDS_Shape(l), out: any[] = [];
+  while (c.Size() > 0) { out.push(c.First()); c.RemoveFirst(); }
+  c.delete();
+  return out;
+}
+
+// Nachschlagen „welche dieser Flächen ist dasselbe TopoDS?“ über replicads Hash (wie IsSame: Orientierung egal),
+// IsSame nur bei gleichem Hash; -1 = nicht enthalten
+export function faceIndex(faces: Face[]) {
+  const hash = (s: any): number => (getOC() as any).ReplicadShapeHasher.HashCode(s, 2147483647), map = new Map<number, number[]>();
+  faces.forEach((f, i) => { const h = hash(f.wrapped); map.set(h, [...map.get(h) ?? [], i]); });
+  return (s: any) => map.get(hash(s))?.find(i => faces[i].wrapped.IsSame(s)) ?? -1;
+}
+
+// Boolesche Operation wie replicad (gleiche Vereinfachung), aber mit Fortschreiben der Namen:
+// unverändert → gleicher Name, verändert/aufgespalten → alle Teile erben den Namen, gelöscht → weg.
+export function boolean(op: 'fuse' | 'cut' | 'common', A: Shape3D, nA: Named, B: Shape3D, nB: Named): [Shape3D, Named] {
+  const oc = getOC() as any;
+  const b = new oc[op === 'fuse' ? 'BRepAlgoAPI_Fuse' : op === 'cut' ? 'BRepAlgoAPI_Cut' : 'BRepAlgoAPI_Common'](A.wrapped, B.wrapped, new oc.Message_ProgressRange());
+  try {
+    b.Build();
+    if (!b.IsDone()) throw new Error('Boolesche Operation fehlgeschlagen');
+    b.SimplifyResult(true, true, 1e-3);
+    const res = cast(b.Shape()) as Shape3D, out = res.faces, idx = faceIndex(out), named: Named = [], taken = new Set<number>();
+    for (const { face, o } of [...nA, ...nB]) {
+      if (b.IsDeleted(face.wrapped)) continue;
+      const mod = list(b.Modified(face.wrapped));
+      for (const t of mod.length ? mod : [face.wrapped]) {
+        const i = idx(t);
+        if (i >= 0 && !taken.has(i)) { taken.add(i); named.push({ face: out[i], o }); } // zusammengelegte Flächen: erster Name gewinnt
+      }
+      mod.forEach(m => m.delete());
+    }
+    return [res, named];
+  } finally { b.delete(); }
+}

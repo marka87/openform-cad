@@ -371,3 +371,15 @@ test('Zeichnungsblatt: Maßstab, Gesamtmaße, Schriftfeld', () => {
   const big = sheetSVG(buildBody([{ ...box(), p: { x: 0, y: 0, w: 400, h: 100 } }]).body!, { sheet: 'A3', title: '', material: '', date: '' });
   expect(big).toContain('1:5'); // 1:2 wäre mit der Iso-Ansicht zu breit
 });
+
+test('Flächen tragen ihre Herkunft durch Extrudieren und Schneiden (T1.3a)', () => {
+  const tags = (o: any[]) => o.map(x => x ? `${x.f}:${x.tag}${x.i ?? ''}${x.from ? '<' + x.from : ''}` : '?').sort();
+  const { origins } = buildBody([box(), hole(-4)]);
+  expect(tags(origins.get(1)!)).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', '2:end', '2:r']); // Deckel gelocht, Bohrung: Wand + Grund
+  const arc: Extrude = { ...polyFeature(GROUND, [[0, 0, 0.4], [20, 0], [20, 10], [0, 10]], 3, false)!, d: 5 };
+  expect(tags(buildBody([arc]).origins.get(1)!)).toEqual(['3:arc0', '3:end', '3:seg1', '3:seg2', '3:seg3', '3:start']);
+  const spline: Extrude = { ...polyFeature(GROUND, [[0, 0], [20, 0], [20, 10], [0, 10]], 4, false, true)!, d: 5 };
+  expect(tags(buildBody([spline]).origins.get(1)!)).toEqual(['4:end', '4:seg0', '4:seg1', '4:seg2', '4:seg3', '4:start']);
+  const add = buildBody([box(), hole(4)]).origins.get(1)!;                   // Zapfen oben drauf: Mantel + Deckel kommen dazu
+  expect(tags(add)).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', '2:end', '2:r']);
+});

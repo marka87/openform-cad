@@ -332,6 +332,26 @@ function insidePoly(pts: number[][], x: number, y: number) {
 }
 
 // Abstand zur Kante i und deren Normale nach außen
+// Welche Seite der Skizze liegt dem Punkt (x, y) am nächsten? Für das Benennen frisch extrudierter Seitenflächen.
+// Rechteck: y0, x1, y1, x0 · Kreis/Ellipse: r · Vieleck: seg bzw. arc mit Seite i (Spline: Bézier-Stück i)
+export function sideOf(f: Extrude, x: number, y: number): { part: Part; i?: number; dist: number } {
+  if (f.type === 'circle') return { part: 'r', dist: 0 };
+  const pts = f.type === 'rect' ? [[f.p.x, f.p.y], [f.p.x + f.p.w, f.p.y], [f.p.x + f.p.w, f.p.y + f.p.h], [f.p.x, f.p.y + f.p.h]] : f.pts!;
+  const sides = pts.map((q, i) => {
+    const b = pts[(i + 1) % pts.length];
+    const line = f.smooth ? bezierPoints(splineBeziers(pts)[i]) : [[q[0], q[1]], ...q[2] ? arcPoints(q, b, q[2]) : [[b[0], b[1]]]];
+    return Math.min(...line.slice(1).map((e, k) => segment([line[k], e], 0, x, y).dist));
+  });
+  const i = sides.indexOf(Math.min(...sides)), dist = sides[i];
+  if (f.type === 'rect') return { part: (['y0', 'x1', 'y1', 'x0'] as const)[i], dist };
+  return { part: !f.smooth && pts[i][2] ? 'arc' : 'seg', i, dist };
+}
+
+const bezierPoints = ([p0, c1, c2, p3]: number[][], n = 16) => Array.from({ length: n + 1 }, (_, k) => {
+  const t = k / n, a = (1 - t) ** 3, b = 3 * (1 - t) ** 2 * t, c = 3 * (1 - t) * t * t, d = t ** 3;
+  return [0, 1].map(j => a * p0[j] + b * c1[j] + c * c2[j] + d * p3[j]);
+});
+
 function segment(pts: number[][], i: number, x: number, y: number) {
   const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length], dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy);
   const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (l * l)));

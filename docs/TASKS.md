@@ -29,10 +29,16 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       (Ursprungs-ID + Kette der verändernden Feature-IDs) plus
       Fingerabdruck-Block (Flächentyp, Normale, Schwerpunkt,
       Fläche/Länge) als Prüfwert. Nur Typen und Doku, kein Resolver.
-- [ ] T1.3 TODO — Historie mitschreiben: bei jeder formverändernden
-      Operation Modified/Generated/IsDeleted auswerten und die
-      Abstammung fortschreiben. Lückenlos — eine ungepflegte Operation
-      reißt die Kette für alles Nachfolgende.
+- [x] T1.3a DONE — Extrudieren (inkl. Bereiche) benennen, Vereinigen/
+      Abziehen/Schnittmenge und Körper verrechnen über eigenen
+      BRepAlgoAPI-Wrapper mit Historie.
+- [ ] T1.3b TODO — Rundung/Fase: Modified für Nachbarflächen, Generated
+      für die neue Fläche (tag fillet/chamfer).
+- [ ] T1.3c TODO — Drehkörper, Schale, Loft benennen (Seiten aus
+      Profilkanten, Innenwand shell).
+- [ ] T1.3d TODO — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
+      (Schnittfläche split), Import (Fläche i). Danach ist die Kette
+      lückenlos; shortcut-Kommentar in buildBody entfernen.
 - [ ] T1.4 TODO — Resolver: Ref + Shape → Fläche/Kante.
       Erst Abstammung. Genau ein Treffer → übernehmen, Fingerabdruck
       nur als Warnung prüfen. Mehrere Treffer (aufgespaltene Fläche)
@@ -82,6 +88,16 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.3a: src/topo.ts nameSolid + boolean, buildBody liefert
+  `origins` (Herkunft je Fläche, null = unbekannt). Neue Prismen werden
+  geometrisch benannt (Boden/Deckel über Höhe, Seite über sideOf in
+  model.ts) statt über MakePrism-Generated: gleich sicher, weil der Körper
+  frisch ist, und replicad baut die Extrusion weiter. Gelernt: der
+  IndexedMap-Hasher ist in der WASM nicht gebunden → replicads
+  ReplicadShapeHasher + IsSame. Spline: eine Seitenfläche je Bézier-Stück.
+  Kosten: 40 Bohrungen 608 → 702 ms (+15 %), alle 86 Flächen benannt.
+  Nach nicht umgestellten Operationen sind die Namen des Körpers vorerst
+  unbekannt (T1.3b–d).
 - 2026-10-28 T1.2: src/topo.ts (nur Typen) und Schema-Abschnitt in
   docs/TOPO-NAMING.md. Origin nutzt die Teil-Namen, die ownerOf schon
   kennt, damit Klick-Auswahl und Bezug dieselbe Sprache sprechen. Kante =
