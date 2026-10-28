@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, sheetSVG } from './kernel';
-import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -399,4 +399,21 @@ test('Drehkörper, Schale und Loft benennen ihre Flächen (T1.3c)', () => {
   const sq = sketchFeature('rect', GROUND, [-5, -5], [5, 5], 4, false)!;
   const sq2 = sketchFeature('rect', { ...GROUND, o: [0, 20, 0] }, [-3, -3], [3, 3], 5, false)!;
   expect(tags(buildBody([sq, sq2, { id: 6, type: 'loft', a: 4, b: 5, body: 6 }]).origins.get(6)!)).toEqual(['6:end', '6:start', '6:x0', '6:x1', '6:y0', '6:y1']);
+});
+
+test('Bewegen, Skalieren, Teilen und Import benennen ihre Flächen (T1.3d)', async () => {
+  const tags = (o: any[]) => o.map(x => x ? `${x.f}:${x.tag}${x.i ?? ''}` : '?').sort();
+  const BOX = ['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', '2:end', '2:r'];
+  const q = [0, 0, Math.sin(Math.PI / 8), Math.cos(Math.PI / 8)];                       // 45° um z
+  const moved = buildBody([box(), hole(-4), { id: 3, type: 'move', body: 1, c: [10, 5, -5], q, t: [30, 0, 0], s: 2 }]);
+  expect(tags(moved.origins.get(1)!)).toEqual(BOX);
+  const s = moved.bodies.get(1)!, o = moved.origins.get(1)!;                           // Deckel ist auch nach dem Bewegen der Deckel
+  expect(s.faces[o.findIndex(x => x?.f === 1 && x.tag === 'end')].normalAt().toTuple().map(v => +v.toFixed(3) + 0)).toEqual([-0.707, 0.707, 0]); // um 45° mitgedreht
+  const pl = { id: 4, type: 'plane' as const, c: [5, 5, -5] as Vec, n: [1, 0, 0] as Vec, u: [0, 0, -1] as Vec, v: [0, 1, 0] as Vec, off: 5 }; // Ebene x = 10, mitten durch die Bohrung
+  const split = buildBody([box(), hole(-4), pl, { id: 5, type: 'split', body: 1, plane: 4 }]);
+  expect(tags(split.origins.get(1)!)).toEqual(['1:end', '1:start', '1:x0', '1:y0', '1:y1', '2:end', '2:r', '5:split']);
+  expect(tags(split.origins.get(5)!)).toEqual(['1:end', '1:start', '1:x1', '1:y0', '1:y1', '2:end', '2:r', '5:split']);
+  const step = await forExport(buildBody([box()]).body!).blobSTEP().text();
+  const imp = { id: 6, type: 'import' as const, name: 'q.step', step };
+  expect(tags(buildBody([imp], new Map([[6, await loadStep(step)]])).origins.get(1)!)).toEqual([0, 1, 2, 3, 4, 5].map(i => `6:import${i}`));
 });

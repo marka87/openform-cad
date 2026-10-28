@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
-import { boolean, edgeOp, faceIndex, nameLoft, nameSolid, shell, type Named, type Origin } from './topo';
+import { boolean, byIndex, edgeOp, nameLoft, nameSolid, originsOf, shell, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -43,7 +43,6 @@ function polyDrawing(pts: number[][], smooth?: boolean) {
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
 // Ergebnis: bodies je Körpernummer; body = der einzige Körper bzw. alle als Verbund (für Export und Tests);
 // origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt
-// shortcut: Import, Bewegen, Teilen schreiben noch keine Namen (T1.3d) → danach unbekannt
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
@@ -64,21 +63,23 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!s || pl?.type !== 'plane') throw new Error('Körper oder Ebene fehlt');
         const o = pl.c.map((x, i) => x + pl.off * pl.n[i]) as Vec;
         const half = drawRectangle(2e4, 2e4).sketchOnPlane(new Plane(o, pl.u, pl.n)).extrude(1e4) as Shape3D; // Halbraum vor der Ebene
-        const front = s.intersect(half), back = s.cut(half);
+        const nS = names.get(k) ?? [], nH: Named = half.faces.map(face => ({ face, o: { f: f.id, tag: 'split' } })); // Schnittfläche
+        const [front, nF] = boolean('common', s, nS, half, nH), [back, nB] = boolean('cut', s, nS, half, nH);
         half.delete(); s.delete();
-        bodies.set(k, back); bodies.set(f.id, front); names.delete(k);
+        bodies.set(k, back); bodies.set(f.id, front); names.set(k, nB); names.set(f.id, nF);
         continue;
       }
       if (f.type === 'move') {
         const k = key(f.body), s = bodies.get(k);
         if (!s) continue;
         const w = Math.min(1, Math.max(-1, f.q[3])), ang = 2 * Math.acos(w), sn = Math.sqrt(1 - w * w);
+        const o = originsOf(s, names.get(k));
         let next = s.clone();
         if (sn > 1e-9) next = next.rotate(ang * 180 / Math.PI, f.c, [f.q[0] / sn, f.q[1] / sn, f.q[2] / sn]);
         if (f.s && f.s !== 1) next = next.scale(f.s, f.c);
         next = next.translate(f.t);
         s.delete();
-        bodies.set(k, next); names.delete(k);
+        bodies.set(k, next); names.set(k, byIndex(next, o));
         continue;
       }
       const k = key(bodyOf(f));
@@ -99,6 +100,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const shape = imports.get(f.id);
         if (!shape) throw new Error('STEP-Datei konnte nicht gelesen werden');
         s = shape.clone();
+        nS = s.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'import', i } })); // Reihenfolge aus der STEP-Datei
       } else if (f.type === 'loft') {
         const [A, B] = [f.a, f.b].map(id => features.find(g => g.id === id));
         if (!A || !B || !isExtrude(A) || !isExtrude(B)) throw new Error('Skizze für den Übergang fehlt');
@@ -119,12 +121,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   }
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
-  const origins = new Map<number, (Origin | null)[]>();
-  for (const [k, s] of bodies) {
-    const faces = s.faces, idx = faceIndex(faces), o: (Origin | null)[] = faces.map(() => null);
-    for (const n of names.get(k) ?? []) { const i = idx(n.face.wrapped); if (i >= 0) o[i] = n.o; }
-    origins.set(k, o);
-  }
+  const origins = new Map<number, (Origin | null)[]>([...bodies].map(([k, s]) => [k, originsOf(s, names.get(k))]));
   return { body, bodies, failed, origins };
 }
 

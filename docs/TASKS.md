@@ -36,7 +36,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       für die neue Fläche (tag fillet/chamfer).
 - [x] T1.3c DONE — Drehkörper, Schale, Loft benennen (Seiten aus
       Profilkanten, Innenwand shell).
-- [ ] T1.3d TODO — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
+- [x] T1.3d DONE — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
       (Schnittfläche split), Import (Fläche i). Danach ist die Kette
       lückenlos; shortcut-Kommentar in buildBody entfernen.
 - [ ] T1.4 TODO — Resolver: Ref + Shape → Fläche/Kante.
@@ -69,6 +69,11 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       jede Seite bekommt eine eigene ID (statt Index), Con.i und Refs
       darauf umstellen, Migration.
 
+- [ ] T1.12 TODO — Schale über Sacklochbohrung: Volumen 2024 mm³ statt
+      < 2000 (Quader 20×10×10, Bohrung R3 tief 4 von oben, Schale 1 mm,
+      Boden offen). Prüfen, ob der Körper gültig ist (BRepCheck), sonst
+      Feature als fehlgeschlagen melden.
+
 ## Epic 2: Sweep
 - [ ] T2.1 TODO — Profil + offener Pfad, ohne UI, mit Test.
 - [ ] T2.2 TODO — geschlossener Pfad, Ecken/Verrundung am Knick.
@@ -88,6 +93,15 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.3d: Bewegen/Drehen/Skalieren übertragen die Namen über
+  die Flächenreihenfolge (Topologie bleibt gleich, IsSame greift wegen der
+  neuen Location nicht), Teilen über boolean mit dem Halbraum (Schnitt-
+  fläche tag split, beide Teile benannt), Import Fläche i in Dateireihen-
+  folge. Damit hat jede Operation in buildBody Namen; Kette lückenlos.
+  Im Browser geprüft: Quader+Bohrung+Rundung+Schale+Bewegen baut ohne
+  Fehler, Volumen identisch zum alten Kern. Dabei gefunden (schon vorher
+  so): Schale über einer Sacklochbohrung ergibt mehr Volumen als der
+  Vollkörper → T1.12.
 - 2026-10-28 T1.3c: Drehkörper geometrisch benannt (Punkt um die Achse
   zurück in die Skizze, Anfang/Ende = Ebenen durch die Achse), Loft über
   die Kante der Seitenfläche, die in Skizze A liegt, Schale über eigenen

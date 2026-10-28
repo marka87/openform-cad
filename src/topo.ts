@@ -133,6 +133,21 @@ export function faceIndex(faces: Face[]) {
   return (s: any) => map.get(hash(s))?.find(i => faces[i].wrapped.IsSame(s)) ?? -1;
 }
 
+// Herkunft je Fläche in der Reihenfolge von s.faces (null = unbekannt)
+export function originsOf(s: Shape3D, named: Named = []): (Origin | null)[] {
+  const faces = s.faces, idx = faceIndex(faces), o: (Origin | null)[] = faces.map(() => null);
+  for (const n of named) { const i = idx(n.face.wrapped); if (i >= 0) o[i] = n.o; }
+  return o;
+}
+
+// Namen über die Flächenreihenfolge übertragen: Bewegen/Drehen/Skalieren und Klonen ändern die Topologie nicht,
+// nur die Lage, deshalb ist Fläche i danach dieselbe Fläche i (IsSame greift nicht, weil sich die Location ändert)
+export function byIndex(s: Shape3D, o: (Origin | null)[]): Named {
+  const faces = s.faces;
+  if (faces.length !== o.length) return []; // sollte nicht vorkommen; dann lieber unbekannt als falsch
+  return faces.flatMap((face, i) => o[i] ? [{ face, o: o[i]! }] : []);
+}
+
 // Boolesche Operation wie replicad (gleiche Vereinfachung), aber mit Fortschreiben der Namen:
 // unverändert → gleicher Name, verändert/aufgespalten → alle Teile erben den Namen, gelöscht → weg.
 export function boolean(op: 'fuse' | 'cut' | 'common', A: Shape3D, nA: Named, B: Shape3D, nB: Named): [Shape3D, Named] {
