@@ -62,7 +62,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Rechtsklick | Menü mit den passenden Befehlen (Löschen, Ausschalten, Duplizieren, Körper wählen …); rechts ziehen = verschieben |
 | Kopieren / Duplizieren | `Strg+C` / `Strg+V` / `Strg+D` – Skizzen, Features oder ganze Körper, um 10 mm versetzt |
 | Maß beim Ziehen | Beim Ziehen einer Fläche Zahl tippen + `Enter` = genaue Höhe/Breite/Radius |
-| Letztes Werkzeug | `Leertaste` |
+| Letztes Werkzeug | `Leertaste` (Maus nicht über einer Fläche) |
 | Ansichtswürfel | Oben links: Seite anklicken; Mausrad zoomt zur Mausposition, Doppelklick zentriert |
 | Hilfsebene | `E`, Fläche anklicken = Ebene 10 mm davor (ziehen = Abstand), darauf skizzieren |
 | Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld, in mm oder Zoll; Ansichten als DXF; Körper als OBJ |
@@ -71,6 +71,6 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Zug (Sweep) | Flache Skizze anklicken → „Zug: Pfad zeichnen“ (oder „quer dazu“), Pfad vom Profil weg klicken, Vorschau läuft mit; Enter = offen, Klick auf den Anfang = geschlossen; runde Ecken = Bögen im Pfad; im Seitenfeld „Abziehen“ |
 | Gewinde / Senkung | Bohrung anklicken → Seitenfeld: Kernloch M3–M12, „Senkung anlegen“ |
 | Raster | Unten links: 0,1 bis 10 mm |
-| Raster auf einer Fläche | Doppelklick auf eine Fläche: dort erscheint ein Raster, neue Skizzen landen in dieser Ebene, auch neben der Fläche; Doppelklick ins Leere oder Esc = zurück zum Boden |
+| Raster auf einer Fläche | Doppelklick auf eine Fläche oder Leertaste mit der Maus darüber: dort erscheint ein Raster, neue Skizzen landen in dieser Ebene, auch neben der Fläche; Doppelklick ins Leere oder Esc = zurück zum Boden |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |
