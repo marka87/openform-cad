@@ -106,12 +106,24 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Epic 4: Tauri-Desktop
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
-- [ ] T4.2 TODO — Datei öffnen/speichern über System-Dialog, `.ofc`
+- [x] T4.2 DONE — Datei öffnen/speichern über System-Dialog, `.ofc`
       verknüpfen.
 - [ ] T4.3 TODO — Installer Windows, danach macOS/Linux.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T4.2: .ofc = dasselbe JSON wie der Autosave (Features, Körper,
+  Maße). Desktop: Öffnen/Speichern/Exporte über den Windows-Dialog
+  (tauri-plugin-dialog), Lesen/Schreiben über zwei kleine Rust-Befehle
+  statt fs-Plugin (Pfade kommen aus dem Dialog oder vom Doppelklick),
+  Strg+S speichert in die geöffnete Datei, Strg+Umschalt+S = unter,
+  Strg+O = öffnen, Fenstertitel zeigt den Dateinamen. Dateiverknüpfung
+  .ofc im Installer; Start mit Datei öffnet sie. Browser: Speichern lädt
+  jetzt modell.ofc herunter, .json öffnet weiterhin. Geprüft in der
+  gebauten App: Start mit probe.ofc lädt das Modell (3,00 cm³), Titel
+  „probe.ofc – OpenForm CAD“, Schreiben/Lesen ok. Nicht automatisch
+  prüfbar: die Windows-Dialoge selbst. Nebenbei: Vite beobachtet src-tauri
+  nicht mehr (der Rust-Build löste sonst Neuladen aus).
 - 2026-10-28 T4.1: src-tauri/ (Tauri 2), `npm run desktop` = Entwicklung,
   `npm run desktop:build` = App + Installer. Entscheidungen des Nutzers:
   Toolchain gnullvm ohne Admin (Rust lag schon im Benutzerordner, LLVM-

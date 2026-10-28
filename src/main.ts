@@ -8,6 +8,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
+import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
 import { bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -1152,26 +1153,43 @@ function showMenu(x: number, y: number, items: ([string, () => void] | null)[]) 
   ctx.style.top = `${Math.min(y, innerHeight - ctx.offsetHeight - 8)}px`;
 }
 
+// Exporte: in der Desktop-App über den Speichern-Dialog, im Browser als Download
 function download(name: string, blob: Blob) {
+  if (isDesktop) return void saveAs(name, blob).catch(e => alert('Speichern fehlgeschlagen: ' + e));
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; clearSel(); refresh(); } };
+$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; setFile(null); clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
-$('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
+// Modell als .ofc (dasselbe JSON wie im Autosave). Desktop: Speichern schreibt in die geöffnete Datei, sonst Dialog
+let filePath: string | null = null;
+function setFile(path: string | null) { filePath = path; void setTitle(path ? `${baseName(path)} – OpenForm CAD` : 'OpenForm CAD'); }
+async function saveModel(as = false) {
+  if (!isDesktop) return download('modell.ofc', new Blob([snapshot()], { type: 'application/json' }));
+  try {
+    if (filePath && !as) { await writeFile(filePath, snapshot()); return showHint(`Gespeichert: ${baseName(filePath)}`); }
+    const p = await saveAs(filePath ? baseName(filePath) : 'modell.ofc', snapshot());
+    if (p) { setFile(p); showHint(`Gespeichert: ${baseName(p)}`); }
+  } catch (e) { alert('Speichern fehlgeschlagen: ' + e); }
+}
+$('bSave').onclick = () => saveModel();
 const fileIn = $<HTMLInputElement>('fileIn');
-$('bOpen').onclick = () => fileIn.click();
-// .json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren
+$('bOpen').onclick = async () => {
+  if (!isDesktop) return fileIn.click();
+  try { const f = await openFile(); if (f) opened(f.path, f.text); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
+};
+// .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
+function opened(name: string, text: string, path: string | null = null) {
+  pushHistory();
+  if (!/\.(step|stp)$/i.test(name)) { restore(text); return setFile(path); }
+  const f: Import = { id: nextId, type: 'import', name: baseName(name), step: text, body: nextId++ };
+  add(f); selId = f.id; refresh();
+}
 fileIn.onchange = async () => {
   const file = fileIn.files?.[0];
   fileIn.value = '';
-  if (!file) return;
-  const text = await file.text();
-  pushHistory();
-  if (!/\.(step|stp)$/i.test(file.name)) return restore(text);
-  const f: Import = { id: nextId, type: 'import', name: file.name, step: text, body: nextId++ };
-  add(f); selId = f.id; refresh();
+  if (file) opened(file.name, await file.text());
 };
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
@@ -1256,6 +1274,8 @@ addEventListener('keydown', e => {
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
   }
   if (e.ctrlKey && k === 'k') { e.preventDefault(); return openPalette(); }
+  if (e.ctrlKey && k === 's') { e.preventDefault(); return void saveModel(e.shiftKey); } // Strg+Umschalt+S = speichern unter
+  if (e.ctrlKey && k === 'o') { e.preventDefault(); return $('bOpen').click(); }
   if (e.ctrlKey && k === 'c') return copySel();
   if (e.ctrlKey && k === 'v') return paste();
   if (e.ctrlKey && k === 'd') { e.preventDefault(); copySel(); return paste(); }
@@ -1530,6 +1550,8 @@ renderer.setAnimationLoop(() => {
 
 try { const s = localStorage.getItem('openform'); if (s) load(s); } catch {}
 refresh();
+// Desktop: per Doppelklick auf eine .ofc-Datei gestartet → diese öffnen
+if (isDesktop) initialFile().then(async p => { if (p) opened(p, await readFile(p), p); }).catch(e => alert('Datei konnte nicht geöffnet werden: ' + e));
 
 // Maßstab: runde Länge (1, 2 oder 5 × 10ⁿ mm), die auf Höhe des Drehpunkts etwa 100 Pixel lang ist
 const scaleBar = $('scale');
