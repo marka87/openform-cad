@@ -15,7 +15,7 @@ import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
 
-type Tool = 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -30,6 +30,7 @@ const HINTS: Record<Tool, string> = {
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
+  aux:    'Hilfslinie: Punkte klicken (bildet keine Fläche, nur zum Einrasten) · Enter = fertig · Klick auf den ersten Punkt = geschlossen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
 
@@ -254,6 +255,7 @@ function rebuild() {
     const M = moveMatrix(movesAfter(L, i));
     const o = f.type === 'sweep' ? (f.id === selId ? pathLine(f) : null)
       : !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
+      : f.aux ? auxLine(f)
       : isFlat(f) ? buildMesh(f, 'sketch')
       : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
       : f.id === selId || multi.has(f.id) ? buildMesh(f, 'outline') : null;
@@ -279,6 +281,17 @@ function rebuild() {
   });
   handles.updateMatrixWorld(true);
   buildDims();
+}
+// Hilfslinie gestrichelt; userData.aux = ID zum Anklicken
+function auxLine(f: Extrude) {
+  const pts = outline(f.pts!, !f.open).map(([x, y]) => V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y));
+  if (!f.open) pts.push(pts[0]);
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineDashedMaterial({ color: f.id === selId ? 0xffa64d : 0x9fb3c8, dashSize: 2, gapSize: 1.5, depthTest: false }));
+  l.computeLineDistances();
+  l.renderOrder = 1;
+  l.userData.aux = f.id;
+  return l;
 }
 // Pfad eines Zugs als Linie (nur wenn ausgewählt, zum Bearbeiten der Punkte)
 function pathLine(f: Sweep) {
@@ -347,6 +360,7 @@ function nameOf(f: Feature) {
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
+  if (f.aux) return 'Hilfslinie';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   if (f.p.ry) return isCut(f) ? 'Tasche' : 'Ellipse';
@@ -429,11 +443,13 @@ function setHover(on: boolean) {
     (hoverSketch.material as THREE.MeshStandardMaterial).opacity = 0.6;
   }
 }
+let auxPick: number | null = null;
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
   const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
-  const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
+  auxPick = hs.find(h => h.object.userData.aux)?.object.userData.aux ?? null; // Hilfslinie unter der Maus (keine Körperkante)
+  const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face && !h.object.userData.aux);
   const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
   let face: Hit | null = null, edge: EdgeHit | null = null;
   lastPick = { fh, eh: eh && (!fh || eh.distance < fh.distance + 12 * px) ? eh : undefined };
@@ -576,7 +592,7 @@ function applyTyped() {
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
 // path = ID der Profilskizze: der Linienzug wird Pfad eines Zugs (Sweep) statt Skizze
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean } | null = null;
 function polyPoint(e: PointerEvent) {
   return poly && sketchPoint(poly.pl, e);
 }
@@ -628,7 +644,7 @@ function snapSegs(pl: Frame | null): Vec[][] {
     if (!isExtrude(f) || !isFlat(f)) continue;
     const w = (f.type === 'poly' ? contour(f.pts!, f.smooth) : shapeOf(f).getPoints(32).map(v => [v.x, v.y]))
       .map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]) as Vec);
-    w.forEach((q, i) => segs.push([q, w[(i + 1) % w.length]]));
+    w.forEach((q, i) => { if (!f.open || i < w.length - 1) segs.push([q, w[(i + 1) % w.length]]); }); // offene Hilfslinie ohne Schluss
   }
   return pl ? segs.filter(([a, b]) => onPlane(pl, a) && onPlane(pl, b)) : segs;
 }
@@ -666,6 +682,13 @@ function finishPoly(closed = true) {
     if (s) { pushHistory(); nextId++; add(s); selId = s.id; setTool('select'); refresh(); }
     return;
   }
+  if (poly?.aux) { // Hilfslinie: offen oder geschlossen, ohne Flächenprüfung
+    const { pl, pts, onFace, body } = poly;
+    cancelPoly();
+    if (pts.length < 2) return;
+    const f: Extrude = { id: nextId, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts), d: 0, onFace, aux: true, ...!closed && { open: true }, body: body ?? nextId };
+    pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); return refresh();
+  }
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
   if (f) f.body = poly!.body ?? f.id;
   if (f && !f.smooth) { // genau waagrechte/senkrechte Seiten (durch Einrasten) bleiben es: Abhängigkeit setzen
@@ -688,9 +711,10 @@ function onDown(e: PointerEvent) {
   if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
-  if (tool === 'line' || tool === 'spline') {
+  if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
+  if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
-    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body };
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -905,6 +929,10 @@ function renderPanel() {
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
+  if (isExtrude(f) && f.aux) {
+    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Bildet keine Fläche, dient zum Einrasten. Punkte ziehen = ändern.</p><button class="del">Löschen</button>`;
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   if (f.type === 'sweep') {
     panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Profil #${f.profile} · Pfad ${f.closed ? 'geschlossen' : 'offen'}, ${f.closed ? f.pts.length : f.pts.length - 1} Abschnitte</p>` +
       `<label>Abziehen <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label><button class="del">Löschen</button>`;
@@ -1060,7 +1088,7 @@ function buildDims() {
   if (!f || !isExtrude(f) || f.type !== 'poly' || f.smooth) return;
   const M = moveMatrix(movesAfter(features, features.indexOf(f))), pts = f.pts!, world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
   pts.forEach((a, i) => {
-    if (a[2]) return;
+    if (a[2] || f.open && i === pts.length - 1) return; // offene Hilfslinie: kein Schlusssegment
     const el = document.createElement('span'), c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i);
     el.textContent = `${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`;
     if (c('len')) el.className = 'lock';
@@ -1345,8 +1373,9 @@ addEventListener('keydown', e => {
   else if (k === 'f') fitView();
   else if (k in { 0: 1, 1: 1, 2: 1, 3: 1 }) setView(['iso', 'front', 'top', 'right'][+k]);
   else if (k === 'l') setTool('line');
+  else if (k === 'g') setTool('aux');
   else if (k === 's') setTool('spline');
-  else if (k === 'enter' && poly) finishPoly(poly.path === undefined); // Zug-Pfad: Enter = offen fertig
+  else if (k === 'enter' && poly) finishPoly(poly.path === undefined && !poly.aux); // Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') { if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });

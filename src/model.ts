@@ -12,6 +12,8 @@ export interface Extrude extends Frame {
   onFace?: boolean;          // auf einer Körperfläche skizziert
   face?: FaceRef;            // … auf welcher (vom Kern nachgetragen); wandert die Fläche, wandert die Skizze mit
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
+  aux?: boolean;             // Hilfslinie: bildet keine Fläche, nur zum Einrasten (wird nie extrudiert)
+  open?: boolean;            // Hilfslinie: offener Linienzug (kein Schlusssegment)
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
@@ -211,7 +213,7 @@ export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null
 // shortcut: Selbstüberschneidungen werden nicht verhindert, der Kern meldet sie als fehlgeschlagenes Feature
 export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
   const pts = f0.pts!.map((p, n) => n === i ? [q[0], q[1], ...p.slice(2)] : [...p]);
-  const ok = Math.abs(area(contour(pts, f.smooth))) > 0.25;
+  const ok = f.aux || Math.abs(area(contour(pts, f.smooth))) > 0.25; // Hilfslinie braucht keine Fläche
   f.pts = ok ? pts : structuredClone(f0.pts!);
   return ok;
 }
@@ -267,6 +269,7 @@ export function alignTo(q: number[], pts: number[][], tol: number) {
 export function keyPoints(f: Extrude): Vec[] {
   const p = f.p, corners = f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]] : f.pts ?? [];
   const mids = f.smooth ? [] : corners.flatMap((a, i) => {
+    if (f.open && i === corners.length - 1) return []; // offene Hilfslinie: kein Schlusssegment
     const b = corners[(i + 1) % corners.length];
     return a[2] ? [] : [[(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]];
   });
@@ -332,7 +335,7 @@ export function bounds(f: Extrude) {
 // shortcut: Überschneidung nur über umschließende Quader geprüft, Nachbarn ohne echte Überschneidung kosten eine Boolesche Operation
 export function regionFeature(features: Feature[], f: Extrude, P: ArrayLike<number>, id: number): Extrude | null {
   const b = bounds(f);
-  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && isFlat(g)
+  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && isFlat(g) && !g.aux
     && Math.abs(dot(f.n, g.n)) > 0.999 && Math.abs(dot(sub(g.o, f.o), f.n)) < 1e-6
     && bounds(g).every(([lo, hi], k) => lo < b[k][1] + 1e-6 && b[k][0] < hi + 1e-6));
   if (!near.length) return null;

@@ -614,3 +614,14 @@ test('Schale über einer Sacklochbohrung: ungültiger Körper wird gemeldet stat
   expect(r.errors.get(9)).toMatch(/gültigen Körper/);
   expect(measureVolume(r.body!)).toBeLessThan(2000);              // ohne die Schale: Quader mit Bohrung bleibt stehen
 });
+
+test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {
+  const aux: Extrude = { id: 7, ...GROUND, type: 'poly', p: {}, pts: [[0, 0], [10, 0], [10, 10]], d: 0, aux: true, open: true };
+  expect(keyPoints(aux).length).toBe(2 * (3 + 2));                     // 3 Ecken + 2 Mitten (kein Schlusssegment), je unten/oben
+  const sq = sketchFeature('rect', GROUND, [0, 0], [10, 10], 1, false)!;
+  const r = regionFeature([sq, aux], sq, [5, 0, -5], 9);
+  expect(r).toBeNull();                                              // Hilfslinie zerlegt die Skizze nicht in Bereiche
+  expect(buildBody([sq, aux]).body).toBeNull();                      // nichts extrudiert
+  const moved = structuredClone(aux);
+  expect(movePoint(moved, aux, 2, [20, 0])).toBe(true);              // auch auf einer Linie liegend ziehbar
+});

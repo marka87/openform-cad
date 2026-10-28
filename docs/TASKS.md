@@ -114,7 +114,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       einen Mac/Linux-Rechner oder GitHub Actions – Entscheidung des Nutzers).
 
 ## Epic 5: Skizzieren (Wunsch des Nutzers, 2026-10-28)
-- [ ] T5.1 TODO — Hilfslinien: Linien, die keine Fläche bilden, nur zum
+- [x] T5.1 DONE — Hilfslinien: Linien, die keine Fläche bilden, nur zum
       Einrasten und Bemaßen (Umschalter im Linien-Werkzeug, gestrichelt).
 - [ ] T5.2 TODO — Trimmen: Stück einer Skizzenlinie zwischen zwei
       Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
@@ -132,6 +132,11 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T5.1: Werkzeug Hilfslinie (G): Vieleck mit `aux` (und `open`
+  bei Enter), gestrichelt, nie extrudiert, nicht in Bereichen/Loft/Zug,
+  aber Rastpunkte und -linien für alle anderen Werkzeuge. Anklicken wählt
+  sie aus (keine Verwechslung mit Körperkanten mehr), Punkte ziehbar,
+  Längen ohne Schlusssegment. Im Browser geprüft.
 - 2026-10-28 T2.4: ausgewählter Zug zeigt seinen Pfad als Linie und die
   Pfadpunkte als Griffe (wie Vieleck-Punkte); Ziehen versetzt den Punkt,
   der Zug rechnet live nach. Punkt 0 hängt am Profil und hat keinen Griff.

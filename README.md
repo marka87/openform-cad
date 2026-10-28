@@ -70,6 +70,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Übergang (Loft) | Flache Skizze anklicken, zweite mit Shift dazu → Seitenfeld „Übergang (Loft)“ |
 | Zug (Sweep) | Flache Skizze anklicken → „Zug: Pfad zeichnen“ (oder „quer dazu“), Pfad vom Profil weg klicken, Vorschau läuft mit; Enter = offen, Klick auf den Anfang = geschlossen; runde Ecken = Bögen im Pfad; im Seitenfeld „Abziehen“ |
 | Gewinde / Senkung | Bohrung anklicken → Seitenfeld: Kernloch M3–M12, „Senkung anlegen“ |
+| Hilfslinie | `G`, Punkte klicken, Enter = offen fertig: gestrichelt, bildet keine Fläche, andere Werkzeuge rasten daran ein |
 | Raster | Unten links: 0,1 bis 10 mm |
 | Raster auf einer Fläche | Doppelklick auf eine Fläche oder Leertaste mit der Maus darüber: dort erscheint ein Raster, neue Skizzen landen in dieser Ebene, auch neben der Fläche; Doppelklick ins Leere oder Esc = zurück zum Boden |
 | Löschen | `Entf` |
