@@ -252,7 +252,8 @@ function rebuild() {
     if (f.type === 'plane' && !f.hidden) return void group.add(planeMesh(f));
     if (f.type === 'import' || f.hidden) return;
     const M = moveMatrix(movesAfter(L, i));
-    const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
+    const o = f.type === 'sweep' ? (f.id === selId ? pathLine(f) : null)
+      : !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
       : isFlat(f) ? buildMesh(f, 'sketch')
       : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
       : f.id === selId || multi.has(f.id) ? buildMesh(f, 'outline') : null;
@@ -266,15 +267,26 @@ function rebuild() {
   group.updateMatrixWorld(true);
   disposeGroup(handles);
   const s = getSel();
-  if (s && isExtrude(s) && s.type === 'poly' && !movesAfter(features, features.indexOf(s)).length) s.pts!.forEach(([x, y], i) => {
+  // Punkte einer Vieleck-Skizze bzw. des Pfads eines Zugs zum Ziehen (Pfadpunkt 0 hängt am Profil und bleibt)
+  const k = s && (isExtrude(s) && s.type === 'poly' || s.type === 'sweep') && !movesAfter(features, features.indexOf(s)).length ? s as Extrude | Sweep : null;
+  if (k) k.pts!.forEach(([x, y], i) => {
+    if (k.type === 'sweep' && i === 0) return;
     const m = new THREE.Mesh(new THREE.SphereGeometry(5 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0xffd2a8, depthTest: false }));
-    m.position.copy(V(s.o).addScaledVector(V(s.u), x).addScaledVector(V(s.v), y));
+    m.position.copy(V(k.o).addScaledVector(V(k.u), x).addScaledVector(V(k.v), y));
     m.renderOrder = 1;
     m.userData.i = i;
     handles.add(m);
   });
   handles.updateMatrixWorld(true);
   buildDims();
+}
+// Pfad eines Zugs als Linie (nur wenn ausgewählt, zum Bearbeiten der Punkte)
+function pathLine(f: Sweep) {
+  const pts = outline(f.pts, !!f.closed).map(([x, y]) => V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y));
+  if (f.closed) pts.push(pts[0]);
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xffd2a8, depthTest: false }));
+  l.renderOrder = 1;
+  return l;
 }
 // Bewegungen als Matrix: x' = R(q)·(x − c) + c + t, in Reihenfolge
 function moveMatrix(moves: Move[]) {
@@ -730,7 +742,7 @@ function onDown(e: PointerEvent) {
     pushHistory(); add(f); selId = f.id; setTool('select'); refresh();
     return;
   } else if (hp) { // Punkt der ausgewählten Skizze
-    const f = getSel() as Extrude;
+    const f = getSel() as Extrude | Sweep;
     drag = { kind: 'point', f, f0: structuredClone(f), i: hp.object.userData.i, sx: e.clientX, sy: e.clientY, started: false };
   } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
     drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
@@ -828,6 +840,11 @@ function onMove(e: PointerEvent) {
       const p = planeHit(drag.f);
       if (!p) return;
       const q = toLocal(drag.f, p).map(x => snap(x, e));
+      if (drag.f.type === 'sweep') { // offener Pfad: keine Fläche zu prüfen, Punkt einfach versetzen
+        drag.f.pts = drag.f0.pts.map((p: number[], n: number) => n === drag.i ? [q[0], q[1], ...p.slice(2)] : [...p]);
+        rebuild();
+        return showHud(e, `Pfadpunkt ${fmt(q[0])} / ${len(q[1])}`);
+      }
       movePoint(drag.f, drag.f0, drag.i, q);
       if (constrain(drag.f, [drag.i])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts; // gezogener Punkt bleibt, Rest folgt
       rebuild();

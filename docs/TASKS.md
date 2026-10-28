@@ -88,7 +88,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T2.2 DONE — geschlossener Pfad, Ecken/Verrundung am Knick.
 - [x] T2.3 DONE — Pfadauswahl und Live-Vorschau im Viewport.
 
-- [ ] T2.4 TODO — Pfad eines Zugs nachträglich bearbeiten (Punkte ziehen,
+- [x] T2.4 DONE — Pfad eines Zugs nachträglich bearbeiten (Punkte ziehen,
       anzeigen, wenn der Zug ausgewählt ist); heute nur löschen und neu.
 - [ ] T2.5 TODO — Pfad aus vorhandenen Körperkanten übernehmen (Kante
       anklicken statt zeichnen).
@@ -132,6 +132,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T2.4: ausgewählter Zug zeigt seinen Pfad als Linie und die
+  Pfadpunkte als Griffe (wie Vieleck-Punkte); Ziehen versetzt den Punkt,
+  der Zug rechnet live nach. Punkt 0 hängt am Profil und hat keinen Griff.
+  Im Browser geprüft: Endpunkt (30,30) → (18,52), Rohr folgt.
 - 2026-10-28 T1.12: Schale prüft ihr Ergebnis mit BRepCheck (wie der Zug);
   der Fall Sacklochbohrung war tatsächlich ungültig und schlägt jetzt rot
   mit Grund fehl, der Körper davor bleibt. Prüfung nur nach Schale und Zug,
