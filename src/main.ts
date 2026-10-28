@@ -6,6 +6,7 @@ import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { bulge3, ellipseFeature, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -221,7 +222,9 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     notice = '';
     busy = false;
     if (pending) requestBuild();
-  } else if (data.blob) download(`modell.${data.format}`, data.blob);
+  } else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
+  else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
+  else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
   else alert('Noch kein Körper vorhanden.');
 };
 
@@ -1077,6 +1080,9 @@ function openCtx(e: PointerEvent) {
   if (selBody !== null) items.push(['Körper duplizieren (Strg+D)', () => { copySel(); paste(); }], null);
   if (clip.length) items.push(['Einfügen (Strg+V)', paste]);
   items.push(['Einpassen (F)', fitView], ['Rückgängig (Strg+Z)', undo], ['Werkzeugsuche (Strg+K)', openPalette]);
+  showMenu(e.clientX, e.clientY, items);
+}
+function showMenu(x: number, y: number, items: ([string, () => void] | null)[]) {
   ctx.replaceChildren(...items.map(it => {
     if (!it) return document.createElement('hr');
     const b = document.createElement('button');
@@ -1085,8 +1091,8 @@ function openCtx(e: PointerEvent) {
     return b;
   }));
   ctx.style.display = 'block';
-  ctx.style.left = `${Math.min(e.clientX, innerWidth - ctx.offsetWidth - 8)}px`;
-  ctx.style.top = `${Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8)}px`;
+  ctx.style.left = `${Math.min(x, innerWidth - ctx.offsetWidth - 8)}px`;
+  ctx.style.top = `${Math.min(y, innerHeight - ctx.offsetHeight - 8)}px`;
 }
 
 function download(name: string, blob: Blob) {
@@ -1112,7 +1118,62 @@ fileIn.onchange = async () => {
 };
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
-$('bSvg').onclick = () => send({ type: 'export', format: 'svg' });
+// ---------- Zeichnung: Blatt als SVG oder drucken (PDF), Ansichten als DXF ----------
+let printNext = false; // nächstes Blatt drucken statt speichern
+function sheet(format: 'A4' | 'A3', print: boolean) {
+  const b = bodyIds.find(b => !meta[b]?.hidden) ?? bodyIds[0];
+  printNext = print;
+  send({ type: 'export', format: 'svg', info: { sheet: format, title: (b !== undefined && meta[b]?.name) || 'Modell', material: b !== undefined ? meta[b]?.mat ?? '' : '', date: new Date().toLocaleDateString('de-DE') } });
+}
+$('bSvg').onclick = e => {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  showMenu(r.left, r.bottom + 4, [['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
+    ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
+    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ]]);
+};
+// Drucken über einen unsichtbaren Rahmen; „Als PDF speichern“ im Druckdialog ergibt die PDF-Datei
+function printSVG(svg: string) {
+  const size = svg.match(/width="(\d+)mm" height="(\d+)mm"/)!, f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;width:0;height:0;border:0';
+  document.body.append(f);
+  f.contentDocument!.write(`<html><head><style>@page{size:${size[1]}mm ${size[2]}mm;margin:0}body{margin:0}svg{display:block}</style></head><body>${svg}</body></html>`);
+  f.contentDocument!.close();
+  setTimeout(() => { f.contentWindow!.print(); setTimeout(() => f.remove(), 1000); }, 100);
+}
+// SVG-Pfade (y nach unten) → DXF-Linien in mm (y nach oben); Bögen und Kurven als kurze Strecken
+// shortcut: Bögen werden zu Strecken (0,5 mm) → echte ARC-Elemente, wenn jemand die DXF weiterbearbeiten will
+function svgToDXF(svg: string) {
+  const NS = 'http://www.w3.org/2000/svg', host = document.createElementNS(NS, 'svg'), out = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
+  host.style.cssText = 'position:absolute;visibility:hidden';
+  document.body.append(host);
+  for (const p of new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('path')) {
+    const layer = p.hasAttribute('stroke-dasharray') ? 'VERDECKT' : 'SICHTBAR';
+    for (const d of p.getAttribute('d')!.split(/(?=M)/)) {
+      let pts: number[][];
+      if (/^[\sML\d.eE+-]*$/.test(d)) { const n = d.match(/-?[\d.]+(e-?\d+)?/gi)!.map(Number); pts = Array.from({ length: n.length / 2 }, (_, i) => [n[2 * i], n[2 * i + 1]]); }
+      else {
+        const el = host.appendChild(document.createElementNS(NS, 'path'));
+        el.setAttribute('d', d);
+        const L = el.getTotalLength(), m = Math.min(2000, Math.max(8, Math.ceil(L / 0.5)));
+        pts = Array.from({ length: m + 1 }, (_, i) => { const q = el.getPointAtLength(L * i / m); return [q.x, q.y]; });
+        el.remove();
+      }
+      for (let i = 1; i < pts.length; i++)
+        out.push('0', 'LINE', '8', layer, '10', String(pts[i - 1][0]), '20', String(-pts[i - 1][1]), '30', '0', '11', String(pts[i][0]), '21', String(-pts[i][1]), '31', '0');
+    }
+  }
+  host.remove();
+  return [...out, '0', 'ENDSEC', '0', 'EOF'].join('\n');
+}
+// Sichtbare Körper als OBJ, Z oben wie STEP/STL
+function exportOBJ() {
+  const g = new THREE.Group();
+  g.rotation.x = Math.PI / 2; // Szene Y-oben → Z-oben
+  for (const m of bodyGroup.children as THREE.Mesh[]) if (m.visible) g.add(new THREE.Mesh(m.geometry));
+  if (!g.children.length) return alert('Noch kein Körper vorhanden.');
+  g.updateMatrixWorld(true);
+  download('modell.obj', new Blob([new OBJExporter().parse(g)], { type: 'text/plain' }));
+}
 
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;

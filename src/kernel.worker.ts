@@ -2,16 +2,16 @@
 import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep, sheetSVG, type SheetInfo } from './kernel';
 import type { Feature } from './model';
 
 export type ToWorker =
   | { type: 'build'; features: Feature[] }
-  | { type: 'export'; format: 'step' | 'stl' | 'svg' };
+  | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; info?: SheetInfo };
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; volume: number; area: number; meshes: BodyMesh[] }
-  | { type: 'export'; format: 'step' | 'stl' | 'svg'; blob: Blob | null }
+  | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string };
 
 // faces/edges: je Fläche bzw. Kante [Start, Anzahl] in Dreiecks-Indizes bzw. Linienpunkten, zum Hervorheben
@@ -48,7 +48,8 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     post({ type: 'built', failed: r.failed, volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
-    if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([drawingSVG(body)], { type: 'image/svg+xml' }) });
+    if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!)], { type: 'image/svg+xml' }) });
+    if (data.format === 'dxf') return post({ type: 'export', format: 'dxf', blob: new Blob([drawingSVG(body)]) }); // Umwandlung im Hauptthread (braucht das DOM)
     const s = forExport(body);
     const blob = data.format === 'step' ? s.blobSTEP() : s.blobSTL({ binary: true, tolerance: 0.01, angularTolerance: 0.1 });
     s.delete();

@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep, sheetSVG } from './kernel';
 import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -356,4 +356,18 @@ test('Ellipse und Bogen durch drei Punkte', () => {
   expect(Math.min(...pts.map(p => p[1]))).toBeCloseTo(-0.4, 1); // Bogen läuft durch den Punkt
   const big = bulge3([0, 0], [2, 0], [1, -3]);                // großer Bogen über den Halbkreis hinaus
   expect(Math.abs(big)).toBeGreaterThan(1);
+});
+
+test('Zeichnungsblatt: Maßstab, Gesamtmaße, Schriftfeld', () => {
+  const body = buildBody([box(), hole(-4)]).body!; // 20 × 10 × 10
+  const svg = sheetSVG(body, { sheet: 'A4', title: 'Halter <1>', material: 'Aluminium', date: '28.10.2026' });
+  expect(svg).toMatch(/viewBox="0 0 297 210"/);
+  expect(svg).toContain('2:1');                         // kleines Teil wird vergrößert
+  expect(svg).toContain('>20<'); expect(svg).toContain('>10<');
+  expect(svg).toContain('Halter &#60;1&#62;');          // Text wird maskiert
+  expect(svg).toContain('stroke-dasharray');
+  expect(drawingSVG(body)).toMatch(/<path d="[^"]*A[^"]*"\/>/); // Bohrung in der Draufsicht sichtbar (durchgezogen)
+  expect(svg).not.toMatch(/<text[^>]*fill="[^"]*"[^>]*fill=/); // kein doppeltes Attribut
+  const big = sheetSVG(buildBody([{ ...box(), p: { x: 0, y: 0, w: 400, h: 100 } }]).body!, { sheet: 'A3', title: '', material: '', date: '' });
+  expect(big).toContain('1:5'); // 1:2 wäre mit der Iso-Ansicht zu breit
 });
