@@ -15,7 +15,7 @@ export type FromWorker =
   | { type: 'error'; message: string };
 
 // faces/edges: je Fläche bzw. Kante [Start, Anzahl] in Dreiecks-Indizes bzw. Linienpunkten, zum Hervorheben
-export type BodyMesh = { body: number; vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array; faces: Int32Array; edges: Int32Array };
+export type BodyMesh = { body: number; volume: number; vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array; faces: Int32Array; edges: Int32Array };
 const post = (m: FromWorker, transfer: Transferable[] = []) => postMessage(m, { transfer });
 const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
 let body: Shape3D | null = null, bodies = new Map<number, Shape3D>();
@@ -38,12 +38,13 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     body = r.body; bodies = r.bodies;
     const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
       const m = s.mesh(MESH), e = s.meshEdges(MESH);
-      return { body: id, vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
+      return { body: id, volume: measureVolume(s), vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
         triangles: new Uint32Array(m.triangles), lines: new Float32Array(e.lines),
         faces: new Int32Array(m.faceGroups.flatMap(g => [g.start, g.count])), edges: new Int32Array(e.edgeGroups.flatMap(g => [g.start, g.count])) };
     });
-    let volume = 0, area = 0;
-    for (const s of bodies.values()) { volume += measureVolume(s); area += measureArea(s); }
+    const volume = meshes.reduce((v, m) => v + m.volume, 0);
+    let area = 0;
+    for (const s of bodies.values()) area += measureArea(s);
     post({ type: 'built', failed: r.failed, volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });

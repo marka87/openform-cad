@@ -282,6 +282,12 @@ test('Mehrere Körper: getrennt, verrechnen, bewegen', () => {
   expect(ownerOf(fs2, [70, 10, 0], [0, 1, 0])?.f).toBe(b);
 });
 
+test('Körper skalieren: Volumen ×8, Deckel bleibt anfassbar', () => {
+  const b = { ...box(), body: 1 }, m = { id: 2, type: 'move' as const, body: 1, c: [0, 0, 0] as [number, number, number], q: [0, 0, 0, 1], t: [0, 0, 0] as [number, number, number], s: 2 };
+  expect(measureVolume(buildBody([b, m]).body!)).toBeCloseTo(16000, 0);
+  expect(ownerOf([b, m], [10, 20, -5], [0, 1, 0])).toMatchObject({ f: b, part: 'end' }); // Deckel jetzt bei y = 20
+});
+
 test('Bemaßungen und Abhängigkeiten mit planegcs', async () => {
   const { make_gcs_wrapper } = await import('@salusoft89/planegcs');
   const { solveSketch } = await import('./sketchSolver');

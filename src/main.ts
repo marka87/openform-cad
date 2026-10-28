@@ -6,7 +6,7 @@ import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -89,9 +89,11 @@ const multi = new Set<number>();  // weitere ausgewählte Features (Shift+Klick)
 let edgeSel: { at: Vec; dir: Vec; body?: number }[] = []; // angeklickte Kanten, zum gemeinsamen Runden/Fasen
 const clearSel = () => { selId = selBody = null; multi.clear(); edgeSel = []; };
 const undoStack: string[] = [], redoStack: string[] = [];
-const snapshot = () => JSON.stringify({ features, nextId });
+let meta: Record<number, BodyMeta> = {}; // Name, Sichtbarkeit, Farbe, Werkstoff je Körper
+const snapshot = () => JSON.stringify({ features, nextId, meta });
 function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
-function restore(s: string) { ({ features, nextId } = JSON.parse(s)); selId = null; refresh(); }
+function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; }
+function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
 // Fehlgeschlagenes automatisches Speichern (Speicher voll) bleibt im Hinweis sichtbar, sonst geht das Modell beim Neuladen verloren
@@ -198,6 +200,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     for (const m of data.meshes) bodyGroup.add(bodyMesh(m));
     bodyGroup.updateMatrixWorld(true);
     bodyIds = data.meshes.map(m => m.body);
+    bodyVol = Object.fromEntries(data.meshes.map(m => [m.body, m.volume]));
     if (selBody !== null && !bodyIds.includes(selBody)) { selBody = null; renderPanel(); }
     if (gizmo.object) attachGizmo(gizmo.mode as 'translate' | 'rotate'); // Griffe an die neue Lage setzen
     applyDisplay();
@@ -249,6 +252,7 @@ function moveMatrix(moves: Move[]) {
     const c = V(m.c);
     M.premultiply(new THREE.Matrix4().makeTranslation(c.clone().negate()))
       .premultiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().fromArray(m.q)))
+      .premultiply(new THREE.Matrix4().makeScale(m.s ?? 1, m.s ?? 1, m.s ?? 1))
       .premultiply(new THREE.Matrix4().makeTranslation(c.add(V(m.t))));
   }
   return M;
@@ -283,11 +287,15 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 const tree = $('tree');
 let bodyInfo = ''; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
 let bodyIds: number[] = [], selBody: number | null = null; // vorhandene Körper (vom Kern) und der ausgewählte
+let bodyVol: Record<number, number> = {}; // Volumen je Körper in mm³
+const bodyName = (b: number) => meta[b]?.name || `Körper #${b}`;
+// Masse in g aus Volumen (mm³) und Dichte (g/cm³); ohne Werkstoff leer
+const massText = (b: number) => { const d = MATERIALS[meta[b]?.mat ?? '']; return d && bodyVol[b] ? ` · ${(bodyVol[b] / 1000 * d).toFixed(1)} g` : ''; };
 function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'plane') return 'Ebene';
-  if (f.type === 'move') return `Körper #${f.body} bewegen`;
+  if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
@@ -296,13 +304,19 @@ function nameOf(f: Feature) {
 }
 function renderTree() {
   tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
-    `<div class="row${b === selBody ? ' on' : ''}" data-b="${b}"><span>Körper #${b}</span></div>`).join('') : '') +
+    `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
+    `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
     `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
     `<div class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
     `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
-  tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => row.onclick = () => {
-    selBody = +row.dataset.b!; selId = null; detachGizmo(); refresh();
+  tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => {
+    const b = +row.dataset.b!;
+    row.querySelector('span')!.textContent = bodyName(b) + massText(b); // Name als Text, nicht als HTML
+    row.onclick = ev => {
+      if ((ev.target as HTMLElement).dataset.a === 'eye') { pushHistory(); (meta[b] ??= {}).hidden = !meta[b].hidden; refresh(); return applyDisplay(); }
+      clearSel(); selBody = b; detachGizmo(); refresh();
+    };
   });
   tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => row.onclick = ev => {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
@@ -348,7 +362,7 @@ function setHover(on: boolean) {
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
-  const hs = ray.intersectObjects([...bodyGroup.children, ...group.children], true);
+  const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
   const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face);
   const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
   let face: Hit | null = null, edge: EdgeHit | null = null;
@@ -991,7 +1005,7 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; selId = null; refresh(); } };
+$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
@@ -1062,22 +1076,28 @@ function attachGizmo(mode: 'translate' | 'rotate') {
   gizmo.setMode(mode); gizmo.attach(pivot);
 }
 function detachGizmo() { gizmo.detach(); }
-function addMove(q: THREE.Quaternion, t: THREE.Vector3) {
-  if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9) return;
+function addMove(q: THREE.Quaternion, t: THREE.Vector3, s = 1) {
+  if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9 && s === 1) return;
   pushHistory();
-  features.push({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec });
+  features.push({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
   refresh();
 }
 function commitGizmo() { addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart)); }
 function renderBodyPanel(b: number) {
   const others = bodyIds.filter(o => o !== b);
+  const bm = meta[b] ?? {};
   panel.innerHTML = `<h3>Körper #${b}</h3>
+    <label>Name <input class="nm" placeholder="Körper #${b}"></label>
+    <label>Werkstoff <select class="mat"><option value="">–</option>${Object.keys(MATERIALS).map(m => `<option>${m}</option>`).join('')}</select></label>
+    <label>Farbe <input type="color" class="col" value="${bm.color ?? display.color}" style="width:40px;padding:0"></label>
+    <p class="info" style="margin:4px 0;color:var(--muted)"></p>
     <button class="gT">Verschieben (Griffe)</button><button class="gR">Drehen (Griffe)</button>
     <details><summary>Genau verschieben / drehen</summary>
       <label>ΔX <input type="number" step="0.5" value="0" class="dx"></label><label>ΔY <input type="number" step="0.5" value="0" class="dy"></label>
       <label>ΔZ <input type="number" step="0.5" value="0" class="dz"></label><button class="mv">Verschieben</button>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
       <label>Winkel ° <input type="number" step="5" value="90" class="ang"></label><button class="rt">Drehen um Mitte</button>
+      <label>Maßstab % <input type="number" step="10" value="200" class="sc"></label><button class="scl">Skalieren um Mitte</button>
     </details>` +
     (others.length ? `<label>mit <select class="other">${others.map(o => `<option value="${o}">Körper #${o}</option>`).join('')}</select></label>
     <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '');
@@ -1086,6 +1106,19 @@ function renderBodyPanel(b: number) {
   q<HTMLButtonElement>('.gT').onclick = () => attachGizmo('translate');
   q<HTMLButtonElement>('.gR').onclick = () => attachGizmo('rotate');
   const num = (c: string) => parseFloat(q<HTMLInputElement>(c).value) || 0;
+  const setMeta = (k: keyof BodyMeta, v: any) => { pushHistory(); meta[b] = { ...meta[b], [k]: v || undefined }; refresh(); applyDisplay(); };
+  q<HTMLInputElement>('.nm').value = bm.name ?? '';
+  q<HTMLInputElement>('.nm').onchange = e => setMeta('name', (e.target as HTMLInputElement).value.trim());
+  q<HTMLSelectElement>('.mat').value = bm.mat ?? '';
+  q<HTMLSelectElement>('.mat').onchange = e => setMeta('mat', (e.target as HTMLSelectElement).value);
+  q<HTMLInputElement>('.col').onchange = e => setMeta('color', (e.target as HTMLInputElement).value);
+  q('.info').textContent = bodyVol[b] ? `${(bodyVol[b] / 1000).toFixed(2)} cm³${massText(b)}` : '';
+  q<HTMLButtonElement>('.scl').onclick = () => {
+    const s = num('.sc') / 100;
+    if (s <= 0) return;
+    attachGizmo('translate');
+    addMove(new THREE.Quaternion(), new THREE.Vector3(), s);
+  };
   // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
   q<HTMLButtonElement>('.mv').onclick = () => { attachGizmo('translate'); addMove(new THREE.Quaternion(), new THREE.Vector3(num('.dx'), num('.dz'), -num('.dy'))); };
   q<HTMLButtonElement>('.rt').onclick = () => {
@@ -1142,7 +1175,7 @@ function fitView() {
 // Doppelklick: Drehpunkt auf die angeklickte Stelle legen
 el.addEventListener('dblclick', e => {
   setRay(e as unknown as PointerEvent);
-  const h = ray.intersectObjects([...bodyGroup.children, ...group.children], true).find(x => x.face);
+  const h = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true).find(x => x.face);
   if (!h) return;
   flyTo(camera.position.clone().add(h.point).sub(controls.target), h.point.clone());
 });
@@ -1187,7 +1220,9 @@ function applyDisplay() {
   }
   for (const mesh of bodyGroup.children as THREE.Mesh[]) {
     const m = mesh.material as THREE.MeshStandardMaterial, lines = mesh.children[0] as THREE.LineSegments;
-    m.color.set(display.color);
+    const bm = meta[mesh.userData.body];
+    m.color.set(bm?.color ?? display.color);
+    mesh.visible = !bm?.hidden;
     m.emissive.set(mesh.userData.body === selBody ? 0x5a2a00 : 0x000000);
     m.wireframe = display.wire;
     m.transparent = display.glass; m.opacity = display.glass ? 0.35 : 1; m.depthWrite = !display.glass;
@@ -1259,7 +1294,7 @@ renderer.setAnimationLoop(() => {
   updateDims();
 });
 
-try { const s = localStorage.getItem('openform'); if (s) ({ features, nextId } = JSON.parse(s)); } catch {}
+try { const s = localStorage.getItem('openform'); if (s) load(s); } catch {}
 refresh();
 
 // Maßstab: runde Länge (1, 2 oder 5 × 10ⁿ mm), die auf Höhe des Drehpunkts etwa 100 Pixel lang ist

@@ -31,8 +31,12 @@ export interface Import { id: number; type: 'import'; name: string; step: string
 export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?: boolean; body?: number }
 // Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
-// Körper bewegen: x' = R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w]
-export interface Move { id: number; type: 'move'; body: number; c: Vec; q: number[]; t: Vec; hidden?: boolean }
+// Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
+export interface Move { id: number; type: 'move'; body: number; c: Vec; q: number[]; t: Vec; s?: number; hidden?: boolean }
+// Angaben je Körper (nicht Teil des Verlaufs): Name, ausgeblendet, eigene Farbe, Werkstoff
+export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat?: string }
+// Dichte in g/cm³
+export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, Aluminium: 2.7, Messing: 8.5, PLA: 1.24, ABS: 1.05, Holz: 0.6 };
 // Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
 export type Feature = Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane;
@@ -347,7 +351,7 @@ export function movesAfter(features: Feature[], i: number): Move[] {
 function toOriginal(features: Feature[], i: number, P: ArrayLike<number>, N: ArrayLike<number>): [Vec, Vec] {
   let p = [P[0], P[1], P[2]] as Vec, n = [N[0], N[1], N[2]] as Vec;
   for (const m of movesAfter(features, i).reverse()) {
-    p = qrot(m.q, [0, 1, 2].map(k => p[k] - m.c[k] - m.t[k]), true).map((x, k) => x + m.c[k]) as Vec;
+    p = qrot(m.q, [0, 1, 2].map(k => (p[k] - m.c[k] - m.t[k]) / (m.s ?? 1)), true).map((x, k) => x + m.c[k]) as Vec;
     n = qrot(m.q, n, true);
   }
   return [p, n];

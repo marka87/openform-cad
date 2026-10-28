@@ -56,6 +56,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const w = Math.min(1, Math.max(-1, f.q[3])), ang = 2 * Math.acos(w), sn = Math.sqrt(1 - w * w);
         let next = s.clone();
         if (sn > 1e-9) next = next.rotate(ang * 180 / Math.PI, f.c, [f.q[0] / sn, f.q[1] / sn, f.q[2] / sn]);
+        if (f.s && f.s !== 1) next = next.scale(f.s, f.c);
         next = next.translate(f.t);
         s.delete();
         bodies.set(k, next);
