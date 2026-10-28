@@ -6,13 +6,13 @@ import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
 
-type Tool = 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -21,6 +21,7 @@ const HINTS: Record<Tool, string> = {
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
   ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
+  plane:  'Fläche anklicken = Hilfsebene 10 mm davor · Ebene ziehen = Abstand ändern · darauf skizzieren wie auf einer Fläche',
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
@@ -214,6 +215,7 @@ function rebuild() {
   requestBuild();
   disposeGroup(group);
   features.forEach((f, i) => {
+    if (f.type === 'plane' && !f.hidden) return void group.add(planeMesh(f));
     if (f.type === 'import' || f.hidden) return;
     const M = moveMatrix(movesAfter(features, i));
     const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
@@ -263,6 +265,18 @@ function constrain(f: Extrude, fixed: number[]) {
   return !!out;
 }
 
+// Hilfsebene als halbdurchsichtiges Quadrat (60 mm), anklickbar zum Skizzieren und Verschieben
+function planeMesh(f: RefPlane) {
+  const sel = f.id === selId || multi.has(f.id), g = new THREE.PlaneGeometry(60, 60);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: sel ? 0xff9a3c : 0x8cc4ff, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: sel ? 0xff9a3c : 0x8cc4ff })));
+  m.children[0].raycast = () => {};
+  m.matrixAutoUpdate = false;
+  m.matrix.makeBasis(V(f.u), V(f.v), V(f.n)).setPosition(V(f.c).addScaledVector(V(f.n), f.off));
+  m.userData.id = f.id;
+  return m;
+}
+
 function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
@@ -272,6 +286,7 @@ let bodyIds: number[] = [], selBody: number | null = null; // vorhandene Körper
 function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
+  if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `Körper #${f.body} bewegen`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
@@ -341,7 +356,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
-    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : ownerOf(features, fh.point.toArray(), n.toArray());
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(features, fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
     face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body };
   }
@@ -527,7 +542,7 @@ function onDown(e: PointerEvent) {
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'line' || tool === 'spline') {
-    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h, smooth: tool === 'spline', body: h?.body };
+    if (!poly) poly = { pl: planeFor(h), pts: [], onFace: !!h && h.grip?.part !== 'plane', smooth: tool === 'spline', body: h?.body };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -538,7 +553,7 @@ function onDown(e: PointerEvent) {
     const pl = planeFor(h); // auf Boden oder Fläche skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!h, body: h?.body };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: !!h && h.grip?.part !== 'plane', body: h?.body };
   } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
     const P = edge ? V(edge.at) : h?.point;
     if (!P) return;
@@ -547,6 +562,11 @@ function onDown(e: PointerEvent) {
     measure = measure.length === 2 ? [] : measure;
     measure.push(s ? V(s.p) : P.clone());
     showMeasure();
+    return;
+  } else if (tool === 'plane') {
+    if (!h) return;
+    const pl = planeFor(h), f: RefPlane = { id: nextId++, type: 'plane', c: h.point.toArray() as Vec, n: pl.n, u: pl.u, v: pl.v, off: 10 };
+    pushHistory(); features.push(f); clearSel(); selId = f.id; setTool('select'); refresh();
     return;
   } else if (tool === 'shell') { // Körper aushöhlen, angeklickte Fläche bleibt offen
     if (!h || h.grip?.f && isExtrude(h.grip.f) && isFlat(h.grip.f)) return;
@@ -565,6 +585,7 @@ function onDown(e: PointerEvent) {
     if (!multi.has(g.f.id)) multi.clear();
     selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
     if (g.part === 'import') return; // importierte Körper nur auswählen
+    if (g.part === 'plane') { drag = { kind: 'plane', f: g.f, off0: g.f.off, P0: h.point, D: V(g.f.n), sx: e.clientX, sy: e.clientY, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; }
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
       : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, i: g.i, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
@@ -634,6 +655,13 @@ function onMove(e: PointerEvent) {
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
     }
+    if (drag.kind === 'plane') { // Ebene entlang ihrer Normalen verschieben
+      const s = lineParam(drag.P0, drag.D);
+      if (s === null) return;
+      drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep));
+      rebuild();
+      return showHud(e, `Abstand: ${drag.f.off.toFixed(1)} mm`);
+    }
     if (drag.kind === 'point') {
       const p = planeHit(drag.f);
       if (!p) return;
@@ -702,6 +730,12 @@ function renderPanel() {
   }
   if (f.type === 'import') return renderImportPanel(f);
   if (f.type === 'shell') return renderShellPanel(f);
+  if (f.type === 'plane') {
+    panel.innerHTML = `<h3>Ebene #${f.id}</h3><label>Abstand <input type="number" step="0.5" value="${+f.off.toFixed(2)}"></label><button class="del">Löschen</button>`;
+    const inp = panel.querySelector('input')!;
+    inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v)) { pushHistory(); f.off = v; refresh(); } };
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   if (!isExtrude(f)) return renderEdgePanel(f);
   const fields = f.type === 'rect' ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
@@ -933,7 +967,7 @@ function openCtx(e: PointerEvent) {
   if (sel) {
     items.push([n > 1 ? `${n} Schritte löschen` : 'Löschen (Entf)', deleteSel], [sel.hidden ? 'Einschalten' : 'Ausschalten', toggleHidden],
       ['Duplizieren (Strg+D)', () => { copySel(); paste(); }], ['Kopieren (Strg+C)', copySel]);
-    const b = sel.type !== 'combine' && sel.type !== 'move' ? bodyOf(sel) : null;
+    const b = sel.type !== 'combine' && sel.type !== 'move' && sel.type !== 'plane' ? bodyOf(sel) : null;
     if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
     if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details:not(.cons)'); if (d) d.open = true; }]);
     items.push(null);
@@ -976,6 +1010,7 @@ fileIn.onchange = async () => {
 };
 $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
+$('bSvg').onclick = () => send({ type: 'export', format: 'svg' });
 
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -1003,6 +1038,7 @@ addEventListener('keydown', e => {
   else if (k === 'o') setTool('slot');
   else if (k === 'h') setTool('shell');
   else if (k === 'm') setTool('measure');
+  else if (k === 'e') setTool('plane');
   else if (k === 'f') fitView();
   else if (k in { 0: 1, 1: 1, 2: 1, 3: 1 }) setView(['iso', 'front', 'top', 'right'][+k]);
   else if (k === 'l') setTool('line');
@@ -1174,7 +1210,7 @@ $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as 
 const ICONS: Partial<Record<Tool, string>> = {
   select: '<path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z"/>', rect: '<rect x="2" y="4" width="12" height="8"/>', circle: '<circle cx="8" cy="8" r="5.5"/>',
   ngon: '<path d="M8 2l5.2 3v6L8 14l-5.2-3V5z"/>', slot: '<rect x="1.5" y="5" width="13" height="6" rx="3"/>', line: '<path d="M2 13L6 4l8 5"/><circle cx="6" cy="4" r="1"/>',
-  spline: '<path d="M2 12c3-9 6 3 12-8"/>', shell: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M5 6.5l3 1.5 3-1.5"/>', measure: '<path d="M2 11L11 2l3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/>',
+  spline: '<path d="M2 12c3-9 6 3 12-8"/>', plane: '<path d="M1.5 12l4-8h9l-4 8z"/>', shell: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M5 6.5l3 1.5 3-1.5"/>', measure: '<path d="M2 11L11 2l3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/>',
 };
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => {
   const t = b.dataset.tool as Tool;

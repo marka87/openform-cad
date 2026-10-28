@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, drawRectangle, importSTEP, makeCompound, Plane, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
+import { draw, drawCircle, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, type Drawing, type EdgeFinder, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
 
 export function solidOf(f: Extrude): Shape3D {
@@ -40,7 +40,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const bodies = new Map<number, Shape3D>(), alias = new Map<number, number>(), failed: number[] = [];
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
   for (const f of features) {
-    if (f.hidden) continue;
+    if (f.hidden || f.type === 'plane') continue;
     try {
       if (f.type === 'combine') {
         const a = key(f.a), b = key(f.b), A = bodies.get(a), B = bodies.get(b);
@@ -95,6 +95,24 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
   return { body, bodies, failed };
+}
+
+// Technische Ansicht als SVG (Maße in mm): Vorderansicht, darunter Draufsicht, rechts daneben Seitenansicht von links
+// (europäische Anordnung); verdeckte Kanten grau gestrichelt
+// shortcut: keine Maße und kein Schriftfeld → richtige Zeichnungen (M5)
+export function drawingSVG(body: Shape3D) {
+  const s = forExport(body), gap = 15, views = (['front', 'top', 'left'] as const).map(v => drawProjection(s, v));
+  s.delete();
+  const box = (d: Drawing) => d.boundingBox.bounds, [fv, tv, lv] = views.map(v => box(v.visible));
+  const shift = [[0, 0], [0, fv[0][1] - gap - tv[1][1]], [fv[1][0] + gap - lv[0][0], 0]];
+  const placed = views.map((v, i) => ({ visible: v.visible.translate(shift[i][0], shift[i][1]), hidden: v.hidden.translate(shift[i][0], shift[i][1]) }));
+  const all = placed.map(v => box(v.visible)), m = 5;
+  const x0 = Math.min(...all.map(b => b[0][0])) - m, x1 = Math.max(...all.map(b => b[1][0])) + m;
+  const y0 = Math.min(...all.map(b => b[0][1])) - m, y1 = Math.max(...all.map(b => b[1][1])) + m;
+  const paths = (d: Drawing, attrs = '') => { try { return d.toSVGPaths().flat().map(p => `<path d="${p}"${attrs}/>`).join(''); } catch { return ''; } }; // leere Zeichnung
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${-y1} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}mm" height="${y1 - y0}mm" `
+    + `fill="none" stroke="black" stroke-width="0.35" stroke-linecap="round" stroke-linejoin="round">`
+    + placed.map(v => paths(v.hidden, ' stroke="#888" stroke-width="0.25" stroke-dasharray="2 1.2"') + paths(v.visible)).join('') + '</svg>';
 }
 
 // Szene ist Y-oben, CAD-Dateien Z-oben

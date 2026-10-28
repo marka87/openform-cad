@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
-import { buildBody, forExport, loadStep } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep } from './kernel';
 import { alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -308,4 +308,12 @@ test('Fläche auf eingetipptes Maß ziehen', () => {
     expect(key === 'd' ? f.d : f.p[key]).toBeCloseTo(v);
   }
   expect(pushTo('arc', b0, 5)).toBeNull();
+});
+
+test('Zeichnung als SVG: drei Ansichten, Bohrung verdeckt gestrichelt', () => {
+  const svg = drawingSVG(buildBody([box(), hole(-4), { id: 9, type: 'plane', c: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], off: 5 }]).body!);
+  expect(svg.startsWith('<svg')).toBe(true);
+  expect((svg.match(/<path /g) ?? []).length).toBeGreaterThan(10);   // Umrisse aller drei Ansichten
+  expect(svg).toContain('stroke-dasharray');                          // Bohrung ist in Vorder-/Seitenansicht verdeckt
+  expect(svg).toMatch(/width="[\d.]+mm"/);
 });

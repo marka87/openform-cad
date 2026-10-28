@@ -33,7 +33,9 @@ export interface Shell { id: number; type: 'shell'; at: Vec; t: number; hidden?:
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w]
 export interface Move { id: number; type: 'move'; body: number; c: Vec; q: number[]; t: Vec; hidden?: boolean }
-export type Feature = Extrude | EdgeOp | Import | Shell | Combine | Move;
+// Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
+export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
+export type Feature = Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane;
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
 // Flache Skizze: weder extrudiert noch gedreht
@@ -41,7 +43,7 @@ export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | 'arc';
 // i = Segment des Vielecks bei 'seg' und 'arc'
-export type Grip = { f: Extrude; part: Part; k: number; i?: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 };
+export type Grip = { f: Extrude; part: Part; k: number; i?: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 } | { f: RefPlane; part: 'plane'; k: 0 };
 
 export const GROUND: Frame = { o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
 
@@ -331,7 +333,7 @@ export function qrot(q: number[], v: ArrayLike<number>, inv = false): Vec {
 // Bewegungen, die nach Feature i seinen Körper noch verschieben (in Reihenfolge); Vereinigungen leiten weiter
 export function movesAfter(features: Feature[], i: number): Move[] {
   const f = features[i], moves: Move[] = [];
-  if (f.type === 'combine' || f.type === 'move') return moves;
+  if (f.type === 'combine' || f.type === 'move' || f.type === 'plane') return moves;
   let b = bodyOf(f);
   for (const g of features.slice(i + 1)) {
     if (g.hidden) continue;
