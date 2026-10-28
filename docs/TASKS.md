@@ -34,7 +34,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       BRepAlgoAPI-Wrapper mit Historie.
 - [x] T1.3b DONE — Rundung/Fase: Modified für Nachbarflächen, Generated
       für die neue Fläche (tag fillet/chamfer).
-- [ ] T1.3c TODO — Drehkörper, Schale, Loft benennen (Seiten aus
+- [x] T1.3c DONE — Drehkörper, Schale, Loft benennen (Seiten aus
       Profilkanten, Innenwand shell).
 - [ ] T1.3d TODO — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
       (Schnittfläche split), Import (Fläche i). Danach ist die Kette
@@ -88,6 +88,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.3c: Drehkörper geometrisch benannt (Punkt um die Achse
+  zurück in die Skizze, Anfang/Ende = Ebenen durch die Achse), Loft über
+  die Kante der Seitenfläche, die in Skizze A liegt, Schale über eigenen
+  MakeThickSolid-Wrapper. Gelernt: bei der Schale bleiben Außenflächen
+  identisch, Innenwand = Generated(Außenfläche), die geöffnete Fläche
+  meldet Modified → Rand. Neu im Schema: Origin.of (Innenwand → Außenfläche).
 - 2026-10-28 T1.3b: edgeOp in src/topo.ts ersetzt replicads fillet/chamfer
   (gleiche Kantensuche über EdgeFinder, gleiche OCCT-Klassen). Neue Fläche
   = Generated(Kante) mit tag fillet/chamfer, Nachbarn über Modified. Der

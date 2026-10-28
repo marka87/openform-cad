@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { draw, drawCircle, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, splineBeziers, type Extrude, type Feature, type Vec } from './model';
-import { boolean, edgeOp, faceIndex, nameSolid, type Named, type Origin } from './topo';
+import { boolean, edgeOp, faceIndex, nameLoft, nameSolid, shell, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -43,7 +43,7 @@ function polyDrawing(pts: number[][], smooth?: boolean) {
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
 // Ergebnis: bodies je Körpernummer; body = der einzige Körper bzw. alle als Verbund (für Export und Tests);
 // origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt
-// shortcut: Schale, Drehkörper, Loft, Import, Bewegen, Teilen schreiben noch keine Namen (T1.3b/c) → danach unbekannt
+// shortcut: Import, Bewegen, Teilen schreiben noch keine Namen (T1.3d) → danach unbekannt
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
@@ -86,7 +86,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       const done = (next: Shape3D, nm: Named = []) => { body?.delete(); bodies.set(k, next); names.set(k, nm); };
       if (f.type === 'shell') {
         if (!body) continue;
-        done(body.shell(f.t, (q: any) => q.either([f.at, ...f.more ?? []].map(p => (x: any) => x.withinDistance(0.1, p))))); // positive Dicke = Wand nach innen
+        done(...shell(f.id, body, names.get(k) ?? [], [f.at, ...f.more ?? []], f.t)); // positive Dicke = Wand nach innen
         continue;
       }
       if (f.type === 'fillet' || f.type === 'chamfer') {
@@ -103,10 +103,11 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const [A, B] = [f.a, f.b].map(id => features.find(g => g.id === id));
         if (!A || !B || !isExtrude(A) || !isExtrude(B)) throw new Error('Skizze für den Übergang fehlt');
         s = sketchOf(A).loftWith(sketchOf(B)) as Shape3D;
+        nS = nameLoft(f.id, A, B, s);
       } else {
         if (!isExtrude(f) || isFlat(f) || (isCut(f) && !body)) continue;
         s = solidOf(f);
-        if (!f.rev) nS = nameSolid(f, s);
+        nS = nameSolid(f, s);
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
       done(...boolean(isCut(f) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));

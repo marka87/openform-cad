@@ -387,3 +387,16 @@ test('Flächen tragen ihre Herkunft durch Extrudieren und Schneiden (T1.3a)', ()
   const add = buildBody([box(), hole(4)]).origins.get(1)!;                   // Zapfen oben drauf: Mantel + Deckel kommen dazu
   expect(tags(add)).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', '2:end', '2:r']);
 });
+
+test('Drehkörper, Schale und Loft benennen ihre Flächen (T1.3c)', () => {
+  const tags = (o: any[]) => o.map(x => x ? `${x.f}:${x.tag}${x.i ?? ''}${x.of ? '/' + x.of.f + ':' + x.of.tag : ''}` : '?').sort();
+  const ring = { ...sketchFeature('rect', GROUND, [5, 0], [10, 20], 1, false)!, rev: 360, axis: 'v' as const };
+  expect(tags(buildBody([ring]).origins.get(1)!)).toEqual(['1:x0', '1:x1', '1:y0', '1:y1']); // Innen-, Außenmantel, zwei Ringflächen
+  expect(tags(buildBody([{ ...ring, rev: 90 }]).origins.get(1)!)).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1']);
+  const shelled = buildBody([box(), { id: 9, type: 'shell', at: [5, 10, -5], t: 1 }]).origins.get(1)!;
+  expect(tags(shelled)).toEqual(['1:end', '1:start', '1:x0', '1:x1', '1:y0', '1:y1', // Deckel wird zum Rand
+    '9:shell/1:start', '9:shell/1:x0', '9:shell/1:x1', '9:shell/1:y0', '9:shell/1:y1']);
+  const sq = sketchFeature('rect', GROUND, [-5, -5], [5, 5], 4, false)!;
+  const sq2 = sketchFeature('rect', { ...GROUND, o: [0, 20, 0] }, [-3, -3], [3, 3], 5, false)!;
+  expect(tags(buildBody([sq, sq2, { id: 6, type: 'loft', a: 4, b: 5, body: 6 }]).origins.get(6)!)).toEqual(['6:end', '6:start', '6:x0', '6:x1', '6:y0', '6:y1']);
+});
