@@ -358,7 +358,8 @@ function planeHit(pl: Frame) {
   return ray.ray.intersectPlane(P, new THREE.Vector3());
 }
 function toLocal(pl: Frame, p: THREE.Vector3) { const d = p.clone().sub(V(pl.o)); return [d.dot(V(pl.u)), d.dot(V(pl.v))]; }
-const snap = (x: number, e: PointerEvent, s = 1) => e.shiftKey ? x : Math.round(x / s) * s;
+let gridStep = 1; // Rastergröße in mm (Auswahl unten links)
+const snap = (x: number, e: PointerEvent, s = gridStep) => e.shiftKey ? x : Math.round(x / s) * s;
 // Parameter s auf der Geraden P0 + s*D, der dem Mausstrahl am nächsten liegt
 function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
   const R0 = ray.ray.origin, E = ray.ray.direction, w0 = P0.clone().sub(R0);
@@ -629,7 +630,7 @@ function onMove(e: PointerEvent) {
         drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         features.push(drag.f); selId = drag.f.id;
       }
-      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, 0.5));
+      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep)));
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${drag.f.r.toFixed(1)} mm`);
     }
@@ -644,7 +645,7 @@ function onMove(e: PointerEvent) {
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
-    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, 0.5), drag.i);
+    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, Math.min(0.5, gridStep)), drag.i);
     if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
@@ -1132,7 +1133,7 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, render: false, color: '#c9ced6' };
+const display = { wire: false, glass: false, edges: true, section: 0, render: false, color: '#c9ced6', grid: 1 };
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
@@ -1165,7 +1166,21 @@ function applyDisplay() {
     if (b.dataset.show === 'section') b.textContent = display.section ? `Schnitt ${'XYZ'[display.section - 1]}` : 'Schnitt';
   });
   $<HTMLInputElement>('bodyColor').value = display.color;
+  gridStep = display.grid; $<HTMLSelectElement>('gridStep').value = String(display.grid);
 }
+$<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
+
+// Symbole und Tooltips für die Werkzeugleiste
+const ICONS: Partial<Record<Tool, string>> = {
+  select: '<path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z"/>', rect: '<rect x="2" y="4" width="12" height="8"/>', circle: '<circle cx="8" cy="8" r="5.5"/>',
+  ngon: '<path d="M8 2l5.2 3v6L8 14l-5.2-3V5z"/>', slot: '<rect x="1.5" y="5" width="13" height="6" rx="3"/>', line: '<path d="M2 13L6 4l8 5"/><circle cx="6" cy="4" r="1"/>',
+  spline: '<path d="M2 12c3-9 6 3 12-8"/>', shell: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M5 6.5l3 1.5 3-1.5"/>', measure: '<path d="M2 11L11 2l3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/>',
+};
+document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => {
+  const t = b.dataset.tool as Tool;
+  b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 16 16">${ICONS[t] ?? ''}</svg>`);
+  b.title = HINTS[t];
+});
 document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => b.onclick = () => {
   const k = b.dataset.show as 'wire' | 'glass' | 'edges' | 'render' | 'section';
   if (k === 'section') display.section = (display.section + 1) % 4; else display[k] = !display[k];
@@ -1177,7 +1192,7 @@ applyDisplay();
 // ---------- Werkzeugsuche (Strg+K): alle Knöpfe der Werkzeugleiste und der oberen Leiste ----------
 const palette = $('palette'), palIn = palette.querySelector('input')!, palList = palette.querySelector('div')!;
 const commands = () => [...document.querySelectorAll<HTMLButtonElement>('#toolbar button, #top button, #views button')]
-  .map(b => ({ label: b.firstChild!.textContent!.replace(/[↶↷]/g, '').trim(), run: () => b.click() }));
+  .map(b => ({ label: [...b.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').replace(/[↶↷]/g, '').trim(), run: () => b.click() }));
 function renderPalette() {
   const q = palIn.value.toLowerCase(), hits = commands().filter(c => c.label.toLowerCase().includes(q));
   palList.replaceChildren(...hits.map((c, i) => {
