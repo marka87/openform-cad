@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -624,4 +624,16 @@ test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)'
   expect(buildBody([sq, aux]).body).toBeNull();                      // nichts extrudiert
   const moved = structuredClone(aux);
   expect(movePoint(moved, aux, 2, [20, 0])).toBe(true);              // auch auf einer Linie liegend ziehbar
+});
+
+test('Hilfslinien trimmen und verlängern (T5.2)', () => {
+  // Linie (0,0)→(20,0)→(20,20), geschnitten von einer senkrechten Linie bei x = 5 und x = 15
+  const pts = [[0, 0], [20, 0], [20, 20]], cuts = [0.25, 0.75];
+  expect(trimOpen(pts, 0, 0.5, cuts)).toEqual([[[0, 0], [5, 0]], [[15, 0], [20, 0], [20, 20]]]); // Mitte raus → zwei Linien
+  expect(trimOpen(pts, 0, 0.1, cuts)).toEqual([[[5, 0], [20, 0], [20, 20]]]);                    // Anfang bis zum Schnitt kürzen
+  expect(trimOpen([[0, 0], [20, 0]], 0, 0.5, [])).toEqual([]);                                     // ohne Schnitt: ganzes Stück weg
+  expect(cutParam([0, 0], [20, 0], [5, -5], [5, 5])).toBeCloseTo(0.25);
+  // Ende bis zur Linie x = 30 verlängern; trifft nichts → null
+  expect(extendOpen(pts.slice(0, 2), 1, [[[30, -5], [30, 5]]])).toEqual([[0, 0], [30, 0]]);
+  expect(extendOpen(pts.slice(0, 2), 0, [[[30, -5], [30, 5]]])).toBeNull();
 });

@@ -9,13 +9,13 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
 
-type Tool = 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -30,6 +30,7 @@ const HINTS: Record<Tool, string> = {
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
+  trim:   'Hilfslinie anklicken = Stück bis zu den nächsten Schnittpunkten entfernen · Shift+Klick nahe einem Ende = bis zur nächsten Linie verlängern',
   aux:    'Hilfslinie: Punkte klicken (bildet keine Fläche, nur zum Einrasten) · Enter = fertig · Klick auf den ersten Punkt = geschlossen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
@@ -281,6 +282,32 @@ function rebuild() {
   });
   handles.updateMatrixWorld(true);
   buildDims();
+}
+// Trimmen (Klick) bzw. Verlängern (Shift+Klick) der offenen Hilfslinie unter der Maus; Schnitte mit allen Linien der Ebene
+function trimAt(e: PointerEvent) {
+  const f = auxPick !== null ? getById(auxPick) : undefined;
+  if (!f || !isExtrude(f) || !f.open) return showHint('Nur offene Hilfslinien lassen sich trimmen und verlängern');
+  const p = planeHit(f);
+  if (!p) return;
+  const q = toLocal(f, p), pts = f.pts!, segs = snapSegs(f).map(s => s.map(x => toLocal(f, V(x))));
+  const near = pts.slice(0, -1).map((a, i) => { // nächster Abschnitt und Stelle t darauf
+    const b = pts[i + 1], d = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((q[0] - a[0]) * d[0] + (q[1] - a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2)));
+    return { i, t, dist: Math.hypot(q[0] - a[0] - t * d[0], q[1] - a[1] - t * d[1]) };
+  }).sort((x, y) => x.dist - y.dist)[0];
+  if (e.shiftKey) {
+    const end = Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) ? 0 : 1;
+    const out = extendOpen(pts, end, segs);
+    if (!out) return showHint('In Verlängerung liegt keine Linie');
+    pushHistory(); f.pts = out; return refresh();
+  }
+  if (pts[near.i][2]) return showHint('Bögen lassen sich nicht trimmen – Bogen über seinen Punkt ändern');
+  const cuts = segs.map(([c, d]) => cutParam(pts[near.i], pts[near.i + 1], c, d)).filter((s): s is number => s !== null);
+  const parts = trimOpen(pts, near.i, near.t, cuts);
+  pushHistory();
+  if (!parts.length) { features.splice(features.indexOf(f), 1); clearSel(); return refresh(); }
+  f.pts = parts[0];
+  if (parts[1]) add({ ...structuredClone(f), id: nextId++, pts: parts[1] });
+  refresh();
 }
 // Hilfslinie gestrichelt; userData.aux = ID zum Anklicken
 function auxLine(f: Extrude) {
@@ -711,6 +738,7 @@ function onDown(e: PointerEvent) {
   if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
+  if (tool === 'trim') return trimAt(e);
   if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
@@ -1374,6 +1402,7 @@ addEventListener('keydown', e => {
   else if (k in { 0: 1, 1: 1, 2: 1, 3: 1 }) setView(['iso', 'front', 'top', 'right'][+k]);
   else if (k === 'l') setTool('line');
   else if (k === 'g') setTool('aux');
+  else if (k === 't') setTool('trim');
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(poly.path === undefined && !poly.aux); // Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();

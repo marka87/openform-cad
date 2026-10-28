@@ -35,7 +35,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Waagrecht/senkrecht gezeichnete Seiten bekommen automatisch die Abhängigkeit
 - [ ] Weitere automatische Abhängigkeiten aus dem Einrasten (auf Linie, im Punkt)
 - [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3
-- [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
+- [x] Trimmen und Verlängern von Hilfslinien (T); geschlossene Skizzen bilden Bereiche
 - [x] Hilfslinien (G): bilden keine Fläche, nur zum Einrasten
 - [x] Raster auf einer Fläche (Doppelklick oder Leertaste), passend zum Bauteil; Skizzen landen in dieser Ebene
 - [x] Versetzte Skizzenebenen (Hilfsebene, Werkzeug E)

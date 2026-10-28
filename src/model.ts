@@ -218,6 +218,34 @@ export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
   return ok;
 }
 
+// Parameter s auf a→b, an dem die Strecke c→d sie schneidet (beide 2D), sonst null; Enden von a→b zählen nicht
+export function cutParam(a: number[], b: number[], c: number[], d: number[]) {
+  const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]], den = r[0] * q[1] - r[1] * q[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const w = [c[0] - a[0], c[1] - a[1]], s = (w[0] * q[1] - w[1] * q[0]) / den, u = (w[0] * r[1] - w[1] * r[0]) / den;
+  return s > 1e-6 && s < 1 - 1e-6 && u > -1e-9 && u < 1 + 1e-9 ? s : null;
+}
+
+// Offene Hilfslinie trimmen: auf Abschnitt i bei t (0..1) das Stück zwischen den nächsten Schnittpunkten
+// (cuts = Parameter auf Abschnitt i) entfernen; ohne Schnittpunkt auf einer Seite bis zum Ende des Abschnitts.
+// Ergebnis: die verbleibenden Linienzüge (0, 1 oder 2)
+export function trimOpen(pts: number[][], i: number, t: number, cuts: number[]): number[][][] {
+  const a = pts[i], b = pts[i + 1], P = (s: number) => [a[0] + s * (b[0] - a[0]), a[1] + s * (b[1] - a[1])];
+  const lo = Math.max(...cuts.filter(s => s < t), -1), hi = Math.min(...cuts.filter(s => s > t), 2);
+  const left = lo < 0 ? pts.slice(0, i + 1) : [...pts.slice(0, i + 1), P(lo)];
+  const right = hi > 1 ? pts.slice(i + 1) : [P(hi), ...pts.slice(i + 1)];
+  return [left, right].filter(l => l.length >= 2).map(l => l.map(p => [...p]));
+}
+
+// Ende (0 = Anfang, 1 = Ende) einer offenen Hilfslinie geradeaus bis zur nächsten der Strecken segs verlängern; null = trifft nichts
+export function extendOpen(pts: number[][], end: 0 | 1, segs: number[][][]): number[][] | null {
+  const [p, q] = end ? [pts.at(-2)!, pts.at(-1)!] : [pts[1], pts[0]], far = [q[0] + (q[0] - p[0]) * 1e4, q[1] + (q[1] - p[1]) * 1e4];
+  const hits = segs.map(([c, d]) => cutParam(q, far, c, d)).filter((s): s is number => s !== null);
+  if (!hits.length) return null;
+  const s = Math.min(...hits), to = [q[0] + s * (far[0] - q[0]), q[1] + s * (far[1] - q[1])];
+  return end ? [...pts.slice(0, -1), to] : [to, ...pts.slice(1)];
+}
+
 // Schnittpunkt zweier Strecken (gleiche Ebene); gemeinsame Endpunkte zählen nicht (z. B. Stücke eines Kreises)
 function crossing(a: Vec, b: Vec, c: Vec, d: Vec): Vec | null {
   const u = sub(b, a), v = sub(d, c), w = sub(a, c);

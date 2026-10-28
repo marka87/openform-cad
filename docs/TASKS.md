@@ -116,7 +116,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 ## Epic 5: Skizzieren (Wunsch des Nutzers, 2026-10-28)
 - [x] T5.1 DONE — Hilfslinien: Linien, die keine Fläche bilden, nur zum
       Einrasten und Bemaßen (Umschalter im Linien-Werkzeug, gestrichelt).
-- [ ] T5.2 TODO — Trimmen: Stück einer Skizzenlinie zwischen zwei
+- [x] T5.2 DONE — Trimmen: Stück einer Skizzenlinie zwischen zwei
       Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
 - [ ] T5.3 TODO — Körperkanten in die Skizzenebene projizieren (als
       Hilfslinien, an den Körper gebunden).
@@ -132,6 +132,13 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T5.2: Werkzeug Trimmen (T) für offene Hilfslinien: Klick
+  entfernt das Stück bis zu den nächsten Schnittpunkten mit allen Linien
+  und Körperkanten der Ebene (Mitte raus = zwei Linien), Shift+Klick
+  verlängert das nahe Ende bis zur nächsten Linie. Entscheidung: nur für
+  Hilfslinien – geschlossene Skizzen bilden ihre Bereiche ohnehin selbst,
+  Trimmen dort wäre eine 2D-Boolesche Operation mit eigenem Paket.
+  Bögen werden nicht getrimmt. Im Browser geprüft.
 - 2026-10-28 T5.1: Werkzeug Hilfslinie (G): Vieleck mit `aux` (und `open`
   bei Enter), gestrichelt, nie extrudiert, nicht in Bereichen/Loft/Zug,
   aber Rastpunkte und -linien für alle anderen Werkzeuge. Anklicken wählt
