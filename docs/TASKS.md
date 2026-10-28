@@ -85,7 +85,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Epic 2: Sweep
 - [x] T2.1 DONE — Profil + offener Pfad, ohne UI, mit Test.
-- [ ] T2.2 TODO — geschlossener Pfad, Ecken/Verrundung am Knick.
+- [x] T2.2 DONE — geschlossener Pfad, Ecken/Verrundung am Knick.
 - [ ] T2.3 TODO — Pfadauswahl und Live-Vorschau im Viewport.
 
 ## Epic 3: Einzelbemaßung Zeichnung
@@ -102,6 +102,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T2.2: geschlossener Pfad (Rahmen, keine Deckel) und Bögen im
+  Pfad als runde Ecken funktionieren, Volumen exakt (Tests). Gelernt:
+  OCCTs RoundCorner ergibt hier ungültige Körper (BRepCheck), offen wie
+  geschlossen, mit und ohne Korrektur → Option `round` entfernt, runde
+  Knicke = Bogen im Pfad. Neu: Sweep prüft das Ergebnis mit BRepCheck und
+  schlägt sonst mit Grund fehl (z. B. Profil größer als der Rahmen).
 - 2026-10-28 T2.1: Feature `sweep` (model.ts): Profil = ID einer flachen
   Skizze, Pfad = Linienzug [x, y, bulge?] in eigener Ebene, offen oder
   geschlossen, Knicke auf Gehrung (Standard) oder rund, auch als Abzug.

@@ -167,11 +167,13 @@ export function nameLoft(id: number, A: Extrude, B: Extrude, s: Shape3D): Named 
 export function sweep(f: Sweep, P: Extrude, profile: Wire, spine: Wire): [Shape3D, Named] {
   const oc = getOC() as any, b = new oc.BRepOffsetAPI_MakePipeShell(spine.wrapped);
   try {
-    const T = oc.BRepBuilderAPI_TransitionMode;
-    b.SetTransitionMode(f.round ? T.BRepBuilderAPI_RoundCorner : T.BRepBuilderAPI_RightCorner);
-    b.Add(profile.wrapped, false, !!f.round);
+    b.SetTransitionMode(oc.BRepBuilderAPI_TransitionMode.BRepBuilderAPI_RightCorner);
+    b.Add(profile.wrapped, false, false);
     b.Build(new oc.Message_ProgressRange());
     if (!b.IsDone() || !b.MakeSolid()) throw new Error('Zug entlang des Pfads fehlgeschlagen');
+    const check = new oc.BRepCheck_Analyzer(b.Shape(), true, false), valid = check.IsValid();
+    check.delete();
+    if (!valid) throw new Error('Zug ergibt keinen gültigen Körper (Profil zu groß für den Pfad?)'); // nie ungültig weiterrechnen oder exportieren
     const s = cast(b.Shape()) as Shape3D, faces = s.faces, idx = faceIndex(faces), named: Named = [], taken = new Set<number>();
     const edges = profile.edges, side0 = edges.map(e => side(P, ...sketchXY(P, e.pointAt(0.5).toTuple())));
     // mehrere Profilkanten auf derselben Seite (Kreis = zwei Bögen): über die Kantennummer k unterscheiden

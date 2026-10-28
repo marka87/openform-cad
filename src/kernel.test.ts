@@ -539,11 +539,27 @@ test('Zug: Kreisprofil entlang eines offenen L-Pfads (T2.1)', () => {
   expect(r.failed).toEqual([]);
   expect(measureVolume(r.bodies.get(2)!)).toBeCloseTo(Math.PI * 4 * 40, 0);  // Gehrung: Länge der Mittellinie zählt
   expect(tags(r.origins.get(2)!)).toEqual(['2:end', '2:r00', '2:r01', '2:r10', '2:r11', '2:start']); // Kreis = 2 Bögen × 2 Abschnitte
-  const round = buildBody([prof, { ...sw, round: true }]);                    // runder Knick: weniger Volumen an der Ecke, aber gültig
-  expect(round.failed).toEqual([]);
   // als Abzug: halbrunde Nut R2 längs über den Deckel des Quaders (Pfad auf y = 10, z = −5)
   const prof2 = sketchFeature('circle', { o: [0, 10, -5], n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] }, [0, 0], [2, 0], 8, false)!;
   const groove = buildBody([{ ...box(), body: 3 }, prof2, { ...sw, id: 9, profile: 8, sub: true, body: 3, ...GROUND, o: [0, 10, -5] as Vec, pts: [[0, 0], [20, 0]] }]);
   expect(groove.failed).toEqual([]);
   expect(measureVolume(groove.bodies.get(3)!)).toBeCloseTo(2000 - Math.PI * 4 / 2 * 20, 0);
+});
+
+test('Zug: geschlossener Pfad, Knicke auf Gehrung oder als Bogen im Pfad (T2.2)', () => {
+  const prof = sketchFeature('circle', { o: [0, 0, 0], n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] }, [0, 0], [2, 0], 1, false)!;
+  const ring: Sweep = { id: 2, type: 'sweep', profile: 1, ...GROUND, pts: [[0, 0], [20, 0], [20, 20], [0, 20]], closed: true, body: 2 };
+  const mitre = buildBody([prof, ring]);
+  expect(mitre.failed).toEqual([]);
+  expect(measureVolume(mitre.bodies.get(2)!)).toBeCloseTo(Math.PI * 4 * 80, 0);   // geschlossener Rahmen, keine Deckel
+  expect(mitre.origins.get(2)!.some(o => o?.tag === 'start' || o?.tag === 'end')).toBe(false);
+  const tight = buildBody([{ ...prof, p: { cx: 0, cy: 0, r: 12 } }, ring]);         // Profil größer als der Rahmen → Fehler statt kaputter Körper
+  expect(tight.errors.get(2)).toMatch(/gültigen Körper|fehlgeschlagen/);
+  // Bögen im Pfad: Rahmen mit Ecken R5 (Viertelkreise), Mittellinie 4·10 + 2π·5
+  const q = Math.tan(Math.PI / 8);
+  const arcs: Sweep = { ...ring, pts: [[5, 0], [15, 0, q], [20, 5], [20, 15, q], [15, 20], [5, 20, q], [0, 15], [0, 5, q]] };
+  const prof2 = { ...prof, o: [5, 0, 0] as Vec };
+  const bent = buildBody([prof2, arcs]);
+  expect(bent.failed).toEqual([]);
+  expect(measureVolume(bent.bodies.get(2)!)).toBeCloseTo(Math.PI * 4 * (40 + 2 * Math.PI * 5), 0);
 });

@@ -36,9 +36,10 @@ export interface Split { id: number; type: 'split'; body: number; plane: number;
 // Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
 export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: number; hidden?: boolean }
 // Profil (flache Skizze profile) entlang eines Pfads ziehen. Der Pfad ist ein Linienzug in eigener Ebene (Frame):
-// pts wie beim Vieleck [x, y, bulge?], offen oder geschlossen (closed). round = Knicke rund statt auf Gehrung.
+// pts wie beim Vieleck [x, y, bulge?], offen oder geschlossen (closed). Knicke auf Gehrung; runde Ecken = Bögen im Pfad
+// (OCCTs RoundCorner ergibt hier ungültige Körper).
 // Das Profil sollte am Pfadanfang liegen; es wird so mitgeführt, wie es gezeichnet ist.
-export interface Sweep extends Frame { id: number; type: 'sweep'; profile: number; pts: number[][]; closed?: boolean; round?: boolean; sub?: boolean; body?: number; hidden?: boolean }
+export interface Sweep extends Frame { id: number; type: 'sweep'; profile: number; pts: number[][]; closed?: boolean; sub?: boolean; body?: number; hidden?: boolean }
 // Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
