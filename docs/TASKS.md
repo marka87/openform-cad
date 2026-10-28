@@ -11,14 +11,14 @@ Feature-IDs. Geometrischer Fingerabdruck dient nur als Plausibilitäts-
 prüfung und als Tiebreaker bei Mehrdeutigkeit — und als alleinige
 Notlösung bei importierter STEP-Geometrie ohne Historie.
 
-- [ ] T1.0 TODO — SPIKE, max. 2h, Wegwerf-Code außerhalb des Repos:
+- [x] T1.0 DONE — SPIKE, max. 2h, Wegwerf-Code außerhalb des Repos:
       Kommt man über replicad an die Builder-Historie heran
       (Modified/Generated/IsDeleted) für einen booleschen Schnitt?
       Falls nein: an welcher Stelle muss direkt auf opencascade.js
       durchgegriffen werden, und was kostet das?
       Ergebnis als docs/adr/0001-topo-naming.md. ANHALTEN und berichten,
       bevor T1.2 beginnt.
-- [ ] T1.1 TODO — Bestandsaufnahme: wo im Feature-JSON werden Flächen
+- [x] T1.1 DONE — Bestandsaufnahme: wo im Feature-JSON werden Flächen
       und Kanten referenziert? Welche Lookups nutzen OCCT-Indizes?
       Ergebnis nach docs/TOPO-NAMING.md. Kein Code.
 - [ ] T1.1b TODO — Stabile IDs sicherstellen: jede Skizzenkurve und
@@ -79,5 +79,17 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.1: docs/TOPO-NAMING.md. Keine OCCT-Index-Bezüge; Skizze
+  auf Fläche, Rundung/Fase und Schale hängen an kopierten Weltkoordinaten.
+  Feature-, Körper-, Loft- und Split-Bezüge laufen über stabile IDs.
+  Vieleck-Seiten über Index – stabil, solange man keine Punkte einfügen kann.
+- 2026-10-28 T1.0: docs/adr/0001-topo-naming.md. replicad verwirft die
+  Builder; opencascade.js (gleiche WASM) liefert Modified/Generated/
+  IsDeleted für Schnitt, Extrusion, Rundung, auch nach SimplifyResult.
+  Nötig: eigene Wrapper für die 12 Operationen in buildBody.
+  Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
+- ADR 0001 freigeben? Abstammung über eigene OCCT-Wrapper (mehr Code,
+  eindeutig) statt nur Fingerabdruck (weniger Code, rät bei gleichen
+  Flächen). Erst danach T1.1b/T1.2.
