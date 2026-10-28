@@ -25,7 +25,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Baum übersteht. Falls heute über Index oder Name identifiziert
       wird, hier umstellen — ohne das trägt die Abstammung nicht.
       Migration bestehender Dateien mit erledigen.
-- [ ] T1.2 TODO — Schema für FaceRef/EdgeRef: Abstammungspfad
+- [x] T1.2 DONE — Schema für FaceRef/EdgeRef: Abstammungspfad
       (Ursprungs-ID + Kette der verändernden Feature-IDs) plus
       Fingerabdruck-Block (Flächentyp, Normale, Schwerpunkt,
       Fläche/Länge) als Prüfwert. Nur Typen und Doku, kein Resolver.
@@ -82,6 +82,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T1.2: src/topo.ts (nur Typen) und Schema-Abschnitt in
+  docs/TOPO-NAMING.md. Origin nutzt die Teil-Namen, die ownerOf schon
+  kennt, damit Klick-Auswahl und Bezug dieselbe Sprache sprechen. Kante =
+  zwei angrenzende Flächen + Fingerabdruck. `via` nur zur Diagnose.
 - 2026-10-28 T1.1b: kein Umbau nötig. Jede ID kommt aus `nextId` (mit
   dem Modell gespeichert), Kopien/Muster/Spiegeln/Einfügen holen neue IDs,
   Umbenennen ändert nur `name`, Umsortieren nur die Reihenfolge.

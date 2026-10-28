@@ -48,3 +48,25 @@ Profilkante i“. Dann braucht jede Vieleck-Seite eine eigene ID.
 - Ziehen an einer Fläche ändert nur das eigene Feature (`applyPush`).
   Abhängige Features (Skizze darauf, Rundung daran) werden nicht
   angefasst.
+
+## Schema (T1.2, Typen in `src/topo.ts`)
+
+- **Origin** = Feature-ID + Teil (`tag`) + Seite `i`. Die Teile sind
+  dieselben Namen, die `ownerOf` heute schon liefert (`start`, `end`,
+  `x0`…`y1`, `r`, `seg`/`arc` mit `i`), ergänzt um `fillet`, `chamfer`,
+  `shell`, `split`, `import`. Bei Bereichs-Features zusätzlich `from` =
+  ID der Original-Skizze.
+- **FaceRef** = Origin + Fingerabdruck (Typ, Schwerpunkt, Normale/Achse,
+  Fläche). `via` listet die ändernden Features, nur für Fehlermeldungen.
+- **EdgeRef** = die zwei angrenzenden Flächen (je ein Origin) +
+  Fingerabdruck der Kante. Eine Kante zwischen zwei bekannten Flächen
+  bleibt eindeutig, auch wenn beide Flächen wachsen.
+- **Resolved** = Treffer mit „sicher/unsicher“ oder Fehler `lost`
+  (Kette gerissen) bzw. `ambiguous` (mehrere Kandidaten, Fingerabdruck
+  entscheidet nicht).
+
+Warum Kante über zwei Flächen statt eigener Abstammung: OCCT meldet für
+Kanten bei Booleschen Operationen oft nur `Modified` auf Teilstücke;
+über die Flächen bleibt der Name auch dann eindeutig.
+Spline-Vieleck (`smooth`): wie viele Seitenflächen OCCT daraus macht, ist
+noch ungeprüft; Origin `seg` mit dem Index der Profilkante (prüfen in T1.3).
