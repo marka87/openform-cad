@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -71,6 +71,9 @@ resetView();
 // ---------- Modell ----------
 let features: Feature[] = [], nextId = 1, selId: number | null = null, tool: Tool = 'select';
 let drag: any = null, ready = false;
+const multi = new Set<number>();  // weitere ausgewählte Features (Shift+Klick)
+let edgeSel: { at: Vec; dir: Vec; body?: number }[] = []; // angeklickte Kanten, zum gemeinsamen Runden/Fasen
+const clearSel = () => { selId = selBody = null; multi.clear(); edgeSel = []; };
 const undoStack: string[] = [], redoStack: string[] = [];
 const snapshot = () => JSON.stringify({ features, nextId });
 function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
@@ -199,13 +202,14 @@ function rebuild() {
     const o = !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
       : isFlat(f) ? buildMesh(f, 'sketch')
       : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
-      : f.id === selId ? buildMesh(f, 'outline') : null;
+      : f.id === selId || multi.has(f.id) ? buildMesh(f, 'outline') : null;
     if (!o) return;
     if (o.matrixAutoUpdate) o.updateMatrix();
     o.matrixAutoUpdate = false;
     o.matrix.premultiply(M);
     group.add(o);
   });
+  for (const a of edgeSel) group.add(edgeMarker(a));
   group.updateMatrixWorld(true);
   disposeGroup(handles);
   const s = getSel();
@@ -262,7 +266,7 @@ function renderTree() {
   tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}" data-b="${b}"><span>Körper #${b}</span></div>`).join('') : '') +
     `<h3>Schritte${bodyInfo}</h3>` + (features.map((f, i) =>
-    `<div class="row${f.id === selId ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
+    `<div class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}" data-i="${i}"><span>${nameOf(f)} #${f.id}</span>` +
     `<button data-a="up" title="früher ausführen">↑</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
   tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => row.onclick = () => {
@@ -272,7 +276,8 @@ function renderTree() {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
     else if (a === 'up') { if (!i) return; pushHistory(); [features[i - 1], features[i]] = [features[i], features[i - 1]]; }
-    else { selId = f.id; selBody = null; detachGizmo(); }
+    else if (ev.shiftKey && selId !== null && selId !== f.id) multi.has(f.id) ? multi.delete(f.id) : multi.add(f.id);
+    else { clearSel(); selId = f.id; detachGizmo(); }
     refresh();
   });
 }
@@ -536,9 +541,11 @@ function onDown(e: PointerEvent) {
   } else if (edge) { // Kante: Rundung entsteht erst beim Ziehen
     drag = { kind: 'edge', f: null, edge, P0: V(edge.at), sx: e.clientX, sy: e.clientY, started: false };
   } else {
-    if (!h?.grip) { if (selId !== null || selBody !== null) { selId = selBody = null; detachGizmo(); refresh(); } return; } // Leere: Orbit
+    if (!h?.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; } // Leere: Orbit
     const g = h.grip;
-    selId = g.f.id; selBody = null; detachGizmo(); refresh();
+    if (e.shiftKey && selId !== null && selId !== g.f.id) { multi.has(g.f.id) ? multi.delete(g.f.id) : multi.add(g.f.id); refresh(); return; }
+    if (!multi.has(g.f.id)) multi.clear();
+    selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
     if (g.part === 'import') return; // importierte Körper nur auswählen
     drag = g.part === 'edge'
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
@@ -634,6 +641,11 @@ el.addEventListener('pointerup', e => {
   onMove(e); // Endposition übernehmen
   hud.style.display = 'none';
   if (drag.kind === 'sketch') finishSketch();
+  if (drag.kind === 'edge' && !drag.started && !drag.f) {
+    const near = (a: { at: Vec }) => V(a.at).distanceTo(V(drag.edge.at)) < 4 * pxSize();
+    edgeSel = e.shiftKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
+    selId = selBody = null; multi.clear();
+  }
   if (drag.kind === 'line' && drag.arc && drag.started && poly) {
     const q = polyPoint(e), first = poly.pts[0];
     if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
@@ -648,8 +660,10 @@ el.addEventListener('pointerup', e => {
 });
 
 // ---------- UI ----------
+let lastTool: Tool = 'rect'; // Leertaste wählt es wieder
 function setTool(t: Tool) {
   if (t !== tool) { cancelPoly(); measure = []; }
+  if (t !== 'select') lastTool = t;
   typed = '';
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -660,6 +674,7 @@ document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.o
 const panel = $('panel');
 function renderPanel() {
   const f = getSel();
+  if (edgeSel.length) { panel.style.display = 'block'; return renderEdgeSetPanel(); }
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
@@ -830,9 +845,94 @@ function renderShellPanel(f: Shell) {
   inp.onchange = () => { const v = parseFloat(inp.value); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
+// Mehrere Kanten auf einmal runden oder fasen (Shift+Klick auf Kanten)
+function renderEdgeSetPanel() {
+  panel.innerHTML = `<h3>${edgeSel.length} Kante${edgeSel.length > 1 ? 'n' : ''}</h3><p style="color:var(--muted);margin:0 0 6px">Shift+Klick = weitere Kanten</p>
+    <label>Maß <input type="number" step="0.5" min="0.5" value="2" class="r"></label>
+    <button class="act" data-t="fillet">Runden</button><button class="act" data-t="chamfer">Fasen</button>`;
+  panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => {
+    const r = Math.max(0.5, parseFloat(panel.querySelector<HTMLInputElement>('.r')!.value) || 2);
+    pushHistory();
+    for (const a of edgeSel) features.push({ id: nextId++, type: b.dataset.t as EdgeOp['type'], at: a.at, dir: a.dir, r, body: a.body });
+    selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
+  });
+}
 function deleteSel() {
-  if (!getSel()) return;
-  pushHistory(); features = features.filter(f => f.id !== selId); selId = null; refresh();
+  const ids = new Set([selId, ...multi]);
+  if (!features.some(f => ids.has(f.id))) return;
+  pushHistory(); features = features.filter(f => !ids.has(f.id)); clearSel(); refresh();
+}
+function toggleHidden() {
+  const fs = features.filter(f => f.id === selId || multi.has(f.id));
+  if (!fs.length) return;
+  pushHistory(); const h = !fs[0].hidden; fs.forEach(f => f.hidden = h); refresh();
+}
+
+// ---------- Kopieren, Einfügen, Duplizieren: Skizzen/Features oder ganzer Körper, um 10 mm in X versetzt ----------
+let clip: Feature[] = [], clipBody = false;
+const COPY_OFFSET: Vec = [10, 0, 0];
+type Copyable = Extrude | EdgeOp | Shell;
+function copySel() {
+  clipBody = selBody !== null;
+  clip = structuredClone(features.filter((f): f is Copyable => (isExtrude(f) || f.type === 'fillet' || f.type === 'chamfer' || f.type === 'shell') && !f.hidden
+    && (clipBody ? bodyOf(f) === selBody : f.id === selId || multi.has(f.id))));
+  showHint(clip.length ? `${clip.length} Schritt${clip.length > 1 ? 'e' : ''} kopiert · Strg+V fügt ein` : 'Nichts zum Kopieren ausgewählt');
+}
+// shortcut: Bewegungen und Verrechnungen des Körpers werden nicht mitkopiert → Körper samt Verlauf kopieren (Körper-IDs umschreiben)
+function paste() {
+  if (!clip.length) return;
+  pushHistory();
+  const newBody = nextId;
+  const out = (clip as Copyable[]).map(f => {
+    const id = nextId++, body = clipBody ? newBody : isExtrude(f) && !f.onFace ? id : f.body; // Bodenskizze = eigener Körper
+    return isExtrude(f) ? { ...movedCopy(f, id, COPY_OFFSET), body }
+      : { ...structuredClone(f), id, body, at: f.at.map((x, k) => x + COPY_OFFSET[k]) as Vec };
+  });
+  features.push(...out);
+  clip = structuredClone(out); // nochmal einfügen = nochmal versetzt
+  clearSel();
+  if (clipBody) selBody = newBody; else selId = out.at(-1)!.id;
+  refresh();
+}
+
+// ---------- Rechtsklick-Menü: Befehle zu dem, was unter der Maus liegt ----------
+const ctx = $('ctx');
+let rDown: { x: number; y: number } | null = null;
+el.addEventListener('pointerdown', e => { if (e.button === 2) rDown = { x: e.clientX, y: e.clientY }; });
+el.addEventListener('pointerup', e => {
+  if (e.button !== 2 || !rDown) return;
+  const moved = Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 4; // Rechts ziehen = verschieben
+  rDown = null;
+  if (!moved) openCtx(e);
+});
+el.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('pointerdown', e => { if (!ctx.contains(e.target as Node)) ctx.style.display = 'none'; }, true);
+function openCtx(e: PointerEvent) {
+  setRay(e);
+  const { face: h, edge } = pick(), g = h?.grip;
+  if (g && g.f.id !== selId && !multi.has(g.f.id)) { clearSel(); selId = g.f.id; refresh(); }
+  const sel = getSel(), n = 1 + multi.size, items: ([string, () => void] | null)[] = [];
+  if (sel) {
+    items.push([n > 1 ? `${n} Schritte löschen` : 'Löschen (Entf)', deleteSel], [sel.hidden ? 'Einschalten' : 'Ausschalten', toggleHidden],
+      ['Duplizieren (Strg+D)', () => { copySel(); paste(); }], ['Kopieren (Strg+C)', copySel]);
+    const b = sel.type !== 'combine' && sel.type !== 'move' ? bodyOf(sel) : null;
+    if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
+    if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details:not(.cons)'); if (d) d.open = true; }]);
+    items.push(null);
+  } else if (edge) items.push(['Kante runden / fasen …', () => { clearSel(); edgeSel = [edge]; refresh(); }], null);
+  if (selBody !== null) items.push(['Körper duplizieren (Strg+D)', () => { copySel(); paste(); }], null);
+  if (clip.length) items.push(['Einfügen (Strg+V)', paste]);
+  items.push(['Einpassen (F)', fitView], ['Rückgängig (Strg+Z)', undo], ['Werkzeugsuche (Strg+K)', openPalette]);
+  ctx.replaceChildren(...items.map(it => {
+    if (!it) return document.createElement('hr');
+    const b = document.createElement('button');
+    b.textContent = it[0];
+    b.onclick = () => { ctx.style.display = 'none'; it[1](); };
+    return b;
+  }));
+  ctx.style.display = 'block';
+  ctx.style.left = `${Math.min(e.clientX, innerWidth - ctx.offsetWidth - 8)}px`;
+  ctx.style.top = `${Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8)}px`;
 }
 
 function download(name: string, blob: Blob) {
@@ -871,8 +971,13 @@ addEventListener('keydown', e => {
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
   }
   if (e.ctrlKey && k === 'k') { e.preventDefault(); return openPalette(); }
+  if (e.ctrlKey && k === 'c') return copySel();
+  if (e.ctrlKey && k === 'v') return paste();
+  if (e.ctrlKey && k === 'd') { e.preventDefault(); copySel(); return paste(); }
+  if (k === ' ') { e.preventDefault(); return setTool(lastTool); }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
+  else if (e.ctrlKey) return; // Strg+S/R/… sind keine Werkzeugtasten
   else if (k === 'v') setTool('select');
   else if (k === 'r') setTool('rect');
   else if (k === 'c') setTool('circle');
@@ -886,7 +991,7 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly();
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { typed = ''; selBody = null; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 // ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------
