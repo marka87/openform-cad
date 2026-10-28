@@ -317,25 +317,36 @@ export function keyPoints(f: Extrude): Vec[] {
 }
 
 // Kopie von f, verschoben um t und gedreht um die Achse ax (Einheitsvektor) durch c um angle (Bogenmaß)
+// Drehung um die Achse ax (Einheitsvektor) um angle (Rodrigues); Punkte zusätzlich um c gedreht und um t verschoben
+export const rotDir = (d: ArrayLike<number>, ax: Vec, angle: number): Vec => {
+  const cs = Math.cos(angle), sn = Math.sin(angle), k = dot(ax, d), x = [ax[1] * d[2] - ax[2] * d[1], ax[2] * d[0] - ax[0] * d[2], ax[0] * d[1] - ax[1] * d[0]];
+  return [0, 1, 2].map(i => d[i] * cs + x[i] * sn + ax[i] * k * (1 - cs)) as Vec;
+};
+export const movePt = (p: Vec, t: Vec, ax: Vec, angle: number, c: Vec): Vec => rotDir(sub(p, c), ax, angle).map((x, i) => x + c[i] + t[i]) as Vec;
+export const mirrorDir = (d: ArrayLike<number>, m: Vec): Vec => { const k = 2 * dot(d, m); return [0, 1, 2].map(i => d[i] - k * m[i]) as Vec; };
+export const mirrorPt = (p: Vec, m: Vec, c: Vec): Vec => mirrorDir(sub(p, c), m).map((x, i) => x + c[i]) as Vec;
+
+// Kopien verlieren den Flächenbezug des Originals (sonst zöge der Kern sie auf dessen Fläche zurück); er wird neu nachgetragen
 export function movedCopy(f: Extrude, id: number, t: Vec, ax: Vec = [0, 1, 0], angle = 0, c: Vec = [0, 0, 0]): Extrude {
-  const cs = Math.cos(angle), sn = Math.sin(angle);
-  const rot = (d: Vec): Vec => { // Rodrigues
-    const k = dot(ax, d), x = [ax[1] * d[2] - ax[2] * d[1], ax[2] * d[0] - ax[0] * d[2], ax[0] * d[1] - ax[1] * d[0]];
-    return [0, 1, 2].map(i => d[i] * cs + x[i] * sn + ax[i] * k * (1 - cs)) as Vec;
+  const rot = (d: Vec) => rotDir(d, ax, angle);
+  const move = (g: Extrude): Extrude => {
+    const h: Extrude = { ...structuredClone(g), o: movePt(g.o, t, ax, angle, c), u: rot(g.u), v: rot(g.v), n: rot(g.n),
+      ...g.and && { and: g.and.map(move) }, ...g.not && { not: g.not.map(move) },
+      ...g.axisLine && { axisLine: { p: movePt(g.axisLine.p, t, ax, angle, c), d: rot(g.axisLine.d) } } };
+    delete h.face;
+    return h;
   };
-  const move = (g: Extrude): Extrude => ({
-    ...structuredClone(g), o: rot(sub(g.o, c)).map((x, i) => x + c[i] + t[i]) as Vec, u: rot(g.u), v: rot(g.v), n: rot(g.n),
-    ...g.and && { and: g.and.map(move) }, ...g.not && { not: g.not.map(move) },
-  });
   return { ...move(f), id };
 }
 
 // Spiegelbild von f an der Ebene durch c mit Normale m. Spiegeln dreht die Händigkeit um: v' = n' × u' = −R·v,
 // deshalb wird die Form in Skizzenkoordinaten an der x-Achse gespiegelt (y → −y, Bögen kehren ihre Richtung)
 export function mirroredCopy(f: Extrude, id: number, m: Vec, c: Vec = [0, 0, 0]): Extrude {
-  const R = (d: Vec): Vec => { const k = 2 * dot(d, m); return [0, 1, 2].map(i => d[i] - k * m[i]) as Vec; };
+  const R = (d: Vec) => mirrorDir(d, m);
   const flip = (g: Extrude): Extrude => {
     const p = g.p, h = structuredClone(g);
+    delete h.face;
+    if (g.axisLine) h.axisLine = { p: mirrorPt(g.axisLine.p, m, c), d: R(g.axisLine.d) };
     h.o = R(sub(g.o, c)).map((x, i) => x + c[i]) as Vec;
     h.u = R(g.u); h.n = R(g.n); h.v = R(g.v).map(x => -x) as Vec;
     if (g.type === 'rect') h.p = { ...p, y: -(p.y + p.h) };

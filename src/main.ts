@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -502,6 +502,7 @@ function setHover(on: boolean) {
 }
 let auxPick: number | null = null;
 let axisFor: number | null = null; // Skizze, deren Drehachse gerade per Kantenklick gewählt wird
+let patPickFor: number | null = null, patRef: { ax: Vec; c: Vec; label: string } | null = null; // Bezug für Muster/Spiegeln
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
@@ -770,6 +771,14 @@ function onDown(e: PointerEvent) {
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'trim') return trimAt(e);
+  if (patPickFor !== null) { // Bezug für Muster/Spiegeln: Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
+    const id = patPickFor;
+    patPickFor = null;
+    patRef = edge ? { ax: edge.dir, c: edge.at, label: 'gewählte Kante' } : h ? { ax: h.n.toArray() as Vec, c: h.point.toArray() as Vec, label: 'gewählte Fläche' } : null;
+    selId = id;
+    showHint(patRef ? `Bezug: ${patRef.label}` : 'Nichts getroffen');
+    return refresh();
+  }
   if (axisFor !== null) { // Drehachse: angeklickte gerade Kante, muss in der Skizzenebene liegen
     const f = getById(axisFor);
     axisFor = null;
@@ -1061,27 +1070,42 @@ function renderPanel() {
       <button class="act cb">Senkung anlegen</button>` : '') +
     (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
-      <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
+      <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
       <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}"></label>
       <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
     `<button class="del">Löschen</button>`;
   // Muster und Spiegeln im Raum; Achsen wie in der Exportdatei (Z oben = Szene +Y), Kreis und Spiegelebene durch den Ursprung
-  // shortcut: nur durch den Ursprung und nur das ausgewählte Feature (ohne Rundungen) → Bezug auf Kante/Fläche (M3)
+  // Bezug: Achse durch den Ursprung oder angeklickte Kante (Richtung, durch die Kante) bzw. Fläche (Normale, durch den Klickpunkt;
+  // beim Spiegeln = Spiegelebene). Rundungen/Fasen an den Flächen des Features werden mitkopiert.
   const AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] };
   const num = (c: string) => parseFloat(panel.querySelector<HTMLInputElement>(c)!.value);
-  const addCopies = (make: (i: number, ax: Vec) => Extrude[]) => {
-    const ax = AXES[panel.querySelector<HTMLSelectElement>('.ax')!.value];
+  const axSel = panel.querySelector<HTMLSelectElement>('.ax')!;
+  axSel.onchange = () => { if (axSel.value === 'pick') { patPickFor = f.id; showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); } };
+  const ref = () => axSel.value === 'ref' && patRef ? patRef : { ax: AXES[axSel.value] ?? AXES.Z, c: [0, 0, 0] as Vec };
+  const edgesOf = features.filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !!e.edge && (e.edge.a.f === f.id || e.edge.b.f === f.id));
+  const addCopies = (make: (i: number) => { g: Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec }[]) => {
     pushHistory();
-    const cs = make(Math.max(2, Math.round(num('.cnt')) || 2), ax);
-    add(...cs); selId = cs.at(-1)!.id; refresh();
+    const cs = make(Math.max(2, Math.round(num('.cnt')) || 2));
+    for (const { g, pt, dir } of cs) {
+      add(g);
+      for (const e of edgesOf) { const c = structuredClone(e); delete c.edge; add({ ...c, id: nextId++, at: pt(e.at), dir: dir(e.dir), body: g.body }); } // Kante findet der Kern neu
+    }
+    selId = cs.at(-1)!.g.id; refresh();
   };
-  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, ax) =>
-    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, ax.map(x => x * num('.dist') * U() * (i + 1)) as Vec)));
-  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, ax) =>
-    Array.from({ length: n - 1 }, (_, i) => movedCopy(f, nextId++, [0, 0, 0], ax, 2 * Math.PI * (i + 1) / n)));
-  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, ax) => [mirroredCopy(f, nextId++, ax)]);
+  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies(n => Array.from({ length: n - 1 }, (_, i) => {
+    const t = ref().ax.map(x => x * num('.dist') * U() * (i + 1)) as Vec;
+    return { g: movedCopy(f, nextId++, t), pt: p => p.map((x, k) => x + t[k]) as Vec, dir: d => d };
+  }));
+  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies(n => Array.from({ length: n - 1 }, (_, i) => {
+    const { ax, c } = ref(), a = 2 * Math.PI * (i + 1) / n;
+    return { g: movedCopy(f, nextId++, [0, 0, 0], ax, a, c), pt: p => movePt(p, [0, 0, 0], ax, a, c), dir: d => rotDir(d, ax, a) };
+  }));
+  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies(() => {
+    const { ax, c } = ref();
+    return [{ g: mirroredCopy(f, nextId++, ax, c), pt: p => mirrorPt(p, ax, c), dir: d => mirrorDir(d, ax) }];
+  });
   if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
   if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
@@ -1489,7 +1513,7 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(poly.path === undefined && !poly.aux); // Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape') { axisFor = null; if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') { axisFor = null; patPickFor = null; if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
 });
 
 // ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------

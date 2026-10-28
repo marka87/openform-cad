@@ -62,7 +62,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Körper an einer Hilfsebene teilen
 - [ ] Körper an einer Fläche teilen
 - [x] Spiegeln und Muster (Reihe, Kreis) für Features; Achse/Ebene durch den Ursprung
-- [ ] Muster und Spiegeln an beliebiger Kante/Fläche, inklusive Rundungen
+- [x] Muster und Spiegeln an beliebiger Kante/Fläche, inklusive Rundungen
+- [ ] Muster und Spiegeln ganzer Körper
 - [x] Loft: Übergang zwischen zwei flachen Skizzen (zweite mit Shift dazu wählen)
 - [x] Sweep (Profil entlang Pfad, offen/geschlossen, mit Vorschau, auch als Abzug)
 - [x] Rundung/Fase an mehreren Kanten auf einmal

@@ -135,11 +135,23 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       enthält BRepAlgoAPI_Defeaturing nicht; bräuchte einen eigenen
       opencascade.js-Build (Entscheidung des Nutzers, siehe Offene Fragen).
 - [x] T6.2 DONE — Drehkörper um eine beliebige gerade Kante.
-- [ ] T6.3 TODO — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
+- [x] T6.3 DONE — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
       Rundungen und ganze Körper.
+
+- [ ] T6.4 TODO — Muster/Spiegeln für ganze Körper (Kopie + Bewegung je
+      Exemplar), heute nur Kopieren mit Strg+D.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T6.3: Muster/Spiegeln mit Bezug „Kante oder Fläche anklicken“
+  (Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
+  bzw. Spiegelebene); Rundungen/Fasen an den Flächen des Features werden
+  mitkopiert (Kante findet der Kern neu). Fehler nebenbei behoben: Kopien
+  trugen den Flächenbezug des Originals mit und wären auf dessen Fläche
+  zurückgezogen worden; Kopien drehen jetzt auch eine freie Drehachse mit.
+  Gelernt: ein Klick genau auf den Nahtpunkt eines Kreises trifft zwei
+  Kantenstücke, dann gibt es bewusst keinen Einzelbezug (Fase bleibt rund).
+  Ganze Körper als Muster: noch nicht (T6.4). Im Browser geprüft.
 - 2026-10-28 T6.2: Drehkörper um eine beliebige Gerade in der
   Skizzenebene (`axisLine`), im Seitenfeld „Drehen um → Kante anklicken“;
   die Kante muss in der Skizzenebene liegen (sonst Hinweis). revAxis() in

@@ -704,3 +704,20 @@ test('Drehkörper um eine beliebige Gerade in der Skizzenebene (T6.2)', () => {
   const half = buildBody([{ ...base, rev: 90, axisLine: { p: [2, 0, 0] as Vec, d: [0, 0, -1] as Vec } }]);
   expect(half.origins.get(1)!.map(o => o?.tag).sort()).toEqual(['end', 'start', 'x0', 'x1', 'y0', 'y1']);
 });
+
+test('Spiegeln an einer Ebene, die nicht durch den Ursprung geht; Kopie verliert den Flächenbezug (T6.3)', () => {
+  const h = { ...sketchFeature('circle', TOP, [0, 5], [2, 5], 2, true)!, d: -4 };   // Bohrung bei x = 5
+  const fs: Feature[] = [box(), h];
+  for (let n = 0; n < 2; n++) { const r = buildBody(fs); for (const [id, p] of r.fixes) Object.assign(fs.find(f => f.id === id)!, p); }
+  expect(h.face).toBeTruthy();
+  const m = mirroredCopy(h, 3, [1, 0, 0], [10, 0, 0]);                              // Spiegelebene x = 10 → Bohrung bei x = 15
+  expect(m.face).toBeUndefined();
+  const r = buildBody([...fs, m]);
+  expect(r.failed).toEqual([]);
+  const walls = r.origins.get(1)!.filter(o => o?.tag === 'r').length;
+  expect(walls).toBe(2);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 - 2 * Math.PI * 4 * 4, 1);
+  const rot = movedCopy(h, 4, [0, 0, 0], [0, 1, 0], Math.PI, [10, 0, -5]);          // 180° um die Hochachse durch die Deckelmitte
+  expect(rot.face).toBeUndefined();
+  expect(buildBody([...fs, rot]).failed).toEqual([]);
+});
