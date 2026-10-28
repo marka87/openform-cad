@@ -3,6 +3,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -27,13 +30,21 @@ const HINTS: Record<Tool, string> = {
 // ---------- Szene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(devicePixelRatio);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 const el = renderer.domElement;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e2126);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(80, 150, 60); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(80, 150, 60); scene.add(sun);
+// weiche Schatten auf einen unsichtbaren Boden, der nur den Schatten zeigt
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.3;
+Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 150, bottom: -150, near: 1, far: 500 });
+const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-100, 60, -80); scene.add(fill);
+const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.ShadowMaterial({ opacity: 0.22 }));
+shadowFloor.rotation.x = -Math.PI / 2; shadowFloor.position.y = -0.03; shadowFloor.receiveShadow = true; shadowFloor.raycast = () => {};
+scene.add(shadowFloor);
 const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
@@ -140,7 +151,11 @@ function bodyMesh(m: BodyMesh) {
   }));
   const eg = new THREE.BufferGeometry();
   eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
-  mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x1a1d22 }))); // Kanten sind anklickbar
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))); // unsichtbar, zum Anklicken
+  const fat = new LineSegments2(new LineSegmentsGeometry().setPositions(m.lines), new LineMaterial({ color: 0x1a1d22, linewidth: 1.6 }));
+  fat.raycast = () => {};
+  mesh.add(fat);
   // Hervorheben beim Überfahren: teilen sich die Puffer des Körpers, zeigen per drawRange nur eine Fläche bzw. Kante
   const hf = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
     color: 0xff9a3c, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
@@ -148,7 +163,7 @@ function bodyMesh(m: BodyMesh) {
   const he = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false }));
   he.geometry.setAttribute('position', eg.attributes.position);
   for (const o of [hf, he]) { o.visible = false; o.raycast = () => {}; o.renderOrder = 3; mesh.add(o); }
-  Object.assign(mesh.userData, { body: m.body, faces: m.faces, edges: m.edges, hf, he });
+  Object.assign(mesh.userData, { body: m.body, faces: m.faces, edges: m.edges, hf, he, fat });
   return mesh;
 }
 
@@ -1123,8 +1138,9 @@ let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
 function applyDisplay() {
   localStorage.setItem('openform-view', JSON.stringify(display));
-  if (display.render && !envMap) envMap = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = display.render ? envMap : null;
+  envMap ??= new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envMap;
+  scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   grid.visible = fine.visible = !display.render;
   renderer.localClippingEnabled = !!display.section;
@@ -1139,9 +1155,9 @@ function applyDisplay() {
     m.wireframe = display.wire;
     m.transparent = display.glass; m.opacity = display.glass ? 0.35 : 1; m.depthWrite = !display.glass;
     m.metalness = display.render ? 0.35 : 0.1; m.roughness = display.render ? 0.35 : 0.6;
-    m.clippingPlanes = (lines.material as THREE.Material).clippingPlanes = display.section ? [cut] : null;
+    m.clippingPlanes = (lines.material as THREE.Material).clippingPlanes = mesh.userData.fat.material.clippingPlanes = display.section ? [cut] : null;
     m.needsUpdate = true;
-    lines.visible = display.edges;
+    mesh.userData.fat.visible = display.edges;
   }
   document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => {
     const v = display[b.dataset.show as 'wire'];
