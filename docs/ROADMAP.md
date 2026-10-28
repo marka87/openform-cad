@@ -37,13 +37,13 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Skizzen spiegeln und als Muster (Reihe, Kreis) vervielfachen – gilt auch für Körper-Features, siehe M3
 - [ ] Trimmen und Verlängern von Linien (heute teils durch Bereiche abgedeckt)
 - [ ] Hilfsgeometrie (Konstruktionslinien, die keine Fläche bilden)
-- [x] Raster auf Flächen beginnt am Lotpunkt des Ursprungs (nicht mehr am Klickpunkt)
+- [x] Raster auf einer Fläche (Doppelklick oder Leertaste), passend zum Bauteil; Skizzen landen in dieser Ebene
 - [x] Versetzte Skizzenebenen (Hilfsebene, Werkzeug E)
 
 ## M3 – Modellieren
 - [x] Feature-Baum (Liste „Schritte“): anzeigen, auswählen/ändern, ein-/ausschalten, umsortieren
 - [x] Feature-Baum: „bis hier“ zurückspulen (neue Schritte kommen dorthin), umbenennen (Doppelklick), per Ziehen umsortieren
-- [ ] Skizzen hängen an ihrer Fläche: wird die Fläche verschoben, wandert die Bohrung mit
+- [x] Skizzen, Rundungen und Schalen hängen an ihrer Fläche/Kante und wandern mit (Epic 1, docs/TASKS.md)
 - [x] Mehrere Körper: Skizze auf dem Boden = neuer Körper, auf einer Fläche = dessen Körper; Körperliste
 - [x] Körper kopieren (Strg+D)
 - [x] Körper benennen, ein-/ausblenden, eigene Farbe

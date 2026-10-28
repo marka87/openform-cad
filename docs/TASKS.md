@@ -113,6 +113,23 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       Nutzer steht aus. macOS/Linux: BLOCKED (hier nicht baubar, braucht
       einen Mac/Linux-Rechner oder GitHub Actions – Entscheidung des Nutzers).
 
+## Epic 5: Skizzieren (Wunsch des Nutzers, 2026-10-28)
+- [ ] T5.1 TODO — Hilfslinien: Linien, die keine Fläche bilden, nur zum
+      Einrasten und Bemaßen (Umschalter im Linien-Werkzeug, gestrichelt).
+- [ ] T5.2 TODO — Trimmen: Stück einer Skizzenlinie zwischen zwei
+      Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
+- [ ] T5.3 TODO — Körperkanten in die Skizzenebene projizieren (als
+      Hilfslinien, an den Körper gebunden).
+- [ ] T5.4 TODO — Weitere Abhängigkeiten: Winkel zwischen Seiten, fester
+      Punkt, Tangente Linie–Bogen, Radius eines Bogens.
+
+## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
+- [ ] T6.1 TODO — Fläche versetzen (Offset Face) und Fläche löschen
+      (Körper heilt die Lücke), mit Bezug auf die Fläche.
+- [ ] T6.2 TODO — Drehkörper um eine beliebige gerade Kante.
+- [ ] T6.3 TODO — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
+      Rundungen und ganze Körper.
+
 ## Log
 (neueste oben)
 - 2026-10-28 Wunsch des Nutzers: Doppelklick auf eine Fläche legt dort ein
