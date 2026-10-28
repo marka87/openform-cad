@@ -7,7 +7,8 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
-import { bulge3, ellipseFeature, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
+import { openSheetEditor, showSheet } from './sheetEditor';
+import { bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -96,9 +97,10 @@ let meta: Record<number, BodyMeta> = {}; // Name, Sichtbarkeit, Farbe, Werkstoff
 let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werden berechnet, neue Schritte kommen dorthin
 const live = () => roll === null ? features : features.slice(0, roll);
 function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else { features.splice(roll, 0, ...fs); roll += fs.length; } }
-const snapshot = () => JSON.stringify({ features, nextId, meta, roll });
+let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
+const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims });
 function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
-function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; roll = d.roll ?? null; }
+function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; roll = d.roll ?? null; sheetDims = d.dims ?? []; }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
@@ -231,7 +233,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       for (const [id, p] of data.fixes) { const f = features.find(g => g.id === id); if (f) Object.assign(f, p); }
       rebuild(); save();
     } else if (pending) requestBuild();
-  } else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
+  } else if (data.type === 'sheet') showSheet(data);
+  else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
   else alert('Noch kein Körper vorhanden.');
@@ -1153,7 +1156,7 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; clearSel(); refresh(); } };
+$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 $('bSave').onclick = () => download('modell.json', new Blob([snapshot()], { type: 'application/json' }));
@@ -1174,14 +1177,26 @@ $('bStl').onclick = () => send({ type: 'export', format: 'stl' });
 $('bStep').onclick = () => send({ type: 'export', format: 'step' });
 // ---------- Zeichnung: Blatt als SVG oder drucken (PDF), Ansichten als DXF ----------
 let printNext = false; // nächstes Blatt drucken statt speichern
-function sheet(format: 'A4' | 'A3', print: boolean) {
+function sheetInfo(format: 'A4' | 'A3') {
   const b = bodyIds.find(b => !meta[b]?.hidden) ?? bodyIds[0];
+  return { sheet: format, title: (b !== undefined && meta[b]?.name) || 'Modell', material: b !== undefined ? meta[b]?.mat ?? '' : '', date: new Date().toLocaleDateString('de-DE'), unit: display.unit };
+}
+function sheet(format: 'A4' | 'A3', print: boolean) {
   printNext = print;
-  send({ type: 'export', format: 'svg', info: { sheet: format, title: (b !== undefined && meta[b]?.name) || 'Modell', material: b !== undefined ? meta[b]?.mat ?? '' : '', date: new Date().toLocaleDateString('de-DE') } });
+  send({ type: 'export', format: 'svg', info: sheetInfo(format), dims: sheetDims });
+}
+function editSheet() {
+  if (!bodyIds.length) return alert('Noch kein Körper vorhanden.');
+  openSheetEditor({
+    request: f => send({ type: 'sheet', info: sheetInfo(f), dims: sheetDims }),
+    dims: () => sheetDims,
+    change: (d, history) => { if (history) pushHistory(); sheetDims = d; save(); },
+    print: f => sheet(f, true), save: f => sheet(f, false),
+  });
 }
 $('bSvg').onclick = e => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  showMenu(r.left, r.bottom + 4, [['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
+  showMenu(r.left, r.bottom + 4, [['Zeichnung bemaßen …', editSheet], null, ['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
     ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
     ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ]]);
 };

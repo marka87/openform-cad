@@ -94,10 +94,15 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       anklicken statt zeichnen).
 
 ## Epic 3: Einzelbemaßung Zeichnung
-- [ ] T3.1 TODO — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
-- [ ] T3.2 TODO — Lineares Maß setzen und verschieben.
-- [ ] T3.3 TODO — Durchmesser, Radius, Winkel.
-- [ ] T3.4 TODO — Toleranzen, Export nach SVG/PDF/DXF prüfen.
+- [x] T3.1 DONE — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
+- [x] T3.2 DONE — Lineares Maß setzen und verschieben.
+- [x] T3.3 DONE — Durchmesser, Radius, Winkel.
+- [x] T3.4 DONE — Toleranzen, Export nach SVG/PDF/DXF prüfen.
+
+- [ ] T3.5 TODO — Maße auch in der Iso-Ansicht und Kreise, die schräg
+      gesehen werden (heute nur Kreise, die von vorn zu sehen sind).
+- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen (heute erst nach dem
+      Klick sichtbar).
 
 ## Epic 4: Tauri-Desktop
 - [ ] T4.1 TODO — Tauri-Shell, WASM lädt im Build korrekt.
@@ -107,6 +112,21 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-28 T3.1–T3.4 (ein Commit, Maßobjekt, Darstellung und Editor
+  hängen eng zusammen): `Dim` im Modell (model.ts), gespeichert mit dem
+  Modell (`dims`, nicht im Verlauf der Features). Bezug: Längen über
+  Eckpunkte (PointRef = die ≥3 Flächen, die sich dort treffen),
+  ⌀/R/Winkel über EdgeRefs – damit folgen Maße Modelländerungen wie die
+  Features (Test: Quader breiter, Bohrung größer → 40, ⌀8). PROJ bildet
+  Modellpunkte wie drawProjection ab (gegen die Ansichtsgrenzen getestet).
+  Editor (src/sheetEditor.ts): Blatt im Vordergrund, Kern liefert die
+  anklickbaren Punkte/Kreise/Kanten in Blattkoordinaten. Länge h/v aus der
+  Mausrichtung, Shift = schräg; Maße ziehen, Entf löscht, Toleranz als
+  freier Text. Blatt jetzt auch in Zoll (Einheit aus der Anzeige).
+  Entscheidung: DXF bleibt reine Geometrie 1:1 ohne Maße (für Laser/CNC
+  stören Maßlinien); Maße gehen in SVG und PDF. Im Browser geprüft: Länge,
+  ⌀ mit H7, Winkel, Verschieben. Nicht auflösbare Maße stehen im Editor-
+  Hinweis mit Grund und werden nicht gezeichnet.
 - 2026-10-28 T2.3: Seitenfeld einer flachen Skizze: „Zug: Pfad zeichnen“
   bzw. „quer dazu“ (Pfadebene = Profilnormale + x- bzw. y-Achse der Skizze,
   Start in der Profilmitte). Gezeichnet wird mit dem Linien-Werkzeug

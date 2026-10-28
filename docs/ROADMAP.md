@@ -101,7 +101,8 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Erste Zeichnung als SVG: Vorder-, Drauf-, Seitenansicht mit verdeckten Kanten
 - [x] Iso-Ansicht, Blatt A4/A3 mit Normmaßstab, Schriftfeld
 - [x] Gesamtmaße je Ansicht
-- [ ] Einzelmaße (Bohrungen, Abstände) und Beschriftungen
+- [x] Einzelmaße: Länge, Durchmesser, Radius, Winkel, Toleranz; folgen Modelländerungen
+- [ ] Beschriftungen, Schnittansichten, Detailansichten
 - [ ] Schnitt- und Detailansichten
 - [x] PDF über Drucken („Als PDF speichern“), Ansichten als DXF (Bögen als kurze Strecken)
 

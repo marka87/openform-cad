@@ -1,9 +1,9 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
-import { measureVolume, setOC } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep, sheetSVG } from './kernel';
-import { edgeRef, faceRef, resolveEdge, resolveFace } from './topo';
-import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type EdgeOp, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { drawProjection, measureVolume, setOC } from 'replicad';
+import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
+import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
+import { bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -564,4 +564,46 @@ test('Zug: geschlossener Pfad, Knicke auf Gehrung oder als Bogen im Pfad (T2.2)'
   expect(measureVolume(bent.bodies.get(2)!)).toBeCloseTo(Math.PI * 4 * (40 + 2 * Math.PI * 5), 0);
   const back = await loadStep(await forExport(bent.body!).blobSTEP().text());     // STEP hin und zurück: gleicher Körper
   expect(measureVolume(back)).toBeCloseTo(measureVolume(bent.body!), 0);
+});
+
+test('Maße in der Zeichnung: Bezug auf Modellpunkte und Kanten, folgen Änderungen (T3.1)', () => {
+  // Projektion stimmt mit drawProjection überein (Quader 20 × 10 × 10 mit Ecke im Ursprung)
+  const r0 = buildBody([box()]), ex = forExport(r0.body!);
+  const corners = [0, 20].flatMap(x => [0, 10].flatMap(y => [-10, 0].map(z => [x, y, z])));
+  (['front', 'bottom', 'right'] as const).forEach((v, i) => {
+    const [[x0, y0], [x1, y1]] = drawProjection(ex, v).visible.boundingBox.bounds, p = corners.map(PROJ[i]);
+    expect([Math.min(...p.map(q => q[0])), Math.min(...p.map(q => q[1])), Math.max(...p.map(q => q[0])), Math.max(...p.map(q => q[1]))].map(x => +x.toFixed(3) + 0)).toEqual([x0, y0, x1, y1].map(x => +x.toFixed(3) + 0));
+  });
+  // Breite oben vorne (vorne, waagrecht), Durchmesser der Bohrung (oben), Winkel an einer Deckelecke (oben)
+  let r = buildBody([box(), hole(-4)]);
+  const nm = r.names.get(1)!, s = r.bodies.get(1)!;
+  const a = pointRef(nm, [0, 10, 0])!, b = pointRef(nm, [20, 10, 0])!;
+  const rim = s.edges.find(e => e.geomType === 'CIRCLE' && Math.abs(e.startPoint.y - 10) < 1e-6)!;
+  const e1 = s.edges.find(e => Math.abs(e.pointAt(0.5).x - 10) < 1e-6 && Math.abs(e.pointAt(0.5).y - 10) < 1e-6 && Math.abs(e.pointAt(0.5).z) < 1e-6)!;   // vordere Deckelkante
+  const e2 = s.edges.find(e => Math.abs(e.pointAt(0.5).x - 20) < 1e-6 && Math.abs(e.pointAt(0.5).y - 10) < 1e-6 && Math.abs(e.pointAt(0.5).z + 5) < 1e-6)!; // rechte Deckelkante
+  const dims: Dim[] = [
+    { id: 1, v: 0, t: 'lin', a, b, dir: 'h', off: 8 },
+    { id: 2, v: 1, t: 'dia', e: edgeRef(nm, rim, s)!, off: 6, tol: 'H7' },
+    { id: 3, v: 1, t: 'ang', e: edgeRef(nm, e1, s)!, e2: edgeRef(nm, e2, s)!, off: 6 },
+  ];
+  expect(resolveDims(dims, r.bodies, r.names).ok.map(d => +d.val.toFixed(3))).toEqual([20, 6, 90]);
+  const wide = box(); wide.p.w = 40;                                   // Quader breiter, Bohrung größer
+  const big = hole(-4); big.p.r = 4;
+  r = buildBody([wide, big]);
+  const res = resolveDims(dims, r.bodies, r.names);
+  expect(res.bad).toEqual([]);
+  expect(res.ok.map(d => +d.val.toFixed(3))).toEqual([40, 8, 90]);
+  const svg = sheetSVG(r.body!, { sheet: 'A4', title: 'T', material: '', date: '' }, res.ok);
+  expect(svg).toContain('>40<');
+  expect(svg).toContain('⌀8 H7');
+  expect(svg).toContain('>90°<');
+  r = buildBody([wide]);                                                 // Bohrung weg → Maß 2 und nur dieses wird gemeldet
+  expect(resolveDims(dims, r.bodies, r.names).bad.map(x => x[0])).toEqual([2]);
+});
+
+test('Zeichnung in Zoll: Gesamt- und Einzelmaße umgerechnet (T3.4)', () => {
+  const r = buildBody([box()]);
+  const svg = sheetSVG(r.body!, { sheet: 'A4', title: 'T', material: '', date: '', unit: 'in' });
+  expect(svg).toContain('>0,787<');                 // 20 mm
+  expect(svg).toContain('· Zoll');
 });

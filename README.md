@@ -55,7 +55,8 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 | Letztes Werkzeug | `Leertaste` |
 | Ansichtswürfel | Oben links: Seite anklicken; Mausrad zoomt zur Mausposition, Doppelklick zentriert |
 | Hilfsebene | `E`, Fläche anklicken = Ebene 10 mm davor (ziehen = Abstand), darauf skizzieren |
-| Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld; Ansichten als DXF; Körper als OBJ |
+| Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld, in mm oder Zoll; Ansichten als DXF; Körper als OBJ |
+| Bemaßen | „Zeichnung / mehr“ → „Zeichnung bemaßen …“: Länge (zwei Ecken, dann ablegen; Shift = schräg), ⌀ / R (Kreis anklicken), Winkel (zwei Kanten); Maße ziehen = verschieben, Entf = löschen, Toleranz als Text (±0,1, H7). Maße hängen am Modell und folgen Änderungen |
 | Übergang (Loft) | Flache Skizze anklicken, zweite mit Shift dazu → Seitenfeld „Übergang (Loft)“ |
 | Zug (Sweep) | Flache Skizze anklicken → „Zug: Pfad zeichnen“ (oder „quer dazu“), Pfad vom Profil weg klicken, Vorschau läuft mit; Enter = offen, Klick auf den Anfang = geschlossen; runde Ecken = Bögen im Pfad; im Seitenfeld „Abziehen“ |
 | Gewinde / Senkung | Bohrung anklicken → Seitenfeld: Kernloch M3–M12, „Senkung anlegen“ |

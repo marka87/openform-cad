@@ -3,7 +3,7 @@
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
 import { cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
-import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type Shell, type Sweep, type Vec } from './model';
+import { bounds, movedCopy, sideOf, type EdgeOp, type Extrude, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
 // Extrusion/Drehkörper/Loft: 'start' = Boden, 'end' = Deckel, Seiten wie in Part
@@ -334,4 +334,34 @@ export function anchorFaces(f: Shell, s: Shape3D, named: Named): Anchor<{ faces:
   const rs = f.faces.map(ref => resolveFace(ref, s, named)), bad = rs.find(r => !r.ok);
   if (bad && !bad.ok) throw fail(bad, 'Offene Fläche der Schale');
   return { faces: rs.map(r => r.ok ? r.shape : null!), sure: rs.every(r => r.ok && r.sure) };
+}
+
+// ── Punkte und Kreise für Maße ──
+const ends = (f: Face) => f.edges.flatMap(e => [e.startPoint.toTuple(), e.endPoint.toTuple()]);
+const same = (a: ArrayLike<number>, b: ArrayLike<number>) => Math.hypot(...sub3(a, b)) < 1e-6;
+
+// Eckpunkt P über die Flächen benennen, die sich dort treffen; null, wenn es weniger als drei benannte sind
+export function pointRef(named: Named, P: Vec): PointRef | null {
+  const f = named.filter(n => ends(n.face).some(q => same(q, P))).map(n => n.o);
+  return f.length >= 3 ? { f, fp: P } : null;
+}
+
+// Punkt, an dem alle Flächen des Bezugs zusammentreffen; mehrere (aufgespaltene Flächen) → der nächste zu fp, unsicher
+export function resolvePoint(ref: PointRef, named: Named): { ok: true; p: Vec; sure: boolean } | { ok: false; why: 'lost' | 'ambiguous' } {
+  const pts = ref.f.map(o => named.filter(n => sameOrigin(n.o, o)).flatMap(n => ends(n.face)));
+  const hits = pts[0].filter(p => pts.every(l => l.some(q => same(q, p)))).filter((p, i, a) => a.findIndex(q => same(q, p)) === i) as Vec[];
+  if (hits.length === 1) return { ok: true, p: hits[0], sure: true };
+  if (!hits.length) return { ok: false, why: 'lost' };
+  const d = hits.map(p => Math.hypot(...sub3(p, ref.fp))).sort((x, y) => x - y);
+  if (d[1] - d[0] < 1e-6) return { ok: false, why: 'ambiguous' };
+  return { ok: true, p: hits.find(p => Math.hypot(...sub3(p, ref.fp)) === d[0])!, sure: false };
+}
+
+// Kreis einer Kreiskante: Mitte, Achse, Radius
+export function circleOf(e: Edge): { c: Vec; n: Vec; r: number } | null {
+  if (e.geomType !== 'CIRCLE') return null;
+  const oc = getOC() as any, ad = new oc.BRepAdaptor_Curve(e.wrapped), ci = ad.Circle(), l = ci.Location(), d = ci.Axis().Direction();
+  const out = { c: [l.X(), l.Y(), l.Z()] as Vec, n: [d.X(), d.Y(), d.Z()] as Vec, r: ci.Radius() };
+  ad.delete();
+  return out;
 }

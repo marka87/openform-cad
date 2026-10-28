@@ -39,6 +39,13 @@
   #tree .row.later { opacity:.4; font-style:italic; }
   #tree .row.bad span { color:#e5736b; }
   #tree .row.unsure span { color:#e0b84f; }
+  #sheetEd { position:fixed; inset:0; z-index:50; background:#2a2e35; display:none; flex-direction:column; }
+  #sheetEd .bar { display:flex; gap:6px; align-items:center; padding:8px 10px; background:var(--panel); flex-wrap:wrap; }
+  #sheetEd .bar button.on { color:var(--accent); outline:1px solid var(--accent); }
+  #sheetEd .hint { padding:4px 12px; color:var(--muted); font-size:12px; }
+  #sheetEd .area { flex:1; min-height:0; padding:10px; display:flex; justify-content:center; cursor:crosshair; }
+  #sheetEd .area svg { height:100%; max-width:100%; box-shadow:0 2px 12px #0008; }
+  #sheetEd [data-dim] { cursor:move; }
   #tree .row span[contenteditable=true] { background:#1e2126; border-radius:4px; padding:0 3px; }
   #tree .rollEnd { display:block; width:100%; margin:0 0 6px; background:#4a3a20; color:var(--accent); border-radius:6px; padding:4px; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }

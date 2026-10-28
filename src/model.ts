@@ -1,5 +1,5 @@
 // Datenmodell und Geometrie-Logik ohne Three.js/OpenCascade, damit sie testbar bleibt.
-import type { EdgeRef, FaceRef } from './topo';
+import type { EdgeRef, FaceRef, Origin } from './topo';
 export type Vec = [number, number, number];
 export interface Frame { o: Vec; n: Vec; u: Vec; v: Vec } // Ursprung, Normale, Skizzenachsen (v = n × u)
 export interface Extrude extends Frame {
@@ -44,6 +44,17 @@ export interface Sweep extends Frame { id: number; type: 'sweep'; profile: numbe
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
 export interface Move { id: number; type: 'move'; body: number; c: Vec; q: number[]; t: Vec; s?: number; hidden?: boolean }
+// Eckpunkt des Modells für Maße: dort, wo die Flächen f zusammentreffen (mind. drei); fp = Lage beim Anlegen (Prüfwert)
+export interface PointRef { f: Origin[]; fp: Vec }
+// Maß in der Zeichnung (Epic 3), gehört zum Modell, nicht zum Verlauf. v = Ansicht (0 vorne, 1 oben, 2 seitlich).
+// lin: Abstand der Punkte a, b – waagrecht (dir h), senkrecht (v) oder entlang der Verbindung (al);
+// dia/rad: Kreiskante e; ang: Winkel zwischen den geraden Kanten e und e2.
+// off = Lage der Maßlinie in mm auf dem Blatt (lin: Abstand vom Punkt a, dia/rad/ang: Abstand der Zahl), tol = Toleranz-Text
+export interface Dim {
+  id: number; v: 0 | 1 | 2; t: 'lin' | 'dia' | 'rad' | 'ang';
+  a?: PointRef; b?: PointRef; dir?: 'h' | 'v' | 'al'; e?: EdgeRef; e2?: EdgeRef;
+  off: number; tol?: string;
+}
 // Angaben je Körper (nicht Teil des Verlaufs): Name, ausgeblendet, eigene Farbe, Werkstoff
 export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat?: string }
 // Dichte in g/cm³
