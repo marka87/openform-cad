@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { measureVolume, setOC } from 'replicad';
 import { buildBody, forExport, loadStep } from './kernel';
-import { alignTo, applyPush, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
+import { alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Extrude, type Feature } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -202,7 +202,7 @@ test('Kantenmitten und Ausrichten an Punkten', () => {
 test('Einrasten an Schnittpunkten, nicht an Stoßstellen', () => {
   const s = (a: number[], b: number[]) => [a, b] as [number, number, number][];
   const cross = [s([0, 0, 0], [10, 0, 10]), s([0, 0, 10], [10, 0, 0])];
-  expect(snapTo([5.5, 0, 4.6], [], cross, 1)).toEqual({ p: [5, 0, 5], kind: 'point' });
+  expect(snapTo([5.5, 0, 4.6], [], cross, 1)).toEqual({ p: [5, 0, 5], kind: 'cross' });
   const chain = [s([0, 0, 0], [5, 0, 0]), s([5, 0, 0], [10, 0, 1])];   // zwei Stücke einer Kurve
   expect(snapTo([5.2, 0, 0.3], [], chain, 1)?.kind).toBe('line');
 });
@@ -298,4 +298,14 @@ test('Bemaßungen und Abhängigkeiten mit planegcs', async () => {
   expect(solveSketch(gcs, pts, [{ t: 'h', i: 0 }, { t: 'v', i: 0 }])).toBeNull();                 // fällt zur Linie zusammen
   expect(solveSketch(gcs, pts, [{ t: 'len', i: 0, val: 30 }, { t: 'len', i: 0, val: 20 }])).toBeNull(); // Widerspruch
   gcs.destroy_gcs_module();
+});
+
+test('Fläche auf eingetipptes Maß ziehen', () => {
+  const b = box(), b0 = structuredClone(b); // 20 × 10, Höhe 10
+  for (const [part, k, v, key] of [['end', 1, 25, 'd'], ['x1', 1, 30, 'w'], ['x0', -1, 12, 'w'], ['y0', -1, 4, 'h']] as const) {
+    const f = structuredClone(b0);
+    applyPush(f, b0, part, k, pushTo(part, b0, v)! * k);
+    expect(key === 'd' ? f.d : f.p[key]).toBeCloseTo(v);
+  }
+  expect(pushTo('arc', b0, 5)).toBeNull();
 });

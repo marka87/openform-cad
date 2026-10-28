@@ -183,7 +183,7 @@ function crossing(a: Vec, b: Vec, c: Vec, d: Vec): Vec | null {
 }
 
 // Einrasten: nächster Punkt bzw. Schnittpunkt innerhalb tol (haben Vorrang), sonst nächster Punkt auf einer Strecke; sonst null
-export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: Vec; kind: 'point' | 'line' } | null {
+export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: Vec; kind: 'point' | 'cross' | 'line' } | null {
   const dist = (q: Vec) => Math.hypot(...sub(P, q));
   let best: Vec | null = null, d = tol;
   for (const q of points) if (dist(q) < d) { d = dist(q); best = q; }
@@ -197,7 +197,7 @@ export function snapTo(P: Vec, points: Vec[], segs: Vec[][], tol: number): { p: 
       const x = crossing(close[i][0], close[i][1], close[j][0], close[j][1]);
       if (x && dist(x) < d) { d = dist(x); best = x; }
     }
-  if (best) return { p: best, kind: 'point' };
+  if (best) return { p: best, kind: 'cross' };
   for (const [a, b] of close) {
     const ab = sub(b, a), l = dot(ab, ab);
     if (!l) continue;
@@ -408,6 +408,20 @@ function extrudeOwner(features: Feature[], P0: ArrayLike<number>, N0: ArrayLike<
     if (Math.abs(nv) > 0.9 && inX && Math.abs(y - p.y - p.h) < eps) return { f, part: 'y1', k: Math.sign(nv) };
   }
   return null;
+}
+
+// Umkehrung von applyPush: Verschiebung m (= t·k), die den Wert im HUD genau auf v bringt; null = nicht eintippbar
+export function pushTo(part: Part, f0: Extrude, v: number): number | null {
+  const p = f0.p;
+  switch (part) {
+    case 'end': return v - f0.d;
+    case 'start': return f0.d - v;
+    case 'seg': return v;
+    case 'r': return v - p.r;
+    case 'x1': case 'x0': return part === 'x1' ? v - p.w : p.w - v;
+    case 'y1': case 'y0': return part === 'y1' ? v - p.h : p.h - v;
+    default: return null;
+  }
 }
 
 // Verschiebt den angefassten Teil um t entlang der Flächennormale. Gibt [Beschriftung, Wert] fürs HUD zurück.

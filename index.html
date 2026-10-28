@@ -48,6 +48,9 @@
   #views button:hover { background:#353a42; }
   #views input[type=color] { width:26px; height:24px; border:0; padding:0; background:transparent; cursor:pointer; vertical-align:middle; }
   #views button.on { border-color:var(--accent); color:var(--accent); }
+  #snapTip { position:fixed; pointer-events:none; font:11px system-ui; color:#1e2126; background:#ffd2a8; border-radius:4px; padding:1px 5px; display:none; }
+  #hud b { display:inline-block; min-width:34px; background:#1e2126; color:var(--accent); border-radius:4px; padding:0 4px; margin:0 2px; text-align:right; }
+  #hud b.on { outline:2px solid #1e2126; background:#fff; color:#1e2126; }
   #dims { position:fixed; inset:0; pointer-events:none; }
   #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:var(--text); background:rgba(42,46,53,.85);
     border-radius:4px; padding:1px 4px; white-space:nowrap; }
@@ -92,6 +95,7 @@
 </div>
 <div id="panel"></div>
 <div id="hud"></div>
+<div id="snapTip"></div>
 <div id="tree"></div>
 <div id="dims"></div>
 <div id="views">

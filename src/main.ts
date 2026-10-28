@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
+import { pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -47,9 +47,18 @@ for (const [d, c] of [[[1, 0, 0], 0xe05555], [[0, 0, -1], 0x55c060], [[0, 1, 0],
 const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
 snapMark.visible = false; snapMark.renderOrder = 2; scene.add(snapMark);
 // Hilfslinien beim Ausrichten: vom Bezugspunkt zum Mauszeiger
-const guides = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.6, depthTest: false }));
+const guides = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8, depthTest: false }));
 guides.frustumCulled = false; scene.add(guides);
-const hideSnap = () => { snapMark.visible = false; guides.visible = false; };
+const snapTip = document.getElementById('snapTip')!;
+const hideSnap = () => { snapMark.visible = false; guides.visible = false; snapTip.style.display = 'none'; };
+// Beschriftung neben dem Einrastpunkt, wie in SketchUp
+function showSnapTip(p: THREE.Vector3, text: string) {
+  const s = p.clone().project(camera), r = el.getBoundingClientRect();
+  snapTip.textContent = text;
+  snapTip.style.display = 'block';
+  snapTip.style.left = `${r.left + (s.x + 1) / 2 * r.width + 12}px`;
+  snapTip.style.top = `${r.top + (1 - s.y) / 2 * r.height - 22}px`;
+}
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
 el.addEventListener('pointerdown', onDown);
@@ -380,13 +389,26 @@ function finishSketch(b?: number[]) {
   const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
   if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; features.push(f); selId = f.id; setTool('select'); }
 }
+// Eingetippte Maße als Felder im HUD: Rechteck/Langloch zwei Felder (Tab wechselt), sonst eins
+function showTyped() {
+  const two = drag?.kind === 'sketch' && (tool === 'rect' || tool === 'slot'), parts = typed.split('x');
+  const field = (v: string | undefined, on: boolean) => `<b class="${on ? 'on' : ''}">${v || '…'}</b>`;
+  hud.style.display = 'block';
+  hud.innerHTML = (two ? `B ${field(parts[0], parts.length === 1)} × T ${field(parts[1], parts.length === 2)}` : field(parts[0], true)) + ' mm ⏎';
+}
 // Eingetippte Maße anwenden: Rechteck/Langloch „B x T“, Kreis/n-Eck Radius (Richtung der Maus), Linie Länge in Mausrichtung
 function applyTyped() {
   const v = typed.split(/[x*; ]+/).map(Number).filter(n => isFinite(n) && n > 0);
   typed = '';
   hud.style.display = 'none';
   if (!v.length) return;
-  if (drag?.kind === 'sketch') {
+  if (drag?.kind === 'push' && drag.started) { // Fläche auf genaues Maß ziehen
+    const m = pushTo(drag.part, drag.f0, v[0]);
+    if (m === null) return showNotice('Für diese Fläche gibt es kein eintippbares Maß');
+    applyPush(drag.f, drag.f0, drag.part, drag.k, m * drag.k, drag.i);
+    if (drag.part === 'seg' && !constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.f.pts = drag.f0.pts;
+    drag = null; controls.enabled = true; refresh();
+  } else if (drag?.kind === 'sketch') {
     const { a, b } = drag, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
     const end = tool === 'rect' || tool === 'slot' ? [a[0] + (Math.sign(dx) || 1) * v[0], a[1] + (Math.sign(dy) || 1) * (v[1] ?? v[0])]
       : [a[0] + (l > 1e-6 && dx ? dx / l : 1) * v[0], a[1] + (dy / l) * v[0]];
@@ -426,11 +448,15 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
     const q = [ax ? ax[0] : snap(raw[0], e), ay ? ay[1] : snap(raw[1], e)];
     const world = (r: number[]) => V(pl.o).addScaledVector(V(pl.u), r[0]).addScaledVector(V(pl.v), r[1]);
     guides.geometry.setFromPoints([ax, ay].filter(a => a).flatMap(a => [world(a!), world(q)]));
+    const cols = [ax && [0.35, 0.8, 0.4], ay && [0.9, 0.35, 0.35]].filter(c => c).flatMap(c => [...c!, ...c!]); // senkrecht grün, waagrecht rot
+    guides.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     guides.visible = !!(ax || ay);
+    if (ax || ay) showSnapTip(world(q), ax && ay ? 'an zwei Punkten ausgerichtet' : ax ? 'senkrecht zum Punkt' : 'waagrecht zum Punkt');
     return q;
   }
   snapMark.position.fromArray(s.p);
-  snapMark.scale.setScalar((s.kind === 'point' ? 5 : 3) * pxSize());
+  snapMark.scale.setScalar((s.kind === 'line' ? 3 : 5) * pxSize());
+  showSnapTip(snapMark.position, s.kind === 'line' ? 'auf Kante' : s.kind === 'cross' ? 'Schnittpunkt' : s.p.every(x => Math.abs(x) < 1e-9) ? 'Ursprung' : 'Punkt');
   return toLocal(pl, V(s.p));
 }
 const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
@@ -534,7 +560,8 @@ function onMove(e: PointerEvent) {
     const last = poly.pts.at(-1)!;
     poly.hover = q;
     showPoly([...poly.pts, q]);
-    return showHud(e, typed ? `Länge: ${typed}` : `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm`);
+    if (typed) return showTyped();
+    return showHud(e, `${Math.hypot(q[0] - last[0], q[1] - last[1]).toFixed(1)} mm · Zahl tippen`);
   }
   if (!drag) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
@@ -561,7 +588,7 @@ function onMove(e: PointerEvent) {
     disposeGroup(preview);
     if (f) {
       preview.add(buildMesh(f, 'preview'));
-      showHud(e, typed ? `Maß: ${typed}` : hudText(f));
+      if (typed) showTyped(); else showHud(e, `${hudText(f)} · Zahl tippen`);
     }
   } else {
     if (!drag.started) {
@@ -598,7 +625,7 @@ function onMove(e: PointerEvent) {
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
     rebuild();
-    showHud(e, `${label}: ${val.toFixed(1)} mm${isCut(drag.f) ? ' (Schnitt)' : ''}`);
+    if (typed) showTyped(); else showHud(e, `${label}: ${val.toFixed(1)} mm${isCut(drag.f) ? ' (Schnitt)' : ''} · Zahl tippen`);
   }
 }
 
@@ -836,9 +863,10 @@ addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   // Maße tippen, solange ein Rechteck/Kreis aufgezogen wird oder eine Linie entsteht
-  if ((drag?.kind === 'sketch' || poly?.pts.length) && !e.ctrlKey) {
-    if (/^[0-9.x ]$/.test(k) || k === ',' ) { typed += k === ',' ? '.' : k; hud.style.display = 'block'; hud.textContent = `Maß: ${typed}`; return; }
-    if (k === 'backspace' && typed) { typed = typed.slice(0, -1); hud.textContent = `Maß: ${typed}`; return; }
+  if ((drag?.kind === 'sketch' || drag?.kind === 'push' && drag.started || poly?.pts.length) && !e.ctrlKey) {
+    if (/^[0-9.]$/.test(k) || k === ',') { typed += k === ',' ? '.' : k; return showTyped(); }
+    if ((k === 'tab' || k === 'x') && drag?.kind === 'sketch' && !typed.includes('x')) { e.preventDefault(); typed += 'x'; return showTyped(); }
+    if (k === 'backspace' && typed) { typed = typed.slice(0, -1); return showTyped(); }
     if (k === 'enter' && typed) return applyTyped();
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
   }
