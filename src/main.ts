@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -705,9 +705,39 @@ function applyTyped() {
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
 // path = ID der Profilskizze: der Linienzug wird Pfad eines Zugs (Sweep) statt Skizze
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean; cons?: Con[] } | null = null;
+let snapKind = ''; // woran der letzte Zeigerpunkt eingerastet ist: point, align, grid
+let dirHit: { t: Con['t']; k?: number } | null = null; // Richtungsfang des letzten Linienpunkts; k = eigene Seite, an der er hängt
+const DIR_TEXT: Record<string, string> = { h: 'waagrecht', v: 'senkrecht', par: 'parallel', perp: 'rechtwinklig' };
+// Punkt der Linie unter dem Zeiger; ohne Punktfang rastet die neue Strecke waagrecht, senkrecht, parallel oder rechtwinklig
+// zu den eigenen Seiten und zu geraden Kanten (≥ 5 mm) in der Ebene ein (Shift = frei)
 function polyPoint(e: PointerEvent) {
-  return poly && sketchPoint(poly.pl, e);
+  const q = poly && sketchPoint(poly.pl, e);
+  dirHit = null;
+  if (!q || !poly!.pts.length || e.shiftKey || snapKind === 'point' || poly!.smooth || poly!.arcEnd || !['line', 'aux'].includes(tool)) return q;
+  const pl = poly!.pl, pts = poly!.pts, a = pts.at(-1)!;
+  const refs: { d: number[]; tag: { t: Con['t']; k?: number } }[] = [{ d: [1, 0], tag: { t: 'h' } }, { d: [0, 1], tag: { t: 'v' } }];
+  const add = (d: number[], k?: number) => {
+    const L = Math.hypot(d[0], d[1]);
+    if (L > 1e-9) refs.push({ d: [d[0] / L, d[1] / L], tag: { t: 'par', k } }, { d: [-d[1] / L, d[0] / L], tag: { t: 'perp', k } });
+  };
+  pts.slice(0, -1).forEach((p, k) => { if (!p[2]) add([pts[k + 1][0] - p[0], pts[k + 1][1] - p[1]], k); });
+  for (const [x, y] of snapSegs(pl)) {
+    if (!onPlane(pl, x) || !onPlane(pl, y) || V(x).distanceTo(V(y)) < 5) continue;
+    const lx = toLocal(pl, V(x)), ly = toLocal(pl, V(y));
+    add([ly[0] - lx[0], ly[1] - lx[1]]);
+  }
+  const s = dirSnap(a, q, refs);
+  if (!s) return q;
+  dirHit = s.tag;
+  const world = (r: number[]) => V(pl.o).addScaledVector(V(pl.u), r[0]).addScaledVector(V(pl.v), r[1]), over = 15 * pxSize();
+  guides.geometry.setFromPoints([world([a[0] - s.d[0] * over, a[1] - s.d[1] * over]), world([s.q[0] + s.d[0] * over * Math.sign((s.q[0] - a[0]) * s.d[0] + (s.q[1] - a[1]) * s.d[1] || 1), s.q[1] + s.d[1] * over * Math.sign((s.q[0] - a[0]) * s.d[0] + (s.q[1] - a[1]) * s.d[1] || 1)])]);
+  const col = s.tag.t === 'h' ? [0.9, 0.35, 0.35] : s.tag.t === 'v' ? [0.35, 0.8, 0.4] : [1, 0.6, 0.24];
+  guides.geometry.setAttribute('color', new THREE.Float32BufferAttribute([...col, ...col], 3));
+  guides.visible = true;
+  markSnap(world(s.q), 0x4da3ff, 3);
+  showSnapTip(world(s.q), DIR_TEXT[s.tag.t] + (s.tag.k !== undefined ? ` zu Seite ${s.tag.k + 1}` : ''));
+  return s.q;
 }
 function showPoly(pts: number[][]) {
   disposeGroup(preview);
@@ -724,6 +754,7 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
   if (!p) return null;
   const pts = snapPoints(pl), s = !e.shiftKey && snapTo(p.toArray() as Vec, pts, snapSegs(pl), 8 * pxSize());
   snapMark.visible = true; // Punkt am Zeiger: wo der nächste Klick landet
+  snapKind = s ? 'point' : 'grid';
   if (!s) { // waagrecht/senkrecht zu einem Punkt ausrichten, sonst Raster
     const raw = toLocal(pl, p), loc = pts.map(q => toLocal(pl, V(q)));
     const { ax, ay } = e.shiftKey ? { ax: null, ay: null } : alignTo(raw, loc, 8 * pxSize());
@@ -733,6 +764,7 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
     const cols = [ax && [0.35, 0.8, 0.4], ay && [0.9, 0.35, 0.35]].filter(c => c).flatMap(c => [...c!, ...c!]); // senkrecht grün, waagrecht rot
     guides.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     guides.visible = !!(ax || ay);
+    if (ax || ay) snapKind = 'align';
     if (ax || ay) showSnapTip(world(q), ax && ay ? 'an zwei Punkten ausgerichtet' : ax ? 'senkrecht zum Punkt' : 'waagrecht zum Punkt');
     else if (e.shiftKey) showSnapTip(world(q), 'frei');
     markSnap(world(q), e.shiftKey ? 0xffffff : 0x4da3ff, 3); // Raster blau, frei weiß
@@ -827,6 +859,7 @@ function finishPoly(closed = true) {
       const b = pts[(i + 1) % pts.length];
       return a[2] ? [] : Math.abs(a[1] - b[1]) < 1e-9 ? [{ t: 'h', i }] : Math.abs(a[0] - b[0]) < 1e-9 ? [{ t: 'v', i }] : [];
     });
+    cons.push(...poly!.cons ?? []);
     if (cons.length) f.cons = cons;
   }
   cancelPoly();
@@ -870,7 +903,10 @@ function onDown(e: PointerEvent) {
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
     drag = { kind: 'line', arc, sx: e.clientX, sy: e.clientY, started: false }; // drag hält auch die Kamera still
     if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
-    else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) poly.pts.push(q);
+    else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) {
+      poly.pts.push(q);
+      if (dirHit?.k !== undefined && (dirHit.t === 'par' || dirHit.t === 'perp')) (poly.cons ??= []).push({ t: dirHit.t, i: poly.pts.length - 2, j: dirHit.k }); // hält beim Ziehen
+    }
   } else if (tool === 'arc') { // Bogen durch drei Punkte: Anfang (nur beim ersten Mal), Ende, Punkt auf dem Bogen
     const t = sketchOn(h);
     if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: false, body: t?.body };

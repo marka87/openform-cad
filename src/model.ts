@@ -336,6 +336,19 @@ export function linePlane(f: Extrude, id: number): RefPlane | null {
   return { id, type: 'plane', c: a.map((x, k) => (x + z[k]) / 2) as Vec, n, u, v, off: 0, hidden: true };
 }
 
+// Richtungsfang beim Linienzeichnen: liegt die Strecke a→q innerhalb tol Grad an einer der Richtungen refs (Einheitsvektoren,
+// beide Orientierungen zählen), wird q auf diese Richtung gelegt (Länge entlang bleibt). Nächste Richtung gewinnt.
+export function dirSnap<T>(a: number[], q: number[], refs: { d: number[]; tag: T }[], tol = 3): { q: number[]; d: number[]; tag: T } | null {
+  const v = [q[0] - a[0], q[1] - a[1]], L = Math.hypot(v[0], v[1]);
+  if (L < 1e-6) return null;
+  let best: { q: number[]; d: number[]; tag: T } | null = null, bestAng = tol * Math.PI / 180;
+  for (const r of refs) {
+    const t = v[0] * r.d[0] + v[1] * r.d[1], ang = Math.acos(Math.min(1, Math.abs(t) / L));
+    if (ang < bestAng) { bestAng = ang; best = { q: [a[0] + t * r.d[0], a[1] + t * r.d[1]], d: r.d, tag: r.tag }; }
+  }
+  return best;
+}
+
 // Rasterabstand „Auto“ nach Zoom: der kleinste Schritt, der auf dem Bildschirm mindestens 8 Pixel breit ist (px = mm je Pixel)
 export const autoStep = (px: number) => [0.1, 0.5, 1, 5, 10, 50].find(s => s / px >= 8) ?? 100;
 

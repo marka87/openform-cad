@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -829,4 +829,13 @@ test('Bögen als echte Kreisbögen im Löser: Radius-Maß und tangential an eine
   expect(solveSketch(gcs, pts, [{ t: 'h', i: 0 }])![1][2]).toBe(0.3);          // ohne Bogen-Maß: Bogen bleibt Sehne mit gleichem Winkel
   expect(R(solveSketch(gcs, pts, [{ t: 'rad', i: 1, val: 2 }])!, 1)).toBeCloseTo(2, 4); // Endpunkte frei: rücken zusammen
   expect(solveSketch(gcs, pts, [{ t: 'rad', i: 1, val: 2 }], [1, 2])).toBeNull(); // Endpunkte fest, Sehne 10 > 2·R: geht nicht
+});
+
+test('Richtungsfang beim Linienzeichnen: waagrecht, rechtwinklig, sonst nichts (T5.13)', () => {
+  const refs = [{ d: [1, 0], tag: 'h' }, { d: [0, 1], tag: 'v' }, { d: [Math.SQRT1_2, Math.SQRT1_2], tag: 'par' }];
+  expect(dirSnap([0, 0], [10, 0.3], refs)).toMatchObject({ q: [10, 0], tag: 'h' });          // 1,7° neben waagrecht
+  expect(dirSnap([0, 0], [-0.2, -8], refs)).toMatchObject({ tag: 'v' });                      // Gegenrichtung zählt auch
+  expect(dirSnap([0, 0], [-0.2, -8], refs)!.q[1]).toBeCloseTo(-8);
+  expect(dirSnap([2, 2], [7.1, 7], refs)).toMatchObject({ tag: 'par' });                      // 45°-Kante
+  expect(dirSnap([0, 0], [10, 2], refs)).toBeNull();                                          // 11° daneben: frei
 });

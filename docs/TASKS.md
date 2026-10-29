@@ -188,10 +188,11 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       Schnittebene durch die Linie (ausgeblendet im Baum) + vorhandenes
       Teilen; beide Hälften eigene Körper. Teilt KÖRPER, keine
       Skizzenbereiche (das bleibt Epic 9).
-- [ ] T5.13 TODO — Fänge beim Zeichnen: waagrecht, senkrecht, parallel
-      und rechtwinklig zu einer vorhandenen Kante. Hilfslinie zeigt es
-      an, beim Absetzen entsteht eine Abhängigkeit, die beim Ziehen
-      hält. Tangential an einen Bogen fehlt hier bewusst → T5.14.
+- [x] T5.13 DONE — Fänge beim Linienzeichnen: waagrecht, senkrecht,
+      parallel und rechtwinklig (eigene Seiten und gerade Kanten ≥ 5 mm
+      in der Ebene), 3° Fangbereich, Wort am Zeiger. Zu eigenen Seiten
+      entsteht beim Absetzen ∥/⟂ als Abhängigkeit (hält beim Ziehen),
+      waagrecht/senkrecht wie bisher. Shift = frei.
 - [ ] T5.14 TODO — Tangentialer Fang an Bögen, Ergänzung zu T5.13.
       ABHÄNGIG von T5.6 (Löser kennt Bögen bisher nur als Sehne).
 - [ ] T5.15 TODO — Winkel tippen: Tab schaltet beim Zeichnen vom
@@ -264,6 +265,18 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.13: dirSnap() in model.ts (Test) legt den Zeigerpunkt auf
+  die nächste Richtung innerhalb 3°, polyPoint() in main.ts sammelt die
+  Richtungen: Achsen der Skizze, eigene gerade Seiten (∥ und ⟂), gerade
+  Kanten von Körpern und Skizzen in derselben Ebene ab 5 mm (kürzere
+  wären Stücke gerundeter Kanten). Vorrang: Punktfang > Ausrichten an
+  Punkten > Richtungsfang > Raster. Beim Absetzen wird ∥/⟂ zu einer
+  eigenen Seite als Con gemerkt und beim Schließen ins Feature
+  geschrieben (zu fremden Kanten nur Geometrie: Abhängigkeiten gibt es
+  nur innerhalb einer Skizze). Gilt für Linie und Hilfslinie, nicht für
+  Spline und Bogen. Im Browser (Draufsicht): schräge Seite, dann
+  „rechtwinklig zu Seite 1“, geschlossen → 90,0000°, Con perp(1,0).
+  53 Tests grün.
 - 2026-10-29 T5.6: Con 'rad' (Radius der Bogen-Seite i) und 'tan' (Seiten
   i, j tangential). sketchSolver legt für jede Bogen-Seite mit so einem
   Maß Mittelpunkt + planegcs-arc + arc_rules an (Anfang/Ende im
