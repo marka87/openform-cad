@@ -1,6 +1,29 @@
 # TASKS — OpenForm CAD
 Status: TODO / DOING / DONE / BLOCKED(Grund)
 
+Regel: DONE nur mit grünem Test oder benanntem Beleg im Log. Ein Paket,
+das nur teilweise erledigt ist, bleibt TODO; der fertige Teil wird im
+Text des Pakets beschrieben, nicht durch ein Häkchen.
+
+## Arbeitsreihenfolge
+Oben abarbeiten, dann nach unten. Die Epics darunter sind die fachliche
+Ordnung, diese Liste ist die zeitliche.
+
+1. T0.1 (Statusabgleich) — vor allem anderen
+2. T4.3 (Installer bauen und testen) — blockiert den Alltag
+3. T1.13, T1.15 — echter Datenverlust bzw. macht Epic 1 benutzbar
+4. T5.6, T6.4 — die beiden falsch als erledigt geführten Punkte
+5. T2.5, T3.6, T5.5, T3.5, T1.14 — Komfort, absteigend nach Nutzen
+6. Epic 7 (Pflege), danach Epic 8 (KI-Assistent)
+
+## Epic 0: Hygiene
+
+- [ ] T0.1 TODO — Statusabgleich gegen den Code. Anlass: T5.4 und T6.3
+      führten Teile als erledigt, die offen sind (siehe dort). Jedes
+      DONE-Paket gegen den Code prüfen, bei Abweichung zurücksetzen und
+      den offenen Teil in ein eigenes Paket schreiben. Ergebnis als
+      Zeile im Log. Kein Feature-Code in diesem Paket.
+
 ## Epic 1: Persistente topologische Referenzen
 
 Ansatz (entschieden, siehe docs/adr/0001-topo-naming.md):
@@ -10,86 +33,54 @@ Feature-IDs. Geometrischer Fingerabdruck dient nur als Plausibilitäts-
 prüfung und als Tiebreaker bei Mehrdeutigkeit — und als alleinige
 Notlösung bei importierter STEP-Geometrie ohne Historie.
 
-- [x] T1.0 DONE — SPIKE, max. 2h, Wegwerf-Code außerhalb des Repos:
-      Kommt man über replicad an die Builder-Historie heran
-      (Modified/Generated/IsDeleted) für einen booleschen Schnitt?
-      Falls nein: an welcher Stelle muss direkt auf opencascade.js
-      durchgegriffen werden, und was kostet das?
-      Ergebnis als docs/adr/0001-topo-naming.md. ANHALTEN und berichten,
-      bevor T1.2 beginnt.
-- [x] T1.1 DONE — Bestandsaufnahme: wo im Feature-JSON werden Flächen
-      und Kanten referenziert? Welche Lookups nutzen OCCT-Indizes?
-      Ergebnis nach docs/TOPO-NAMING.md. Kein Code.
-- [x] T1.1b DONE — Stabile IDs sicherstellen: jede Skizzenkurve und
-      jedes Feature bekommt eine ID, die Umbenennen und Umsortieren im
-      Baum übersteht. Falls heute über Index oder Name identifiziert
-      wird, hier umstellen — ohne das trägt die Abstammung nicht.
-      Migration bestehender Dateien mit erledigen.
-- [x] T1.2 DONE — Schema für FaceRef/EdgeRef: Abstammungspfad
-      (Ursprungs-ID + Kette der verändernden Feature-IDs) plus
-      Fingerabdruck-Block (Flächentyp, Normale, Schwerpunkt,
-      Fläche/Länge) als Prüfwert. Nur Typen und Doku, kein Resolver.
-- [x] T1.3a DONE — Extrudieren (inkl. Bereiche) benennen, Vereinigen/
-      Abziehen/Schnittmenge und Körper verrechnen über eigenen
-      BRepAlgoAPI-Wrapper mit Historie.
+- [x] T1.0 DONE — SPIKE: Kommt man über replicad an die Builder-Historie
+      heran (Modified/Generated/IsDeleted)? Ergebnis in
+      docs/adr/0001-topo-naming.md.
+- [x] T1.1 DONE — Bestandsaufnahme der Flächen-/Kantenbezüge im
+      Feature-JSON, Ergebnis in docs/TOPO-NAMING.md.
+- [x] T1.1b DONE — Stabile IDs für Skizzenkurven und Features, die
+      Umbenennen und Umsortieren überstehen.
+- [x] T1.2 DONE — Schema FaceRef/EdgeRef: Abstammungspfad plus
+      Fingerabdruck-Block als Prüfwert.
+- [x] T1.3a DONE — Extrudieren, Vereinigen/Abziehen/Schnittmenge über
+      eigenen BRepAlgoAPI-Wrapper mit Historie.
 - [x] T1.3b DONE — Rundung/Fase: Modified für Nachbarflächen, Generated
-      für die neue Fläche (tag fillet/chamfer).
-- [x] T1.3c DONE — Drehkörper, Schale, Loft benennen (Seiten aus
-      Profilkanten, Innenwand shell).
-- [x] T1.3d DONE — Bewegen/Skalieren (BRepBuilderAPI_Transform), Teilen
-      (Schnittfläche split), Import (Fläche i). Danach ist die Kette
-      lückenlos; shortcut-Kommentar in buildBody entfernen.
-- [x] T1.4 DONE — Resolver: Ref + Shape → Fläche/Kante.
-      Erst Abstammung. Genau ein Treffer → übernehmen, Fingerabdruck
-      nur als Warnung prüfen. Mehrere Treffer (aufgespaltene Fläche)
-      oder keiner (Kette gerissen) → Fingerabdruck entscheidet unter den
-      Kandidaten, Ergebnis gilt als unsicher.
-      Unit-Tests: verschoben, skaliert, aufgespalten, mehrdeutig
-      (vier gleiche Eckbohrungen), verschwunden, STEP-Import ohne
-      Historie.
-- [x] T1.5 DONE — Schreibpfad: neue Features schreiben Refs mit, alte
-      Index-Referenzen bleiben vorerst parallel bestehen.
-- [x] T1.6 DONE — Rebuild auf Resolver umstellen, Feature für Feature.
-      Reihenfolge: Fase/Rundung zuerst, dann Skizze-auf-Fläche.
-- [x] T1.7 DONE — Fehlerfall sichtbar machen: unsichere oder verlorene
-      Referenz markiert das Feature im Baum als defekt und bricht
-      sichtbar ab. Niemals still auf die falsche Fläche auflösen.
-- [x] T1.8 DONE — Gelöschtes oder umsortiertes Feature: Abstammung
-      zeigt ins Leere. Verhalten festlegen (Rückfall auf Fingerabdruck
-      vs. Feature als defekt markieren) und testen.
-- [x] T1.9 DONE — Regressionstest: Grundkörper mit Skizze auf einer
-      Fläche, Grundkörper-Maß deutlich ändern, Rebuild → Skizze und
-      Folgefeatures wandern mit. Zusätzlich: Platte mit vier
-      Eckbohrungen, Fase an genau einer davon, Breite ändern → Fase
-      bleibt an derselben Bohrung.
-- [x] T1.10 DONE — Migration bestehender `.ofc`-Dateien: beim Laden
-      Refs nachrüsten, alte Dateien dürfen nicht brechen.
-
-- [ ] T1.11 TODO — Sobald Vieleck-Punkte eingefügt/gelöscht werden können:
-      jede Seite bekommt eine eigene ID (statt Index), Con.i und Refs
-      darauf umstellen, Migration.
-
-- [x] T1.12 DONE — Schale über Sacklochbohrung: Volumen 2024 mm³ statt
-      < 2000 (Quader 20×10×10, Bohrung R3 tief 4 von oben, Schale 1 mm,
-      Boden offen). Prüfen, ob der Körper gültig ist (BRepCheck), sonst
-      Feature als fehlgeschlagen melden.
+      für die neue Fläche.
+- [x] T1.3c DONE — Drehkörper, Schale, Loft benennen.
+- [x] T1.3d DONE — Bewegen/Skalieren, Teilen, Import. Kette lückenlos.
+- [x] T1.4 DONE — Resolver (src/topo.ts): erst Abstammung, dann
+      Fingerabdruck als Tiebreaker. Unit-Tests für verschoben, skaliert,
+      aufgespalten, mehrdeutig, verschwunden, STEP-Import.
+- [x] T1.5 DONE — Schreibpfad: neue Features schreiben Refs mit.
+- [x] T1.6 DONE — Rebuild auf Resolver umgestellt.
+- [x] T1.7 DONE — Fehlerfall sichtbar: rot bei verloren, gelb bei
+      unsicher, nie stilles Einrasten auf eine falsche Fläche.
+- [x] T1.8 DONE — Verhalten bei gelöschtem/umsortiertem Feature
+      festgelegt und getestet.
+- [x] T1.9 DONE — Regressionstests: Maßänderung am Grundkörper, Fase an
+      einer von vier Eckbohrungen.
+- [x] T1.10 DONE — Migration bestehender `.ofc`-Dateien beim Laden.
+- [x] T1.12 DONE — Schale prüft ihr Ergebnis mit BRepCheck und meldet
+      ungültige Körper als Fehler.
 
 - [ ] T1.13 TODO — Skizze auf gekippter Fläche: Ebene aus der aufgelösten
       Fläche neu ableiten statt abbrechen (heute nur Verschieben entlang
-      der Normalen).
-- [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen
-      (heute zählt nur der Bezug).
-
+      der Normalen). Datenverlust im Alltag, deshalb vorgezogen.
 - [ ] T1.15 TODO — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
       „Bezug übernehmen“ schreibt die gefundene Fläche als neuen Bezug.
+      Ohne das ist die gelbe Markierung aus T1.7 eine Sackgasse.
+- [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen.
+      Kosmetik — gerechnet wird korrekt über den Bezug.
+- [ ] T1.11 BLOCKED(Vieleck-Punkte lassen sich noch nicht einfügen oder
+      löschen) — Sobald das geht: jede Vieleckseite bekommt eine eigene
+      ID statt eines Index, Con.i und Refs umstellen, Migration.
 
 ## Epic 2: Sweep
-- [x] T2.1 DONE — Profil + offener Pfad, ohne UI, mit Test.
-- [x] T2.2 DONE — geschlossener Pfad, Ecken/Verrundung am Knick.
+- [x] T2.1 DONE — Profil + offener Pfad, mit Test.
+- [x] T2.2 DONE — geschlossener Pfad, Bögen als runde Ecken.
 - [x] T2.3 DONE — Pfadauswahl und Live-Vorschau im Viewport.
+- [x] T2.4 DONE — Pfadpunkte nachträglich ziehen.
 
-- [x] T2.4 DONE — Pfad eines Zugs nachträglich bearbeiten (Punkte ziehen,
-      anzeigen, wenn der Zug ausgewählt ist); heute nur löschen und neu.
 - [ ] T2.5 TODO — Pfad aus vorhandenen Körperkanten übernehmen (Kante
       anklicken statt zeichnen).
 
@@ -97,48 +88,84 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T3.1 DONE — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
 - [x] T3.2 DONE — Lineares Maß setzen und verschieben.
 - [x] T3.3 DONE — Durchmesser, Radius, Winkel.
-- [x] T3.4 DONE — Toleranzen, Export nach SVG/PDF/DXF prüfen.
+- [x] T3.4 DONE — Toleranzen, Export nach SVG/PDF/DXF. Entscheidung:
+      DXF bleibt reine Geometrie ohne Maße.
 
-- [ ] T3.5 TODO — Maße auch in der Iso-Ansicht und Kreise, die schräg
-      gesehen werden (heute nur Kreise, die von vorn zu sehen sind).
-- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen (heute erst nach dem
-      Klick sichtbar).
+- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen (heute erst nach
+      dem Klick sichtbar).
+- [ ] T3.5 TODO — Maße in der Iso-Ansicht und an schräg gesehenen
+      Kreisen (heute nur Kreise, die von vorn zu sehen sind).
 
 ## Epic 4: Tauri-Desktop
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
-- [x] T4.2 DONE — Datei öffnen/speichern über System-Dialog, `.ofc`
-      verknüpfen.
-- [ ] T4.3 DOING — Windows-Installer gebaut (pro Benutzer, NSIS, deutsch,
-      7,6 MB, src-tauri/target/release/bundle/nsis/), Installation durch den
-      Nutzer steht aus. macOS/Linux: BLOCKED (hier nicht baubar, braucht
-      einen Mac/Linux-Rechner oder GitHub Actions – Entscheidung des Nutzers).
+- [x] T4.2 DONE — Öffnen/Speichern über System-Dialog, `.ofc` verknüpft.
 
-## Epic 5: Skizzieren (Wunsch des Nutzers, 2026-10-28)
-- [x] T5.1 DONE — Hilfslinien: Linien, die keine Fläche bilden, nur zum
-      Einrasten und Bemaßen (Umschalter im Linien-Werkzeug, gestrichelt).
-- [x] T5.2 DONE — Trimmen: Stück einer Skizzenlinie zwischen zwei
-      Schnittpunkten anklicken = entfernen; Verlängern bis zur nächsten Linie.
-- [x] T5.3 DONE — Körperkanten in die Skizzenebene projizieren (als
-      Hilfslinien, an den Körper gebunden).
-- [x] T5.4 DONE — Weitere Abhängigkeiten: Winkel zwischen Seiten, fester
-      Punkt, Tangente Linie–Bogen, Radius eines Bogens.
+- [ ] T4.3 TODO — Installer neu bauen (`npm run desktop:build`; der
+      vorhandene Build ist älter als Epic 5 und 6, ihm fehlen die neuen
+      Funktionen), dann installieren und durchklicken: Öffnen, Speichern,
+      `.ofc`-Verknüpfung, STEP-/STL-Export, Zeichnung. Die Installation
+      selbst macht der Nutzer.
+      Hinweis: Der Status stand auf DOING, ohne dass jemand daran
+      arbeitete. DOING heißt „gerade in Arbeit“, nicht „teilweise fertig“.
+- [ ] T4.4 TODO — macOS- und Linux-Build über GitHub Actions. Der Weg ist
+      erprobt (.github/workflows/opencascade.yml läuft bereits), es fehlt
+      nur die Entscheidung, ob es sich lohnt. Erst sinnvoll, wenn jemand
+      außer dem Nutzer die App haben will. Siehe Offene Fragen.
 
-- [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen) und
-      an den Körper gebunden, damit sie bei Änderungen mitwandert.
+## Epic 5: Skizzieren
+- [x] T5.1 DONE — Hilfslinien (G), gestrichelt, nur zum Einrasten und
+      Bemaßen.
+- [x] T5.2 DONE — Trimmen und Verlängern (T) für offene Hilfslinien.
+- [x] T5.3 DONE — Körperkanten in die Skizzenebene projizieren (P).
+      Einschränkung: Momentaufnahme aus dem Anzeige-Netz → T5.5.
+- [x] T5.4 DONE — Abhängigkeiten Winkel zwischen Seiten und fester Punkt.
+      KORREKTUR 2026-10-29: Tangente Linie–Bogen und Radius eines Bogens
+      waren hier fälschlich als erledigt geführt. Sie sind offen und
+      leben in T5.6, weil der Löser Bögen nur als Sehne kennt.
 
 - [ ] T5.6 TODO — Bögen im Löser als echte Kreisbögen (planegcs arc):
       Radius-Maß und Tangente Linie–Bogen.
+- [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen)
+      und an den Körper gebunden, damit sie bei Änderungen mitwandert.
 
-## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
-- [x] T6.1 DONE (Versetzen) — Fläche versetzen für ebene Flächen.
-- [x] T6.1b DONE — Fläche löschen (Rechtsklick), über eigenen OpenCascade-Build
-      mit BRepAlgoAPI_Defeaturing (vendor/, GitHub-Workflow).
+## Epic 6: Modellieren
+- [x] T6.1 DONE — Fläche versetzen für ebene Flächen, auch bei
+      STEP-Import und Loft.
+- [x] T6.1b DONE — Fläche löschen über eigenen OpenCascade-Build mit
+      BRepAlgoAPI_Defeaturing (vendor/, GitHub-Workflow).
 - [x] T6.2 DONE — Drehkörper um eine beliebige gerade Kante.
-- [x] T6.3 DONE — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
-      Rundungen und ganze Körper.
+- [x] T6.3 DONE — Muster/Spiegeln an beliebiger Kante bzw. Fläche,
+      Rundungen und Fasen werden mitkopiert.
+      KORREKTUR 2026-10-29: „auch ganze Körper“ stand hier fälschlich.
+      Das ist offen und liegt in T6.4.
 
 - [ ] T6.4 TODO — Muster/Spiegeln für ganze Körper (Kopie + Bewegung je
       Exemplar), heute nur Kopieren mit Strg+D.
+
+## Epic 7: Pflege
+- [ ] T7.1 TODO — 3MF-Export (in CLAUDE.md als Format vorgesehen,
+      bisher nicht gebaut).
+- [ ] T7.2 TODO — Wiederkehrende Pflicht bei jedem replicad-Update:
+      prüfen, ob sich replicad-opencascadejs geändert hat; wenn ja, den
+      Workflow mit neuer REPLICAD_REF/IMAGE laufen lassen, sonst bricht
+      „Fläche löschen“. Danach voller Regressionslauf.
+      Zustand: Das Update auf 1.2.0 ist laut Log vom 2026-10-29 bereits
+      erledigt (gleiches OCCT-Image, 47 Tests grün). Siehe Offene Fragen.
+
+## Epic 8: KI-Assistent (M4 aus PLAN.md)
+Erst beginnen, wenn Epic 1 bis 7 abgeräumt sind: Der Assistent setzt auf
+dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
+
+- [ ] T8.1 TODO — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
+      im bestehenden Datenmodell, niemals Meshes. Jeder Schritt landet im
+      Baum, ist normal nachbearbeitbar und rückgängig zu machen.
+      Schlüssel vom Nutzer, abschaltbar, kein Cloud-Zwang.
+- [ ] T8.2 TODO — Text zu Teil für einen engen Fall:
+      „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken“.
+- [ ] T8.3 TODO — Ändern per Text an bestehender Auswahl
+      („Wand 2 mm dicker“).
+- [ ] T8.4 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
+      zu beheben ist.
 
 ## Log
 (neueste oben)
@@ -363,3 +390,12 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
+- 2026-10-29 macOS- und Linux-Builds (T4.4): bauen oder weglassen? Der Weg
+  über GitHub Actions ist durch .github/workflows/opencascade.yml schon
+  erprobt, es kostet also vor allem Zeit, nicht Risiko. Ohne Testgeräte
+  bleibt es aber ungeprüftes Binärpaket. Vorschlag: zurückstellen, bis
+  jemand außer dem Nutzer die App haben will.
+- 2026-10-29 replicad 1.2.0 (T7.2): Das Log trägt das Update am 2026-10-29
+  als erledigt ein (gleiches OCCT-Image, 47 Tests grün), der Nutzer führt
+  es als offen. Einmal in package.json nachsehen und T7.2 schließen oder
+  offen lassen. Fällt mit unter T0.1.
