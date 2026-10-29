@@ -786,3 +786,15 @@ test('Raster „Auto“ nach Zoom und Seitenmitten zum Beschriften (T5.10)', () 
   expect(keyPoints(r, 'mid')).toContainEqual([10, 0, 0]);
   expect(keyPoints(r, 'mid')).not.toContainEqual([0, 0, 0]);         // Ecke ist keine Mitte
 });
+
+test('Offene Linie (Linienkette): eigene Art, bildet keine Fläche, auch auf einer Fläche (T5.12)', () => {
+  const L: Extrude = { id: 5, ...TOP, type: 'line', p: {}, pts: [[-5, -5], [5, -5], [5, 5]], d: 0, onFace: true, open: true };
+  const r = buildBody([box(), L]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000, 6);                     // Körper unverändert
+  expect(r.fixes.get(5)).toHaveProperty('face');                           // hängt an der Fläche wie jede Skizze
+  expect(keyPoints(L).length).toBe(2 * (3 + 2));                           // 3 Punkte + 2 Mitten, kein Schlusssegment (je unten/oben)
+  const rect = { ...sketchFeature('rect', TOP, [-8, -8], [8, 8], 6, true)!, d: 0 };
+  expect(regionFeature([rect, L], rect, [10, 10, -5], 7)).toBeNull();      // Linie teilt (noch) keine Bereiche (Weg B, Epic 9)
+  expect(movePoint(L, structuredClone(L), 2, [-5, -5])).toBe(true);        // Punkte ziehen ohne Flächenprüfung
+});

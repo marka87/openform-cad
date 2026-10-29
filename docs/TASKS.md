@@ -176,15 +176,11 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       sichtbar und einrastbar; Fluchtlinien über das vorhandene
       Ausrichten. Im Bereich der Fläche gilt das Raster auch über einer
       Bohrung (Mitte der Bohrung erreichbar).
-- [ ] T5.12 TODO — Linienkette wie in Shapr3D (Weg A): Punkt A, Punkt B,
-      weiter in einer Kette. Ende durch Doppelklick, Klick auf den
-      letzten Punkt, Esc oder Rechtsklick (siehe T5.8). Klick auf den
-      Anfangspunkt schließt zur Fläche wie heute.
-      WICHTIG: Offene Linien bekommen einen EIGENEN TYP, nicht das
-      `aux`-Flag der Hilfslinien. Sie zeichnen durchgezogen, bilden
-      keine Bereiche, sind im Modell aber als „Skizzenlinie, offen"
-      erkennbar. Grund: Bei einer späteren Umstellung auf Weg B (Epic 9)
-      dürfen gespeicherte Modelle nicht still ihre Form ändern.
+- [x] T5.12 DONE — Linienkette (Weg A): Punkte klicken; Doppelklick,
+      Klick auf den letzten Punkt, Enter, Esc oder Rechtsklick beenden
+      offen, Klick auf den Anfangspunkt schließt zur Fläche. Offene Linien
+      sind eigene Art `type: 'line'` (nicht `aux`), durchgezogen, bilden
+      keine Bereiche.
 - [ ] T5.18 TODO — Körper an einer offenen Linie teilen: Linie auf einer
       Fläche auswählen → „Körper hier teilen". Die Linie wird senkrecht
       zur Skizzenebene zur Schnittebene, der Rest läuft über das
@@ -269,6 +265,20 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.12: Extrude.type 'line' (mit open: true, damit Einrasten,
+  Trimmen/Verlängern und Punktziehen der offenen Hilfslinien ohne
+  Sonderfälle greifen); noFace() fasst Hilfslinie und Linie zusammen
+  (nie extrudiert, nicht in Bereichen, Punkte ohne Flächenprüfung),
+  bounds() rechnet für alles mit pts. Linien-Werkzeug: Enter und
+  Rechtsklick beenden jetzt offen (vorher: schließen), Esc behält ab zwei
+  Punkten das Gezeichnete, Klick ohne Ziehen auf den letzten Punkt und
+  Doppelklick beenden ebenfalls; der Doppelklick setzt danach kein Raster.
+  Werkzeug bleibt nach einer offenen Linie aktiv. Spline und Bogen
+  schließen wie bisher. Entscheidung zu T5.16: „Esc beendet die Kette“
+  ist dort die erste Stufe. Test: Linie auf der Deckelfläche baut ohne
+  Fehler, bekommt ihren Flächenbezug, teilt keinen Bereich. Im Browser:
+  Doppelklick → Linie 3 Punkte, Esc → Linie 2 Punkte, Klick auf Anfang →
+  geschlossene Skizze. 50 Tests grün.
 - 2026-10-29 T5.11: workPoints() in main.ts beim Anlegen des Rasters:
   Flächenmitte = flächengewichteter Schwerpunkt der Dreiecke der
   angeklickten B-Rep-Fläche (Hit trägt jetzt deren Dreiecksbereich), aus

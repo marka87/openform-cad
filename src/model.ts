@@ -4,7 +4,7 @@ export type Vec = [number, number, number];
 export interface Frame { o: Vec; n: Vec; u: Vec; v: Vec } // Ursprung, Normale, Skizzenachsen (v = n × u)
 export interface Extrude extends Frame {
   id: number;
-  type: 'rect' | 'circle' | 'poly';
+  type: 'rect' | 'circle' | 'poly' | 'line'; // line = offene Skizzenlinie (Linienkette, bildet keine Fläche, immer mit open)
   p: Record<string, number>; // rect: x y w h · circle: cx cy r (+ ry = Ellipse mit Halbachsen r, ry) · poly: leer
   pts?: number[][];          // poly: Eckpunkte [x, y, bulge?] in Skizzenkoordinaten, geschlossen gedacht;
                              // bulge ≠ 0 = Bogen zum nächsten Punkt (tan(Winkel/4), > 0 = gegen den Uhrzeigersinn)
@@ -13,7 +13,7 @@ export interface Extrude extends Frame {
   face?: FaceRef;            // … auf welcher (vom Kern nachgetragen); wandert die Fläche, wandert die Skizze mit
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   aux?: boolean;             // Hilfslinie: bildet keine Fläche, nur zum Einrasten (wird nie extrudiert)
-  open?: boolean;            // Hilfslinie: offener Linienzug (kein Schlusssegment)
+  open?: boolean;            // Hilfslinie oder Linie: offener Linienzug (kein Schlusssegment)
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
@@ -72,7 +72,9 @@ export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, 
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove) => f.body ?? 1;
-export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly';
+export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';
+// Bildet keine Fläche: Hilfslinie oder offene Skizzenlinie (nie extrudiert, nicht in Bereichen)
+export const noFace = (f: Extrude) => !!f.aux || f.type === 'line';
 // Flache Skizze: weder extrudiert noch gedreht
 // Drehachse eines Drehkörpers als Punkt + Einheitsrichtung und die Richtung w in der Skizzenebene quer dazu
 export function revAxis(f: Extrude) {
@@ -226,7 +228,7 @@ export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null
 // shortcut: Selbstüberschneidungen werden nicht verhindert, der Kern meldet sie als fehlgeschlagenes Feature
 export function movePoint(f: Extrude, f0: Extrude, i: number, q: number[]) {
   const pts = f0.pts!.map((p, n) => n === i ? [q[0], q[1], ...p.slice(2)] : [...p]);
-  const ok = f.aux || Math.abs(area(contour(pts, f.smooth))) > 0.25; // Hilfslinie braucht keine Fläche
+  const ok = noFace(f) || Math.abs(area(contour(pts, f.smooth))) > 0.25; // Hilfslinie braucht keine Fläche
   f.pts = ok ? pts : structuredClone(f0.pts!);
   return ok;
 }
@@ -381,7 +383,7 @@ function insideShape(f: Extrude, x: number, y: number, eps: number) {
 // Achsenparalleler Quader um die Skizze in Weltkoordinaten
 export function bounds(f: Extrude) {
   const p = f.p, [x0, y0, x1, y1] = f.type === 'rect' ? [p.x, p.y, p.x + p.w, p.y + p.h] : [p.cx - p.r, p.cy - (p.ry ?? p.r), p.cx + p.r, p.cy + (p.ry ?? p.r)];
-  const pts = f.type === 'poly' ? contour(f.pts!, f.smooth) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const pts = f.pts ? contour(f.pts, f.smooth) : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   const w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]));
   return [0, 1, 2].map(k => [Math.min(...w.map(q => q[k])), Math.max(...w.map(q => q[k]))]);
 }
@@ -391,7 +393,7 @@ export function bounds(f: Extrude) {
 // shortcut: Überschneidung nur über umschließende Quader geprüft, Nachbarn ohne echte Überschneidung kosten eine Boolesche Operation
 export function regionFeature(features: Feature[], f: Extrude, P: ArrayLike<number>, id: number): Extrude | null {
   const b = bounds(f);
-  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && isFlat(g) && !g.aux
+  const near = features.filter((g): g is Extrude => isExtrude(g) && g !== f && isFlat(g) && !noFace(g)
     && Math.abs(dot(f.n, g.n)) > 0.999 && Math.abs(dot(sub(g.o, f.o), f.n)) < 1e-6
     && bounds(g).every(([lo, hi], k) => lo < b[k][1] + 1e-6 && b[k][0] < hi + 1e-6));
   if (!near.length) return null;

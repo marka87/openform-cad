@@ -41,7 +41,9 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Versatz | Flache Skizze anklicken, im Seitenfeld Abstand eingeben (minus = nach innen) → „Versatz anlegen“ |
 | Muster / Spiegeln | Skizze oder Körper-Feature anklicken → Seitenfeld „Muster / Spiegeln“: Reihe entlang X/Y/Z, Kreis um eine Achse oder Spiegeln (Ebene durch den Ursprung) |
 | Punkte verschieben | Vieleck oder Spline anklicken (auch als Körper) – die Punkte erscheinen und lassen sich ziehen |
-| Einrasten | Beim Skizzieren rastet der Mauszeiger an Ecken, Kantenmitten, Schnittpunkten, Mittelpunkten, dem Ursprung und an Kanten/Linien ein (oranger Punkt); `Shift` schaltet Einrasten und Raster ab |
+| Einrasten | Beim Skizzieren zeigt ein Punkt am Zeiger, wo der Klick landet: blau Raster, orange Endpunkt/Mitte/Schnitt/Ursprung, gelb auf Linie; liegt ein Flächenraster, rasten auch Flächenmitte, Ecken, Kantenmitten und Bohrungsmitten ein (weiße Punkte); `Shift` = frei. Raster unten links „Auto“ passt sich dem Zoom an |
+| Linienkette | `L`: Punkte klicken; Doppelklick, Klick auf den letzten Punkt, `Enter`, `Esc` oder Rechtsklick = offene Linie fertig; Klick auf den ersten Punkt = geschlossene Fläche |
+| Auf die Fläche schauen | Raster liegt (Doppelklick auf eine Fläche): `Leertaste` = senkrecht draufschauen, nochmal = zurück |
 | Ausrichten | Liegt der Zeiger waagrecht oder senkrecht zu einem Punkt, rastet er dort ein (orange Hilfslinie) |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
 | Rundung / Fase | Kante anfassen: vom Körper wegziehen = Rundung, in den Körper hineinschieben = Fase; Maß im Seitenfeld |
