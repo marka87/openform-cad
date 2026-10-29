@@ -5,24 +5,56 @@ Regel: DONE nur mit grünem Test oder benanntem Beleg im Log. Ein Paket,
 das nur teilweise erledigt ist, bleibt TODO; der fertige Teil wird im
 Text des Pakets beschrieben, nicht durch ein Häkchen.
 
+Zweite Regel (seit 2026-10-29): Neue Funktionswünsche kommen aus
+docs/FELDNOTIZEN.md, nicht aus Vermutungen. Was beim Bauen echter Teile
+dreimal stört, wird ein Paket. Was einmal stört, bleibt Notiz. Die
+Pakete T5.7 bis T5.18 sind vor dieser Regel entstanden und daher
+Vermutungen — sie gelten, bis die Feldnotizen etwas anderes zeigen.
+
 ## Arbeitsreihenfolge
 Oben abarbeiten, dann nach unten. Die Epics darunter sind die fachliche
 Ordnung, diese Liste ist die zeitliche.
 
-1. T0.1 (Statusabgleich) — vor allem anderen
-2. T4.3 (Installer bauen und testen) — blockiert den Alltag
-3. T1.13, T1.15 — echter Datenverlust bzw. macht Epic 1 benutzbar
-4. T5.6, T6.4 — die beiden falsch als erledigt geführten Punkte
-5. T2.5, T3.6, T5.5, T3.5, T1.14 — Komfort, absteigend nach Nutzen
-6. Epic 7 (Pflege), danach Epic 8 (KI-Assistent)
+1. T0.2, T4.3 — Installer installieren und dabei ein echtes Teil bauen,
+   Stolperstellen mitschreiben. Erledigt beides in einem Durchlauf.
+2. T0.3 — zwei weitere echte Teile, dann Feldnotizen auswerten.
+   DANACH kann sich alles darunter ändern.
+3. T5.7, T5.8 — kleine Fehler aus dem Weg räumen
+4. T5.17 — Messen, sobald das Fehlerbild aus den Feldnotizen da ist
+5. T5.9 — Ansicht auf die Fläche
+6. T5.10 — sichtbarer Punkt und Auto-Raster
+7. T5.11 — Flächenpunkte und Fluchtlinien
+8. T5.12 — Linienkette, Weg A, mit eigenem Linientyp
+9. T5.18 — Körper an einer Linie teilen
+10. T5.6 — echte Bögen im Löser
+11. T5.13, T5.14 — Fänge, gerade zuerst, tangential nach T5.6
+12. T5.15, T5.16 — Winkel tippen, Esc stufenweise
+13. T1.14, T2.5, T3.6, T5.5, T3.5, T6.4 — restliche Nacharbeiten
+14. Epic 7 (Pflege), Epic 8 (KI-Assistent), Epic 9 (Weg B)
 
-## Epic 0: Hygiene
+## Epic 0: Hygiene und Anforderungen
 
-- [x] T0.1 DONE — Statusabgleich gegen den Code. Anlass: T5.4 und T6.3
-      führten Teile als erledigt, die offen sind (siehe dort). Jedes
-      DONE-Paket gegen den Code prüfen, bei Abweichung zurücksetzen und
-      den offenen Teil in ein eigenes Paket schreiben. Ergebnis als
-      Zeile im Log. Kein Feature-Code in diesem Paket.
+- [x] T0.1 DONE — Statusabgleich gegen den Code (Commit 4a77bbf).
+      Kein Paket musste zurückgesetzt werden. Zwei DONE-Pakete hatten
+      keinen Beleg und haben jetzt je einen Test: Radius-Maß (T3.3) und
+      Mitkopieren von Fasen beim Spiegeln (T6.3). 48 Tests grün.
+      replicad steht in package.json auf 1.2.0, die offene Frage dazu
+      ist damit erledigt.
+
+- [ ] T0.2 TODO — docs/FELDNOTIZEN.md anlegen und beim Bauen des ersten
+      echten Teils führen. Eine Zeile je Stolperstelle: was wolltest du
+      tun, was ist passiert, wie lange dauerte der Umweg.
+      WICHTIG: keine Lösungsvorschläge notieren. „Wollte an der
+      Bohrungsmitte anfangen, musste Koordinaten im Kopf rechnen" ist
+      brauchbar; „brauche Hilfspunkte" ist schon eine Lösung und
+      verdeckt, was sonst geholfen hätte.
+      Läuft zusammen mit T4.3 in einem Durchlauf.
+- [ ] T0.3 TODO — Zwei weitere echte Teile bauen (zusammen mit dem aus
+      T0.2: ein Halter, ein Gehäuse, ein Adapter — Dinge, die der Nutzer
+      wirklich gebraucht hat, nichts Erfundenes). Danach Feldnotizen
+      auswerten: Was dreimal vorkommt, wird ein Paket und bestimmt die
+      Arbeitsreihenfolge neu. Was einmal vorkommt, bleibt Notiz.
+      Die drei Teile wandern anschließend als Regressionstest ins Repo.
 
 ## Epic 1: Persistente topologische Referenzen
 
@@ -34,39 +66,30 @@ prüfung und als Tiebreaker bei Mehrdeutigkeit — und als alleinige
 Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 - [x] T1.0 DONE — SPIKE: Kommt man über replicad an die Builder-Historie
-      heran (Modified/Generated/IsDeleted)? Ergebnis in
-      docs/adr/0001-topo-naming.md.
-- [x] T1.1 DONE — Bestandsaufnahme der Flächen-/Kantenbezüge im
-      Feature-JSON, Ergebnis in docs/TOPO-NAMING.md.
-- [x] T1.1b DONE — Stabile IDs für Skizzenkurven und Features, die
-      Umbenennen und Umsortieren überstehen.
-- [x] T1.2 DONE — Schema FaceRef/EdgeRef: Abstammungspfad plus
-      Fingerabdruck-Block als Prüfwert.
-- [x] T1.3a DONE — Extrudieren, Vereinigen/Abziehen/Schnittmenge über
-      eigenen BRepAlgoAPI-Wrapper mit Historie.
-- [x] T1.3b DONE — Rundung/Fase: Modified für Nachbarflächen, Generated
-      für die neue Fläche.
+      heran? Ergebnis in docs/adr/0001-topo-naming.md.
+- [x] T1.1 DONE — Bestandsaufnahme der Bezüge, docs/TOPO-NAMING.md.
+- [x] T1.1b DONE — Stabile IDs für Skizzenkurven und Features.
+- [x] T1.2 DONE — Schema FaceRef/EdgeRef.
+- [x] T1.3a DONE — Extrudieren und Boolesche Operationen mit Historie.
+- [x] T1.3b DONE — Rundung/Fase benennen.
 - [x] T1.3c DONE — Drehkörper, Schale, Loft benennen.
 - [x] T1.3d DONE — Bewegen/Skalieren, Teilen, Import. Kette lückenlos.
-- [x] T1.4 DONE — Resolver (src/topo.ts): erst Abstammung, dann
-      Fingerabdruck als Tiebreaker. Unit-Tests für verschoben, skaliert,
-      aufgespalten, mehrdeutig, verschwunden, STEP-Import.
+- [x] T1.4 DONE — Resolver (src/topo.ts) mit Unit-Tests.
 - [x] T1.5 DONE — Schreibpfad: neue Features schreiben Refs mit.
 - [x] T1.6 DONE — Rebuild auf Resolver umgestellt.
 - [x] T1.7 DONE — Fehlerfall sichtbar: rot bei verloren, gelb bei
       unsicher, nie stilles Einrasten auf eine falsche Fläche.
-- [x] T1.8 DONE — Verhalten bei gelöschtem/umsortiertem Feature
-      festgelegt und getestet.
-- [x] T1.9 DONE — Regressionstests: Maßänderung am Grundkörper, Fase an
-      einer von vier Eckbohrungen.
-- [x] T1.10 DONE — Migration bestehender `.ofc`-Dateien beim Laden.
-- [x] T1.12 DONE — Schale prüft ihr Ergebnis mit BRepCheck und meldet
-      ungültige Körper als Fehler.
+- [x] T1.8 DONE — Verhalten bei gelöschtem/umsortiertem Feature.
+- [x] T1.9 DONE — Regressionstests Maßänderung und Eckbohrung.
+- [x] T1.10 DONE — Migration bestehender `.ofc`-Dateien.
+- [x] T1.12 DONE — Schale prüft ihr Ergebnis mit BRepCheck.
+- [x] T1.13 DONE — Skizze auf gekippter Fläche dreht mit, statt
+      abzubrechen. Gedreht wird um die Schnittlinie von alter und neuer
+      Ebene. Im Browser geprüft (17,49 cm³).
+- [x] T1.15 DONE — Knopf „Bezug übernehmen" im Seitenfeld für gelb
+      markierte Schritte. Nur auf Knopfdruck, nie automatisch,
+      rückgängig möglich.
 
-- [x] T1.13 DONE — Skizze auf gekippter Fläche dreht sich um die
-      Schnittgerade von alter und neuer Ebene mit, statt abzubrechen.
-- [x] T1.15 DONE — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
-      „Bezug übernehmen“ schreibt die gefundene Fläche/Kante als neuen Bezug.
 - [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen.
       Kosmetik — gerechnet wird korrekt über den Bezug.
 - [ ] T1.11 BLOCKED(Vieleck-Punkte lassen sich noch nicht einfügen oder
@@ -85,37 +108,34 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 ## Epic 3: Einzelbemaßung Zeichnung
 - [x] T3.1 DONE — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
 - [x] T3.2 DONE — Lineares Maß setzen und verschieben.
-- [x] T3.3 DONE — Durchmesser, Radius, Winkel.
+- [x] T3.3 DONE — Durchmesser, Radius, Winkel. Test für das Radius-Maß
+      in T0.1 nachgetragen.
 - [x] T3.4 DONE — Toleranzen, Export nach SVG/PDF/DXF. Entscheidung:
       DXF bleibt reine Geometrie ohne Maße.
 
-- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen (heute erst nach
-      dem Klick sichtbar).
+- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen.
 - [ ] T3.5 TODO — Maße in der Iso-Ansicht und an schräg gesehenen
-      Kreisen (heute nur Kreise, die von vorn zu sehen sind).
+      Kreisen.
 
 ## Epic 4: Tauri-Desktop
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [x] T4.2 DONE — Öffnen/Speichern über System-Dialog, `.ofc` verknüpft.
 
-- [ ] T4.3 TODO — Installer ist neu gebaut (2026-10-29, Stand 6f1d140, mit
-      eigenem OpenCascade-Build, T1.13 und T1.15). Offen: installieren und
-      durchklicken: Öffnen, Speichern,
-      `.ofc`-Verknüpfung, STEP-/STL-Export, Zeichnung. Die Installation
-      selbst macht der Nutzer.
-      Hinweis: Der Status stand auf DOING, ohne dass jemand daran
-      arbeitete. DOING heißt „gerade in Arbeit“, nicht „teilweise fertig“.
-- [ ] T4.4 TODO — macOS- und Linux-Build über GitHub Actions. Der Weg ist
-      erprobt (.github/workflows/opencascade.yml läuft bereits), es fehlt
-      nur die Entscheidung, ob es sich lohnt. Erst sinnvoll, wenn jemand
-      außer dem Nutzer die App haben will. Siehe Offene Fragen.
+- [ ] T4.3 TODO — Installer ist neu gebaut (Stand T1.15, mit eigenem
+      OpenCascade-Build, 7,65 MB, src-tauri/target/release/bundle/nsis/).
+      Offen beim Nutzer: installieren und durchklicken — Öffnen,
+      Speichern, Doppelklick auf eine `.ofc`-Datei, STEP- und
+      STL-Export, Zeichnung. Dabei gleich T0.2 mitführen.
+- [ ] T4.4 TODO — macOS- und Linux-Build über GitHub Actions. Der Weg
+      ist erprobt (.github/workflows/opencascade.yml läuft bereits), es
+      fehlt nur die Entscheidung, ob es sich lohnt. Erst sinnvoll, wenn
+      jemand außer dem Nutzer die App haben will.
 
 ## Epic 5: Skizzieren
-- [x] T5.1 DONE — Hilfslinien (G), gestrichelt, nur zum Einrasten und
-      Bemaßen.
+- [x] T5.1 DONE — Hilfslinien (G), gestrichelt.
 - [x] T5.2 DONE — Trimmen und Verlängern (T) für offene Hilfslinien.
-- [x] T5.3 DONE — Körperkanten in die Skizzenebene projizieren (P).
-      Einschränkung: Momentaufnahme aus dem Anzeige-Netz → T5.5.
+- [x] T5.3 DONE — Körperkanten projizieren (P). Einschränkung:
+      Momentaufnahme aus dem Anzeige-Netz → T5.5.
 - [x] T5.4 DONE — Abhängigkeiten Winkel zwischen Seiten und fester Punkt.
       KORREKTUR 2026-10-29: Tangente Linie–Bogen und Radius eines Bogens
       waren hier fälschlich als erledigt geführt. Sie sind offen und
@@ -124,79 +144,133 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [ ] T5.6 TODO — Bögen im Löser als echte Kreisbögen (planegcs arc):
       Radius-Maß und Tangente Linie–Bogen.
 - [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen)
-      und an den Körper gebunden, damit sie bei Änderungen mitwandert.
+      und an den Körper gebunden.
+
+### Skizzieren wie in Shapr3D (Wunsch des Nutzers, 2026-10-29)
+Entstanden vor der Feldnotizen-Regel, also Vermutungen. Nach T0.3
+gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
+
+- [ ] T5.7 TODO — Leerer Bereich über der Werkzeugliste: Das Panel
+      beginnt weit oben, die Werkzeuge sitzen am unteren Ende
+      (Screenshot der Desktop-App, 2026-10-29). Im Browser prüfen, ob es
+      dort auch auftritt. Vermutlich eine Höhen- oder Ausrichtungsregel,
+      die im WebView2 anders greift. Erst reproduzieren, dann fixen.
+- [ ] T5.8 TODO — Rechtsklick während des Zeichnens beendet den Zug,
+      statt das normale Kontextmenü mit „Löschen" und „Fläche löschen"
+      zu öffnen (laut Screenshot heute so).
+- [ ] T5.17 TODO — Messen überarbeiten. Der Nutzer meldet, dass es nicht
+      richtig funktioniert; das genaue Fehlerbild steht noch aus und
+      soll aus T0.2 kommen. Erst reproduzieren und beschreiben, dann
+      umsetzen. Messen gehört zu den am häufigsten benutzten Werkzeugen
+      des Nutzers, deshalb vorgezogen.
+- [ ] T5.9 TODO — Ansicht auf die Fläche: Leertaste bei liegendem Raster
+      fliegt die Kamera sanft senkrecht auf die Fläche, die Fläche füllt
+      das Bild, „oben" ist oben in der Skizze. Nochmal Leertaste =
+      zurück zur vorigen Ansicht. Ohne Raster bleibt die Leertaste
+      „letztes Werkzeug".
+- [ ] T5.10 TODO — Sichtbarer Punkt am Zeiger: zeigt immer, wo der
+      nächste Klick landet. Rastet auf Raster-, Eck-, Mittel-,
+      Schnittpunkte und Linien. Farbe plus kurzes Wort („Mitte",
+      „Endpunkt", „Schnitt", „auf Linie"). Shift = frei setzen, jetzt
+      auch sichtbar. Dazu Rasterabstand nach Zoom (weit 10 mm, nah 1
+      bis 0,5 mm), die Auswahl unten links bekommt „Auto".
+- [ ] T5.11 TODO — Hilfspunkte auf der Fläche, sobald ein Raster liegt:
+      Flächenmitte, Ecken, Kantenmitten, Mitten von Bohrungen, alle
+      einrastbar. Dazu gestrichelte Fluchtlinien, wenn der Zeiger auf
+      Höhe eines dieser Punkte steht.
+- [ ] T5.12 TODO — Linienkette wie in Shapr3D (Weg A): Punkt A, Punkt B,
+      weiter in einer Kette. Ende durch Doppelklick, Klick auf den
+      letzten Punkt, Esc oder Rechtsklick (siehe T5.8). Klick auf den
+      Anfangspunkt schließt zur Fläche wie heute.
+      WICHTIG: Offene Linien bekommen einen EIGENEN TYP, nicht das
+      `aux`-Flag der Hilfslinien. Sie zeichnen durchgezogen, bilden
+      keine Bereiche, sind im Modell aber als „Skizzenlinie, offen"
+      erkennbar. Grund: Bei einer späteren Umstellung auf Weg B (Epic 9)
+      dürfen gespeicherte Modelle nicht still ihre Form ändern.
+- [ ] T5.18 TODO — Körper an einer offenen Linie teilen: Linie auf einer
+      Fläche auswählen → „Körper hier teilen". Die Linie wird senkrecht
+      zur Skizzenebene zur Schnittebene, der Rest läuft über das
+      vorhandene Teilen (T1.3d, Schnittfläche tag split). Beide Hälften
+      bleiben eigene Körper, einzeln löschbar.
+      Abgrenzung: Das teilt KÖRPER, nicht Skizzenflächen. Eine Linie
+      quer durch ein Rechteck ergibt weiterhin keine zwei extrudierbaren
+      Bereiche — das ist Epic 9.
+- [ ] T5.13 TODO — Fänge beim Zeichnen: waagrecht, senkrecht, parallel
+      und rechtwinklig zu einer vorhandenen Kante. Hilfslinie zeigt es
+      an, beim Absetzen entsteht eine Abhängigkeit, die beim Ziehen
+      hält. Tangential an einen Bogen fehlt hier bewusst → T5.14.
+- [ ] T5.14 TODO — Tangentialer Fang an Bögen, Ergänzung zu T5.13.
+      ABHÄNGIG von T5.6 (Löser kennt Bögen bisher nur als Sehne).
+- [ ] T5.15 TODO — Winkel tippen: Tab schaltet beim Zeichnen vom
+      Längen- ins Winkelfeld, wie in Shapr3D.
+- [ ] T5.16 TODO — Esc stufenweise: erst laufenden Zug abbrechen, dann
+      Werkzeug verlassen, dann Raster aufheben. Heute passiert mehreres
+      auf einmal.
 
 ## Epic 6: Modellieren
-- [x] T6.1 DONE — Fläche versetzen für ebene Flächen, auch bei
-      STEP-Import und Loft.
-- [x] T6.1b DONE — Fläche löschen über eigenen OpenCascade-Build mit
-      BRepAlgoAPI_Defeaturing (vendor/, GitHub-Workflow).
+- [x] T6.1 DONE — Fläche versetzen für ebene Flächen.
+- [x] T6.1b DONE — Fläche löschen über eigenen OpenCascade-Build.
 - [x] T6.2 DONE — Drehkörper um eine beliebige gerade Kante.
 - [x] T6.3 DONE — Muster/Spiegeln an beliebiger Kante bzw. Fläche,
-      Rundungen und Fasen werden mitkopiert.
-      KORREKTUR 2026-10-29: „auch ganze Körper“ stand hier fälschlich.
+      Rundungen und Fasen werden mitkopiert (Test in T0.1 nachgetragen).
+      KORREKTUR 2026-10-29: „auch ganze Körper" stand hier fälschlich.
       Das ist offen und liegt in T6.4.
 
 - [ ] T6.4 TODO — Muster/Spiegeln für ganze Körper (Kopie + Bewegung je
       Exemplar), heute nur Kopieren mit Strg+D.
 
 ## Epic 7: Pflege
-- [ ] T7.1 TODO — 3MF-Export (in CLAUDE.md als Format vorgesehen,
-      bisher nicht gebaut).
+- [ ] T7.1 TODO — 3MF-Export (in CLAUDE.md als Format vorgesehen).
 - [ ] T7.2 TODO — Wiederkehrende Pflicht bei jedem replicad-Update:
       prüfen, ob sich replicad-opencascadejs geändert hat; wenn ja, den
       Workflow mit neuer REPLICAD_REF/IMAGE laufen lassen, sonst bricht
-      „Fläche löschen“. Danach voller Regressionslauf.
-      Zustand: aktuell. package.json steht auf replicad ^1.2.0 (installiert
-      1.2.0, Commit 4b91aa7); bleibt TODO als Pflicht für das nächste Update.
+      „Fläche löschen". Danach voller Regressionslauf.
+      Stand: 1.2.0 ist erledigt, gleiches OCCT-Image.
 
 ## Epic 8: KI-Assistent (M4 aus PLAN.md)
-Erst beginnen, wenn Epic 1 bis 7 abgeräumt sind: Der Assistent setzt auf
-dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
+Erst beginnen, wenn das Skizzieren im Alltag steht. Der Assistent setzt
+auf dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
+
+Entschieden (2026-10-29): Kein fest eingebauter Anbieter. Adapter gegen
+die OpenAI-kompatible Chat-Completions-Schnittstelle, drei Felder in den
+Einstellungen (Basis-URL, Modell, Schlüssel). Damit laufen Groq, Mistral,
+OpenRouter, OpenAI und jedes lokale Ollama über denselben Code.
+Grund gegen eine feste Gratis-Stufe: Die Gratis-Stufen verlangen meist
+die Zustimmung zur Nutzung der Daten fürs Training — bei CAD-Geometrie
+inakzeptabel als Standard. KI bleibt abschaltbar und ist standardmäßig
+aus.
 
 - [ ] T8.1 TODO — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
-      im bestehenden Datenmodell, niemals Meshes. Jeder Schritt landet im
-      Baum, ist normal nachbearbeitbar und rückgängig zu machen.
-      Schlüssel vom Nutzer, abschaltbar, kein Cloud-Zwang.
-- [ ] T8.2 TODO — Text zu Teil für einen engen Fall:
-      „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken“.
-- [ ] T8.3 TODO — Ändern per Text an bestehender Auswahl
-      („Wand 2 mm dicker“).
-- [ ] T8.4 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
+      im bestehenden Datenmodell über Tool-Calls mit festem Schema,
+      niemals replicad-Code, der ausgeführt wird, und niemals Meshes.
+      Jeder Schritt landet im Baum, ist nachbearbeitbar und rückgängig.
+      Folge: Anforderung ans Modell ist zuverlässiges Befolgen eines
+      JSON-Schemas, nicht Geometrieverständnis — kleinere Modelle
+      genügen.
+- [ ] T8.2 TODO — Adapter plus Einstellungen, mit drei Voreinstellungen
+      zum Anklicken (Groq, lokal über Ollama, eigener Anbieter) und
+      einem Hinweis, dass Gratis-Stufen in der Regel mitlesen.
+- [ ] T8.3 TODO — Text zu Teil für einen engen Fall:
+      „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken".
+- [ ] T8.4 TODO — Ändern per Text an bestehender Auswahl
+      („Wand 2 mm dicker").
+- [ ] T8.5 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
       zu beheben ist.
+
+## Epic 9: Skizzieren, Bereiche aus offenen Linien (Weg B)
+Große Architekturänderung, bewusst ans Ende. Erst sinnvoll, wenn Weg A
+(T5.12) im Alltag steht und die Feldnotizen zeigen, dass es fehlt.
+Der Nutzer verwendet die Linie heute vor allem zum Messen und als
+Baulinie, dafür genügt Weg A.
+
+- [ ] T9.1 TODO — Alle Linien einer Ebene bilden gemeinsam Bereiche:
+      Rechteck plus Linie quer ergibt zwei einzeln herausziehbare
+      Flächen. Offene Linien teilen Bereiche zusätzlich.
+- [ ] T9.2 TODO — Migration: offene Linien aus Weg A bewusst und pro
+      Datei sichtbar nach Weg B überführen, nie still beim Laden.
 
 ## Log
 (neueste oben)
-- 2026-10-29 T1.15: Die Anker liefern bei unsicherem Treffer `confirm` =
-  Bezug auf das Gefundene (Skizze: face, Rundung/Fase: edge, Schale und
-  Fläche löschen: faces, Versetzen: face); buildBody gibt sie als Map
-  `confirm` weiter, der Worker reicht sie durch. Seitenfeld eines gelben
-  Schritts zeigt „Bezug übernehmen“ (mit Rückgängig-Schritt), danach baut
-  der Schritt sicher. Entscheidung: nur auf Knopfdruck, nie automatisch
-  (T1.7: nicht still umschreiben). Tests: Grundkörper neu gezeichnet →
-  Bohrung und Fase bestätigen → nichts mehr gelb; gekippte Seite (T1.13)
-  → bestätigen → grün. Im Browser geprüft: Bohrung auf gekippter Stirnseite
-  gelb, Knopf, danach grün, Bezug trägt die neue Normale.
-- 2026-10-29 T1.13: anchorSketch dreht die Skizze, wenn ihre Fläche kippt:
-  Drehachse = Schnittgerade von alter Skizzenebene und neuer Fläche
-  (Scharnier), Winkel = n → N; Ebene, Bereiche und Drehachse werden als
-  patch nachgeführt. Entscheidung: gekippt bleibt der Bezug gelb, weil der
-  Fingerabdruck (alte Normale) nicht passt; bestätigen kommt mit T1.15,
-  nicht still. Umdrehen um mehr als ~90° = sichtbarer Fehler. Test:
-  Vieleckecke wandert, Seite kippt um die stehende Kante, Bohrung bleibt
-  5 mm vom Scharnier in der neuen Ebene. Im Browser geprüft (17,49 cm³,
-  Bohrung gelb auf der schrägen Stirnseite).
-- 2026-10-29 T0.1: Jedes DONE-Paket gegen Code, Tests und Log geprüft.
-  Beleg je Paket: Kern-Test mit Paketnummer im Namen (T1.3a–d, T1.4–T1.9,
-  T1.12, T2.1, T2.2, T3.1, T3.4, T5.1, T5.2, T5.4, T6.1–T6.3, T6.1b) oder
-  benannte Prüfung im Log (T1.0/T1.1 = Dokumente, T1.1b ohne Code, T1.10,
-  T2.3, T2.4, T4.1, T4.2, T5.3 im Browser bzw. in der gebauten App).
-  Zwei Lücken ohne Beleg gefunden und mit Test geschlossen, kein Zurücksetzen
-  nötig: Radius-Maß (T3.3, war weder getestet noch im Log genannt) und
-  „Rundungen/Fasen werden mitkopiert“ (T6.3, Fase am Bohrungsrand
-  mitgespiegelt). Die schon korrigierten Teile von T5.4/T6.3 liegen in
-  T5.6/T6.4. replicad: package.json steht auf ^1.2.0 → Offene Frage
-  gestrichen, T7.2 bleibt als Pflicht fürs nächste Update.
 - 2026-10-29 replicad 1.1.0 → 1.2.0: bringt dieselbe OpenCascade-Konfiguration
   (replicad-opencascadejs bleibt 1.1.0, gleiches Image), der eigene Build in
   vendor/ gilt also weiter; nur REPLICAD_REF im Workflow nachgezogen. 47 Tests
@@ -418,12 +492,17 @@ dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- 2026-10-29 macOS- und Linux-Builds (T4.4): bauen oder weglassen? Der Weg
-  über GitHub Actions ist durch .github/workflows/opencascade.yml schon
-  erprobt, es kostet also vor allem Zeit, nicht Risiko. Ohne Testgeräte
-  bleibt es aber ungeprüftes Binärpaket. Vorschlag: zurückstellen, bis
-  jemand außer dem Nutzer die App haben will.
-- 2026-10-29 replicad 1.2.0 (T7.2): Das Log trägt das Update am 2026-10-29
-  als erledigt ein (gleiches OCCT-Image, 47 Tests grün), der Nutzer führt
-  es als offen. Einmal in package.json nachsehen und T7.2 schließen oder
-  offen lassen. Fällt mit unter T0.1.
+- 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
+  nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
+  reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
+- 2026-10-29 macOS- und Linux-Builds (T4.4): bauen oder weglassen? Der
+  Weg über GitHub Actions ist durch .github/workflows/opencascade.yml
+  schon erprobt, es kostet also vor allem Zeit, nicht Risiko. Ohne
+  Testgeräte bleibt es aber ungeprüftes Binärpaket. Vorschlag:
+  zurückstellen, bis jemand außer dem Nutzer die App haben will.
+
+Erledigt:
+- replicad 1.2.0: geklärt in T0.1, package.json steht auf 1.2.0.
+- KI-Anbieter: entschieden, siehe Epic 8.
+- Weg A oder B beim Skizzieren: entschieden für A zuerst, siehe T5.12
+  und Epic 9.
