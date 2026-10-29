@@ -40,6 +40,11 @@
   #tree .row.later { opacity:.4; font-style:italic; }
   #tree .row.bad span { color:#e5736b; }
   #tree .row.unsure span { color:#e0b84f; }
+  #aiBar { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); width:min(680px, calc(100% - 32px)); z-index:40; display:none; gap:6px; align-items:center;
+    background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:6px; }
+  #aiBar input { flex:1; min-width:0; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
+  #aiBar .res { color:var(--muted); font-size:12px; max-width:40%; }
+  #aiBar button { background:#353a42; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 9px; font:inherit; cursor:pointer; }
   #aiDlg { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; }
   #aiDlg .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; width:min(460px, 100%); }
   #aiDlg h3 { margin:0 0 10px; }

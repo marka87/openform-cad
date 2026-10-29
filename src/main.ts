@@ -9,9 +9,10 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
-import { openAiSettings } from './ai';
+import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings, type Msg } from './ai';
+import { aiContext, applyCalls, SYSTEM, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
+import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -145,8 +146,6 @@ let notice = '';
 function showNotice(text: string) { notice = text; showHint(text); }
 const getById = (id: number) => features.find(f => f.id === id);
 const getSel = () => selId === null ? undefined : getById(selId);
-// Kernlochdurchmesser für metrische Regelgewinde in mm
-const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 
 function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
@@ -1831,7 +1830,7 @@ $('bSvg').onclick = e => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   showMenu(r.left, r.bottom + 4, [['Zeichnung bemaßen …', editSheet], null, ['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
     ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
-    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => send({ type: 'export', format: '3mf' })], null, ['KI-Assistent einrichten …', openAiSettings]]);
+    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => send({ type: 'export', format: '3mf' })], null, ['KI fragen …', askAi], ['KI-Assistent einrichten …', openAiSettings]]);
 };
 // Drucken über einen unsichtbaren Rahmen; „Als PDF speichern“ im Druckdialog ergibt die PDF-Datei
 function printSVG(svg: string) {
@@ -1868,6 +1867,33 @@ function svgToDXF(svg: string) {
   return [...out, '0', 'ENDSEC', '0', 'EOF'].join('\n');
 }
 // Sichtbare Körper als OBJ, Z oben wie STEP/STL
+// KI (T8.3, ADR 0002): Werkzeugaufrufe prüfen und als ein Rückgängig-Schritt einfügen; Prüffehler gehen bis zu zweimal zurück an die KI
+// shortcut: Fehler des Kerns (z. B. Rundung zu groß) gehen noch nicht an die KI zurück → T8.6
+function askAi() {
+  if (!loadSettings().on) return openAiSettings();
+  openAiPrompt(async text => {
+    if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
+    const s = loadSettings(), msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, display.unit)}
+
+Auftrag: ${text}` }];
+    let fs = features, id = nextId, made = 0, last = '';
+    try {
+      for (let round = 0; round < 3; round++) {
+        aiStatus(round ? `KI korrigiert (${round}) …` : 'KI arbeitet …');
+        const r = await chat(s, msgs, TOOLS);
+        if (!r.toolCalls.length) { last = r.content ?? ''; break; }
+        const out = applyCalls(fs, r.toolCalls, id), bad = out.results.filter(x => !x.ok);
+        fs = out.fs; id = out.nextId; made += out.results.length - bad.length;
+        last = bad.map(x => x.text).join(' · ');
+        if (!bad.length) break;
+        msgs.push(r.message, ...out.results.map((x): Msg => ({ role: 'tool', tool_call_id: x.id, content: x.text })));
+      }
+    } catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
+    if (!made) return aiStatus(`Nichts angelegt${last ? `: ${last}` : ''}`);
+    pushHistory(); features = fs; nextId = id; clearSel(); refresh();
+    aiStatus(`${made} Schritt${made > 1 ? 'e' : ''} angelegt${last ? ` (nicht umgesetzt: ${last})` : ''}`, undo);
+  });
+}
 function exportOBJ() {
   const g = new THREE.Group();
   g.rotation.x = Math.PI / 2; // Szene Y-oben → Z-oben

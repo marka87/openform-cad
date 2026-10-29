@@ -255,12 +255,16 @@ aus.
 - [x] T8.2 DONE — Adapter plus Einstellungen, mit drei Voreinstellungen
       zum Anklicken (Groq, lokal über Ollama, eigener Anbieter) und
       einem Hinweis, dass Gratis-Stufen in der Regel mitlesen.
-- [ ] T8.3 TODO — Text zu Teil für einen engen Fall:
+- [x] T8.3 DONE — Text zu Teil für einen engen Fall:
       „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken".
 - [ ] T8.4 TODO — Ändern per Text an bestehender Auswahl
       („Wand 2 mm dicker").
 - [ ] T8.5 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
       zu beheben ist.
+- [ ] T8.6 TODO — Kernfehler an die KI zurückgeben (ADR 0002, Abschnitt 4):
+      scheitert ein KI-Schritt erst im Kern (z. B. Rundung zu groß), den
+      Grund bis zu zweimal zurückschicken. Braucht ein Warten auf das
+      Ergebnis des Kernlaufs (inkl. zweitem Lauf nach Bezugsnachträgen).
 
 ## Epic 9: Skizzieren, Bereiche aus offenen Linien (Weg B)
 Große Architekturänderung, bewusst ans Ende. Erst sinnvoll, wenn Weg A
@@ -326,6 +330,22 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T8.3: src/aiTools.ts – Werkzeuge skizze_rechteck, skizze_kreis,
+  extrudieren, bohrung (Durchmesser oder M3–M12 als Kernloch mit Namen
+  „Gewinde Mx“, Tiefe oder „durch“); Flächen vorerst nur „oben“ auf einem
+  nach oben extrudierten Schritt (dieselben x/y wie dessen Skizze). Von den
+  7 Werkzeugen aus ADR 0002 sind 4 da; runden/fasen, muster, wert_setzen
+  kommen mit T8.4. applyCalls prüft jeden Aufruf einzeln (Wertebereich,
+  Richtung, vorhandener Schritt); fehlerhafte ändern nichts und gehen mit
+  Grund als Werkzeugergebnis zurück, höchstens zwei Korrekturrunden. Alles
+  zusammen = ein Rückgängig-Schritt; Leiste „Übernehmen / Verwerfen“.
+  THREADS nach model.ts verschoben (eine Tabelle für App und KI). Gefunden
+  beim Testen: Ebene als Kopie der ganzen Elternskizze überschrieb id und
+  onFace der Bohrung → nur o/n/u/v. Abnahme als Kern-Test mit
+  aufgezeichneten Aufrufen: 5 Schritte, Volumen exakt, STEP hin und zurück
+  gleich. Browser mit vorgetäuschtem fetch: falsche Bohrung (Schritt 7) →
+  Korrekturrunde → 5 Schritte, Verwerfen nimmt alle zurück. Nicht geprüft:
+  ein echtes Sprachmodell (kein Anbieter eingerichtet). Neu nötig: T8.6.
 - 2026-10-29 T8.2: src/ai.ts – chat() gegen /chat/completions (temperature 0,
   tools optional), Werkzeugaufrufe mit geparsten args (kaputtes JSON = null,
   nicht geraten), Fehler als Klartext (401/403, 404, 429, nicht erreichbar,

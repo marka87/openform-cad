@@ -3,6 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
+import { applyCalls } from './aiTools';
 import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -700,6 +701,28 @@ test('3MF-Export: ZIP mit geschlossenem, einheitlich ausgerichtetem Netz je Kör
   expect([...dir].every(k => dir.has(k.split(',').reverse().join(',')))).toBe(true); // jede Kante hat ihr Gegenstück: dicht
   const zs = [...xml.matchAll(/z="([-\d.e]+)"/g)].map(m => +m[1]);
   expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(10, 6);       // Z oben: Quader 10 hoch
+});
+
+test('KI: Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken aus Werkzeugaufrufen (T8.3)', async () => {
+  const hole = (id: string, x: number, y: number) => ({ id, name: 'bohrung', raw: '', args: { flaeche: { schritt: 1, seite: 'oben' }, x, y, gewinde: 'M5', tiefe: 'durch' } });
+  const calls = [
+    { id: 'p', name: 'skizze_rechteck', raw: '', args: { ebene: 'boden', x: 0, y: 0, breite: 100, tiefe: 60, hoehe: 5 } },
+    hole('a', 8, 8), hole('b', 92, 8), hole('c', 8, 52), hole('d', 92, 52),
+    { id: 'x', name: 'bohrung', raw: '', args: { flaeche: { schritt: 99, seite: 'oben' }, x: 0, y: 0, durchmesser: 3, tiefe: 2 } }, // gibt es nicht
+    { id: 'y', name: 'extrudieren', raw: '{kaputt', args: null },
+  ];
+  const r = applyCalls([], calls, 1);
+  expect(r.results.map(x => x.ok)).toEqual([true, true, true, true, true, false, false]);
+  expect(r.results[5].text).toContain('keine Skizze');
+  expect([r.fs.length, r.nextId]).toEqual([5, 6]);                         // fünf Schritte wie von Hand
+  expect(r.fs.slice(1).every(f => f.name === 'Gewinde M5')).toBe(true);
+  const b = buildBody(r.fs);
+  expect(b.failed).toEqual([]);
+  expect(measureVolume(b.body!)).toBeCloseTo(100 * 60 * 5 - 4 * Math.PI * 2.1 ** 2 * 5, 1);
+  const back = await loadStep(await forExport(b.body!).blobSTEP().text());   // STEP hin und zurück
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(b.body!), 1);
+  expect(applyCalls([], [{ id: 'z', name: 'skizze_kreis', raw: '', args: { ebene: 'boden', x: 0, y: 0, radius: 5, hoehe: -3 } }], 1).results[0].text)
+    .toContain('nur nach oben');                                             // Wertebereich geprüft, nicht geraten
 });
 
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {

@@ -80,6 +80,8 @@ export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, 
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature) => f.body ?? 1;
+// Kernlochdurchmesser für metrische Regelgewinde in mm
+export const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';
 // Bildet keine Fläche: Hilfslinie oder offene Skizzenlinie (nie extrudiert, nicht in Bereichen)
 export const noFace = (f: Extrude) => !!f.aux || f.type === 'line';

@@ -97,3 +97,32 @@ export function openAiSettings() {
   q('.res').textContent = ''; q('.note').textContent = '';
   dlg.style.display = 'flex';
 }
+
+// Eingabezeile „KI fragen“: Enter schickt ab, Esc schließt. Nur der Nutzer löst eine Anfrage aus
+let bar: HTMLDivElement | null = null;
+export function openAiPrompt(submit: (text: string) => void) {
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'aiBar';
+    bar.innerHTML = `<input placeholder="Beschreibe das Teil, z. B. Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken"><span class="res"></span><button class="ok">Übernehmen</button><button class="no">Verwerfen</button><button class="x">✕</button>`;
+    document.body.append(bar);
+    bar.querySelector<HTMLButtonElement>('.x')!.onclick = () => { bar!.style.display = 'none'; };
+  }
+  const inp = bar.querySelector('input')!;
+  inp.onkeydown = e => {
+    if (e.key === 'Escape') bar!.style.display = 'none';
+    if (e.key === 'Enter' && inp.value.trim()) submit(inp.value.trim());
+  };
+  aiStatus('');
+  bar.style.display = 'flex';
+  inp.focus();
+}
+// Zustand in der Zeile; mit discard erscheinen „Übernehmen / Verwerfen“ (Verwerfen = Rückgängig)
+export function aiStatus(text: string, discard?: () => void) {
+  if (!bar) return;
+  bar.querySelector('.res')!.textContent = text;
+  const ok = bar.querySelector<HTMLButtonElement>('.ok')!, no = bar.querySelector<HTMLButtonElement>('.no')!;
+  ok.style.display = no.style.display = discard ? '' : 'none';
+  ok.onclick = () => { aiStatus('übernommen'); bar!.querySelector('input')!.value = ''; };
+  no.onclick = () => { discard?.(); aiStatus('verworfen'); };
+}
