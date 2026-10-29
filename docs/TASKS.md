@@ -142,6 +142,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-29 replicad 1.1.0 → 1.2.0: bringt dieselbe OpenCascade-Konfiguration
+  (replicad-opencascadejs bleibt 1.1.0, gleiches Image), der eigene Build in
+  vendor/ gilt also weiter; nur REPLICAD_REF im Workflow nachgezogen. 47 Tests
+  grün, Fläche löschen im Browser geprüft.
 - 2026-10-29 T6.1b: Eigener OpenCascade-Build per GitHub Actions
   (.github/workflows/opencascade.yml, ~15 min): replicad v1.1.0 + Bindung
   BRepAlgoAPI_Defeaturing, nur gelinkt im Image von replicad, kein Docker
@@ -151,7 +155,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
   geht es nicht (z. B. Deckel eines Quaders), liefert OCCT still den alten
   Körper → Prüfung IsDeleted je Fläche, sonst sichtbarer Fehler. Neu nötig:
   bei einem replicad-Update den Workflow mit neuer REPLICAD_REF/IMAGE laufen
-  lassen (replicad v1.2.0 ist erschienen).
+  lassen, falls sich replicad-opencascadejs ändert.
 - 2026-10-28 T6.3: Muster/Spiegeln mit Bezug „Kante oder Fläche anklicken“
   (Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
   bzw. Spiegelebene); Rundungen/Fasen an den Flächen des Features werden

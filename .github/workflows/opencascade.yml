@@ -5,7 +5,7 @@ name: OpenCascade-Build
 on: workflow_dispatch
 
 env:
-  REPLICAD_REF: v1.1.0 # muss zur replicad-Version in package.json passen
+  REPLICAD_REF: v1.2.0 # muss zur replicad-Version in package.json passen (1.2.0 bringt dieselbe OCCT-Konfiguration wie 1.1.0)
   IMAGE: ghcr.io/taucad/opencascade.js:canary-ebd263f1-single-threaded # aus replicad-opencascadejs/package.json dieser Version
   EXTRA: BRepAlgoAPI_Defeaturing # zusätzliche Bindungen, durch Leerzeichen getrennt
 
