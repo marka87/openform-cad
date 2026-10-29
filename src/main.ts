@@ -923,6 +923,7 @@ function onDown(e: PointerEvent) {
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'trim') return trimAt(e);
+  if (xfPick) return xfClick(h, edge);
   if (patPickBody !== null) { // dasselbe für den ganzen Körper
     const b = patPickBody;
     patPickBody = null;
@@ -1199,7 +1200,7 @@ let lastTool: Tool = 'rect'; // Leertaste wählt es wieder
 const rect3W = (q: number[]) => { const { a, b } = rect3!, L = Math.hypot(b[0] - a[0], b[1] - a[1]); return ((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / L; };
 const rect3Feature = (q: number[]) => polyFeature(rect3!.pl, rect3Pts(rect3!.a, rect3!.b, rect3W(q)), nextId, rect3!.onFace);
 // Aufklappmenüs der Werkzeugleiste: Art des Rechtecks, Ecken des Vielecks
-const MENUS: Record<string, [string, string][]> = { measure: [['obj', 'Objekt'], ['p2p', 'Punkt zu Punkt'], ['ang', 'Winkel (3 Punkte)']], rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
+const MENUS: Record<string, [string, string][]> = { xf: [['move', 'Verschieben / Drehen (Griffe)'], ['values', 'Verschieben, Drehen, Skalieren um Werte'], ['axis', 'Drehen um Achse (Kante anklicken)'], ['align', 'Ausrichten (Fläche auf Fläche)'], ['pattern', 'Muster'], ['mirror', 'Spiegeln']], measure: [['obj', 'Objekt'], ['p2p', 'Punkt zu Punkt'], ['ang', 'Winkel (3 Punkte)']], rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
 const flyout = $('flyout');
 function modeLabels() {
   document.querySelector('#toolbar [data-tool="rect"] .mode')!.textContent = MENUS.rect.find(m => m[0] === rectMode)![1];
@@ -1208,11 +1209,11 @@ function modeLabels() {
 }
 document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.onclick = e => {
   e.stopPropagation();
-  const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : m === 'measure' ? measureMode : String(sides);
+  const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : m === 'measure' ? measureMode : m === 'xf' ? '' : String(sides);
   flyout.replaceChildren(...MENUS[m].map(([v, label]) => {
     const b = document.createElement('button');
     b.textContent = label; b.classList.toggle('on', v === cur);
-    b.onclick = () => { if (m === 'rect') rectMode = v as typeof rectMode; else if (m === 'measure') { measureMode = v as typeof measureMode; measure = []; disposeGroup(preview); setMeasureLabel(null); } else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
+    b.onclick = () => { if (m === 'xf') { flyout.style.display = 'none'; return transformAct(v); } if (m === 'rect') rectMode = v as typeof rectMode; else if (m === 'measure') { measureMode = v as typeof measureMode; measure = []; disposeGroup(preview); setMeasureLabel(null); } else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
     return b;
   }));
   Object.assign(flyout.style, { display: 'block', left: `${r.right + 6}px`, top: `${r.top}px` });
@@ -1232,20 +1233,49 @@ function setTool(t: Tool) {
 }
 document.querySelectorAll<HTMLButtonElement>('#toolbar button[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool as Tool));
 // Verschieben/Drehen, Muster, Spiegeln aus der Leiste: wirken auf die Auswahl (Körper bzw. Skizze/Schritt) und öffnen das passende Feld
-document.querySelectorAll<HTMLButtonElement>('#toolbar button[data-act]').forEach(b => b.onclick = () => {
-  const f = getSel(), act = b.dataset.act!;
+document.querySelectorAll<HTMLButtonElement>('#toolbar button[data-act]').forEach(b => b.onclick = () => transformAct(b.dataset.act!));
+// Transformieren: wirkt auf den ausgewählten Körper (bzw. den Körper des ausgewählten Schritts); Muster/Spiegeln einer
+// ausgewählten Skizze bleiben beim Skizzen-Feld. Drehen um Achse und Ausrichten fragen Kante bzw. Flächen per Klick ab.
+let xfPick: { b: number; kind: 'axis' | 'from' | 'to'; p?: THREE.Vector3; n?: THREE.Vector3 } | null = null;
+function transformAct(act: string) {
+  const f = getSel();
   if (selBody === null && !f) return showHint('Erst einen Körper (im Baum oder per Doppelklick) oder eine Skizze auswählen');
   setTool('select');
-  if (act === 'move' || selBody !== null || !isExtrude(f!)) { // Körper: Griffe bzw. Muster/Spiegeln des ganzen Körpers
+  if (selBody !== null || !isExtrude(f!) || !['pattern', 'mirror'].includes(act)) { // Körper: Griffe, Werte, Achse, Ausrichten, Muster
     const bb = selBody ?? (f && f.type !== 'combine' && f.type !== 'plane' ? f.type === 'move' ? f.body : bodyOf(f) : null);
     if (bb === null || !bodyIds.includes(bb)) return showHint('Dieser Schritt gehört zu keinem Körper');
     clearSel(); selBody = bb; refresh();
     if (act === 'move') return attachGizmo('translate');
+    if (act === 'axis') { xfPick = { b: bb, kind: 'axis' }; return showNotice('Drehachse: gerade Kante anklicken (Winkel aus „Genau verschieben / drehen“) · Esc = abbrechen'); }
+    if (act === 'align') { xfPick = { b: bb, kind: 'from' }; return showNotice('Ausrichten: erst eine ebene Fläche dieses Körpers anklicken · Esc = abbrechen'); }
   }
-  const d = panel.querySelector<HTMLDetailsElement>('details.pat');
+  const d = panel.querySelector<HTMLDetailsElement>(act === 'values' ? 'details.vals' : 'details.pat');
   if (d) { d.open = true; d.scrollIntoView({ block: 'nearest' }); }
-  showHint(act === 'mirror' ? 'Spiegelebene wählen (⟂ Achse, oder Fläche anklicken), dann „Spiegeln“' : 'Achse, Anzahl und Abstand wählen, dann „Reihe“ oder „Kreis“');
-});
+  showNotice(act === 'values' ? 'Werte eintragen, dann Verschieben, Drehen oder Skalieren'
+    : act === 'mirror' ? 'Spiegelebene wählen (⟂ Achse, oder Fläche anklicken), dann „Spiegeln“' : 'Achse, Anzahl und Abstand wählen, dann „Reihe“ oder „Kreis“');
+}
+// Klick während „Drehen um Achse“ / „Ausrichten“: legt eine Bewegung des Körpers an (wie die Griffe, mit Rückgängig)
+function xfClick(h: Hit | null, edge: EdgeHit | null) {
+  const x = xfPick!, move = (c: THREE.Vector3, q: THREE.Quaternion, t: THREE.Vector3) => {
+    xfPick = null; clearSel(); selBody = x.b; pushHistory();
+    add({ id: nextId++, type: 'move', body: x.b, c: c.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec }); refresh();
+  };
+  if (x.kind === 'axis') {
+    if (!edge) return showHint('Keine Kante getroffen – gerade Kante anklicken · Esc = abbrechen');
+    const ang = parseFloat(panel.querySelector<HTMLInputElement>('.ang')?.value ?? '90') || 90;
+    move(V(edge.at), new THREE.Quaternion().setFromAxisAngle(V(edge.dir).normalize(), ang * Math.PI / 180), new THREE.Vector3());
+    return showNotice(`Um die Kante gedreht (${ang}°) · Winkel im Seitenfeld unter „Genau verschieben / drehen“`);
+  }
+  if (!h) return showHint('Keine Fläche getroffen · Esc = abbrechen');
+  if (x.kind === 'from') {
+    if (h.body !== x.b) return showHint('Bitte eine Fläche des ausgewählten Körpers anklicken');
+    xfPick = { ...x, kind: 'to', p: h.point.clone(), n: h.n.clone() };
+    return showHint('Jetzt die Zielfläche anklicken: die Fläche legt sich flach darauf');
+  }
+  // Quellfläche dreht sich gegen die Zielnormale und liegt dann mit dem Klickpunkt auf dem Zielpunkt
+  move(x.p!, new THREE.Quaternion().setFromUnitVectors(x.n!.clone().normalize(), h.n.clone().normalize().negate()), h.point.clone().sub(x.p!));
+  showNotice('Ausgerichtet · Rückgängig mit Strg+Z');
+}
 
 const panel = $('panel');
 function renderPanel() {
@@ -1494,7 +1524,7 @@ function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift:
     const hit = live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && keyPoints(f).every(inside)).map(f => f.id);
     for (const id of hit) { if (selId === null) selId = id; else if (id !== selId) multi.add(id); }
     refresh();
-    return showHint(hit.length ? `${hit.length} ausgewählt${hit.length > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
+    return showNotice(hit.length ? `${hit.length} ausgewählt${hit.length > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
   }
   refresh();
 }
@@ -1853,7 +1883,7 @@ function escapeStep() {
   ctx.style.display = 'none';
   if (typed) { typed = ''; hud.style.display = 'none'; return; }
   if (rect3) { rect3 = null; disposeGroup(preview); return showHint(HINTS[tool]); }
-  if (axisFor !== null || patPickFor !== null || patPickBody !== null) { axisFor = patPickFor = patPickBody = null; return showHint(HINTS[tool]); }
+  if (axisFor !== null || patPickFor !== null || patPickBody !== null || xfPick) { axisFor = patPickFor = patPickBody = null; xfPick = null; return showHint(HINTS[tool]); }
   if (poly) {
     if (tool === 'line' && !poly.smooth && poly.path === undefined && poly.pts.length >= 2) return finishPoly(false);
     cancelPoly(); return showHint(HINTS[tool]);
@@ -1894,7 +1924,7 @@ function renderBodyPanel(b: number) {
     <label>Farbe <input type="color" class="col" value="${bm.color ?? display.color}" style="width:40px;padding:0"></label>
     <p class="info" style="margin:4px 0;color:var(--muted)"></p>
     <button class="gT">Verschieben (Griffe)</button><button class="gR">Drehen (Griffe)</button>
-    <details><summary>Genau verschieben / drehen</summary>
+    <details class="vals"><summary>Genau verschieben / drehen</summary>
       <label>ΔX <input type="number" step="0.5" value="0" class="dx"></label><label>ΔY <input type="number" step="0.5" value="0" class="dy"></label>
       <label>ΔZ <input type="number" step="0.5" value="0" class="dz"></label><button class="mv">Verschieben</button>
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
@@ -1948,7 +1978,7 @@ function renderBodyPanel(b: number) {
     let out: Feature[] = [];
     for (const m of moves) { const c = bodyCopy(features, b, nextId, m); nextId += c.length; out = [...out, ...c]; }
     add(...out); detachGizmo(); refresh();
-    showHint(`${moves.length} Kopie${moves.length > 1 ? 'n' : ''} von Körper #${b} angelegt`);
+    showNotice(`${moves.length} Kopie${moves.length > 1 ? 'n' : ''} von Körper #${b} angelegt`);
   };
   const n = () => Math.max(2, Math.round(num('.pcnt')) || 2);
   q<HTMLButtonElement>('.plin').onclick = () => { const { ax } = pref(), d = num('.pdist') * U(); copies(Array.from({ length: n() - 1 }, (_, i) => ({ c: [0, 0, 0] as Vec, q: [0, 0, 0, 1], t: ax.map(x => x * d * (i + 1)) as Vec }))); };

@@ -289,9 +289,10 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 - [ ] T10.4 TODO — Text als Skizze (replicad drawText, opentype ist schon
       installiert) mit einer mitgelieferten freien Schrift (OFL),
       extrudieren oder gravieren. Nur wenn machbar ohne neue Lizenzfolgen.
-- [ ] T10.5 TODO — Transformieren-Menü: Verschieben/Drehen, Skalieren,
-      Verschieben um Werte, Drehen um eine angeklickte Achse (Kante),
-      Ausrichten (Fläche auf Fläche), Spiegeln, Muster.
+- [x] T10.5 DONE — Transformieren-Menü (▸ an „Verschieben / Drehen“):
+      Griffe, Werte (verschieben/drehen/skalieren), Drehen um Achse
+      (Kante anklicken, Winkel aus dem Feld), Ausrichten (Fläche des
+      Körpers, dann Zielfläche: liegt flach darauf), Muster, Spiegeln.
 - [x] T10.6 DONE — Einrasten-Menü (Knopf „Einrasten ▸“ unten links):
       Raster, Hilfslinien, Punkte der Skizzen, Punkte am Körper,
       Körperkanten einzeln schaltbar; Rastpunkte und Hinweise ein/aus;
@@ -305,6 +306,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.5: transformAct() bündelt die Leistenknöpfe und das
+  Aufklappmenü, xfClick() erledigt die Klicks für „Drehen um Achse“
+  (Move um die Kantenrichtung durch den Kantenpunkt) und „Ausrichten“
+  (Drehung Quellnormale → −Zielnormale um den ersten Klickpunkt, dann
+  Verschiebung auf den zweiten). Beides sind normale Move-Schritte im
+  Baum (Rückgängig, Ausschalten). Abkürzung: Ausrichten legt nur die
+  Normalen gegeneinander, die Drehung um die Normale bleibt, wie sie
+  sich ergibt. Hinweise jetzt über showNotice, sonst überschreibt der
+  nächste Bau sie. Im Browser: Deckel von Körper 1 auf die rechte Seite
+  von Körper 2 → Klickpunkt liegt auf x = 60; Drehen um senkrechte Kante
+  bei x = 40 → 90° um y. Kein Kern-Test (Move ist getestet). 56 Tests grün.
 - 2026-10-29 T10.3/T6.4: bodyCopy() in model.ts kopiert alle Schritte eines
   Körpers (Skizzen, Rundung/Fase, Schale, Versatz, Fläche löschen, Zug,
   Übergang, Bewegungen) mit neuen IDs in einen neuen Körper, Verweise auf
