@@ -252,7 +252,7 @@ aus.
       Folge: Anforderung ans Modell ist zuverlässiges Befolgen eines
       JSON-Schemas, nicht Geometrieverständnis — kleinere Modelle
       genügen.
-- [ ] T8.2 TODO — Adapter plus Einstellungen, mit drei Voreinstellungen
+- [x] T8.2 DONE — Adapter plus Einstellungen, mit drei Voreinstellungen
       zum Anklicken (Groq, lokal über Ollama, eigener Anbieter) und
       einem Hinweis, dass Gratis-Stufen in der Regel mitlesen.
 - [ ] T8.3 TODO — Text zu Teil für einen engen Fall:
@@ -326,6 +326,21 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T8.2: src/ai.ts – chat() gegen /chat/completions (temperature 0,
+  tools optional), Werkzeugaufrufe mit geparsten args (kaputtes JSON = null,
+  nicht geraten), Fehler als Klartext (401/403, 404, 429, nicht erreichbar,
+  Zeitüberschreitung). Einstellungen: „Zeichnung / mehr“ → „KI-Assistent
+  einrichten …“, aus per Standard, Voreinstellungen Groq / Ollama / eigener
+  Anbieter, Hinweis zum Mitlesen der Gratis-Stufen, „Verbindung testen“.
+  Desktop: tauri-plugin-http (Rust + npm), Berechtigung https://* und
+  localhost/127.0.0.1 (Ollama); Browser nimmt normales fetch. Tests mit
+  vorgetäuschtem fetch (src/ai.test.ts, 2 Tests). Geprüft: Browser-Fenster,
+  Ollama-Test meldet „nicht erreichbar“ (läuft hier nicht); Desktop-Build
+  startet, keine neuen Fremd-DLLs, Installer 9,41 MB (+1,4 MB durch das
+  Plugin). Nicht geprüft: eine echte Anfrage an einen Anbieter (kein
+  Schlüssel hier) und die Anfrage über das Plugin in der Desktop-App.
+  Die Modellnamen der Voreinstellungen sind nicht gegen die aktuellen
+  Listen der Anbieter geprüft, deshalb editierbar.
 - 2026-10-29 T8.1: docs/adr/0002-ki-assistent.md. Kern des Entwurfs: KI
   ruft nur Werkzeuge mit festem Schema auf (7 Werkzeuge in Stufe 1), die
   App prüft und setzt sie in normale Features um, ein Rückgängig-Schritt
@@ -878,10 +893,6 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- 2026-10-29 KI-Assistent (ADR 0002, blockiert T8.2): (1) KI-Ergebnis direkt
-  einfügen mit „Übernehmen / Verwerfen“ oder erst Vorschau? (2) API-Schlüssel
-  im App-Speicher (v1) oder Windows-Schlüsselspeicher (weiteres Plugin)?
-  (3) tauri-plugin-http als neue Abhängigkeit für Anfragen ohne CORS-Probleme?
 - 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
   nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
   reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
@@ -892,6 +903,8 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   zurückstellen, bis jemand außer dem Nutzer die App haben will.
 
 Erledigt:
+- KI-Assistent (ADR 0002): direkt einfügen mit Übernehmen/Verwerfen, Schlüssel im
+  App-Speicher (v1), tauri-plugin-http – alles wie vorgeschlagen (Nutzer 2026-10-29).
 - Schrift für Text: DejaVu Sans mitgeliefert (Freigabe des Nutzers 2026-10-29).
 - replicad 1.2.0: geklärt in T0.1, package.json steht auf 1.2.0.
 - KI-Anbieter: entschieden, siehe Epic 8.

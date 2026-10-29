@@ -40,6 +40,16 @@
   #tree .row.later { opacity:.4; font-style:italic; }
   #tree .row.bad span { color:#e5736b; }
   #tree .row.unsure span { color:#e0b84f; }
+  #aiDlg { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; }
+  #aiDlg .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; width:min(460px, 100%); }
+  #aiDlg h3 { margin:0 0 10px; }
+  #aiDlg label { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0; color:var(--muted); }
+  #aiDlg label.row, #aiDlg .row { display:flex; justify-content:flex-start; gap:8px; align-items:center; color:var(--text); }
+  #aiDlg input:not([type=checkbox]) { flex:1; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
+  #aiDlg button { background:#353a42; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font:inherit; cursor:pointer; }
+  #aiDlg .presets { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  #aiDlg .warn { color:#ffcf8a; font-size:12px; margin:6px 0; }
+  #aiDlg .note, #aiDlg .keynote { color:var(--muted); font-size:12px; margin:4px 0; min-height:1em; }
   #sheetEd { position:fixed; inset:0; z-index:50; background:#2a2e35; display:none; flex-direction:column; }
   #sheetEd .bar { display:flex; gap:6px; align-items:center; padding:8px 10px; background:var(--panel); flex-wrap:wrap; }
   #sheetEd .bar button.on { color:var(--accent); outline:1px solid var(--accent); }

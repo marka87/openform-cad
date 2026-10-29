@@ -22,6 +22,7 @@ fn initial_file() -> Option<String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init()) // KI-Anfragen ohne CORS-Sperren des WebViews (ADR 0002)
         .invoke_handler(tauri::generate_handler![read_text, write_bytes, initial_file])
         .run(tauri::generate_context!())
         .expect("OpenForm CAD konnte nicht starten");
