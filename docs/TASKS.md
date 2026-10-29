@@ -197,8 +197,9 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       nächste Strecke tangential ein („tangential an Bogen n“), ein
       gezogener Bogen schließt tangential an; beides wird als
       Abhängigkeit gemerkt und hält beim Ziehen (über T5.6).
-- [ ] T5.15 TODO — Winkel tippen: Tab schaltet beim Zeichnen vom
-      Längen- ins Winkelfeld, wie in Shapr3D.
+- [x] T5.15 DONE — Winkel tippen: beim Linienzeichnen Länge tippen, Tab,
+      Winkel (Grad zur x-Achse der Skizze, gegen den Uhrzeigersinn,
+      Minus erlaubt), Enter. Nur Winkel (Tab zuerst) = Länge bis zur Maus.
 - [ ] T5.16 TODO — Esc stufenweise: erst laufenden Zug abbrechen, dann
       Werkzeug verlassen, dann Raster aufheben. Heute passiert mehreres
       auf einmal.
@@ -267,6 +268,12 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.15: Linie nutzt dasselbe Trennzeichen wie „B × T“ beim
+  Rechteck (Tab bzw. x), Anzeige „L … mm · ∠ …°“. Entscheidung: Winkel
+  absolut zur x-Achse der Skizze (wie die Anzeige in Shapr3D), nicht
+  relativ zur vorigen Seite. Leeres Feld = Wert der Maus. Kein Kern-Test
+  (Tastatur in main.ts). Im Browser mit echten Tastendruck-Ereignissen:
+  40, Tab, 30, Enter → Linie 40,0000 mm unter 30,0000°.
 - 2026-10-29 T5.14: polyPoint nimmt nach einer Bogen-Seite deren
   Endtangente vorn in die Fangrichtungen (gewinnt bei Gleichstand gegen
   waagrecht/senkrecht); beim Absetzen Con tan(neue Seite, Bogen). Der

@@ -671,14 +671,24 @@ function finishSketch(b?: number[]) {
   if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); }
 }
 // Eingetippte Maße als Felder im HUD: Rechteck/Langloch zwei Felder (Tab wechselt), sonst eins
+const lineTyping = () => !drag && !!poly?.pts.length && !poly.smooth && !poly.arcEnd; // Linie: Länge, Tab, Winkel
 function showTyped() {
   const two = drag?.kind === 'sketch' && (tool === 'rect' || tool === 'slot' || tool === 'ellipse'), parts = typed.split('x');
   const field = (v: string | undefined, on: boolean) => `<b class="${on ? 'on' : ''}">${v || '…'}</b>`;
   hud.style.display = 'block';
-  hud.innerHTML = (two ? `B ${field(parts[0], parts.length === 1)} × T ${field(parts[1], parts.length === 2)}` : field(parts[0], true)) + ` ${display.unit} ⏎`;
+  hud.innerHTML = lineTyping() ? `L ${field(parts[0], parts.length === 1)} ${display.unit} · ∠ ${field(parts[1], parts.length === 2)}° ⏎`
+    : (two ? `B ${field(parts[0], parts.length === 1)} × T ${field(parts[1], parts.length === 2)}` : field(parts[0], true)) + ` ${display.unit} ⏎`;
 }
 // Eingetippte Maße anwenden: Rechteck/Langloch „B x T“, Kreis/n-Eck Radius (Richtung der Maus), Linie Länge in Mausrichtung
 function applyTyped() {
+  if (lineTyping() && poly!.hover) { // Linie: Länge (leer = bis zur Maus) und Winkel zur x-Achse der Skizze (leer = Mausrichtung)
+    const [ls, as] = typed.split('x'), last = poly!.pts.at(-1)!, dx = poly!.hover[0] - last[0], dy = poly!.hover[1] - last[1];
+    typed = ''; hud.style.display = 'none';
+    const l = ls ? +ls * U() : Math.hypot(dx, dy), a = as ? +as * Math.PI / 180 : Math.atan2(dy, dx);
+    if (!(l > 1e-6) || !isFinite(a)) return;
+    poly!.pts.push([last[0] + l * Math.cos(a), last[1] + l * Math.sin(a)]);
+    return showPoly(poly!.pts);
+  }
   const v = typed.split(/[x*; ]+/).map(Number).filter(n => isFinite(n) && n > 0).map(n => n * U());
   typed = '';
   hud.style.display = 'none';
@@ -1628,8 +1638,8 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   // Maße tippen, solange ein Rechteck/Kreis aufgezogen wird oder eine Linie entsteht
   if ((drag?.kind === 'sketch' || drag?.kind === 'push' && drag.started || poly?.pts.length) && !e.ctrlKey) {
-    if (/^[0-9.]$/.test(k) || k === ',') { typed += k === ',' ? '.' : k; return showTyped(); }
-    if ((k === 'tab' || k === 'x') && drag?.kind === 'sketch' && !typed.includes('x')) { e.preventDefault(); typed += 'x'; return showTyped(); }
+    if (/^[0-9.]$/.test(k) || k === ',' || (k === '-' && lineTyping() && typed.endsWith('x'))) { typed += k === ',' ? '.' : k; return showTyped(); } // Minus nur am Anfang des Winkels
+    if ((k === 'tab' || k === 'x') && (drag?.kind === 'sketch' || lineTyping()) && !typed.includes('x')) { e.preventDefault(); typed += 'x'; return showTyped(); }
     if (k === 'backspace' && typed) { typed = typed.slice(0, -1); return showTyped(); }
     if (k === 'enter' && typed) return applyTyped();
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); return showHint(`${sides} Ecken`); }
