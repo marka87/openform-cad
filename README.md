@@ -61,7 +61,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge; Name, Farbe, Werkstoff (→ Masse), skalieren, an einer Hilfsebene teilen; `●`/`○` blendet aus |
 | Maße und Abhängigkeiten | Vieleck anklicken → Seitenfeld „Maße und Abhängigkeiten“: Länge je Seite eintippen (festgelegt = orange), `—` waagrecht, `\|` senkrecht, zwei Seiten ∥ parallel / ⟂ rechtwinklig / = gleich lang; ✕ entfernt. Die Skizze hält die Abhängigkeiten auch beim Ziehen |
 | Auswahl | Fläche/Kante leuchtet beim Überfahren; Shift+Klick wählt weitere Schritte oder Kanten (mehrere Kanten auf einmal runden/fasen) |
-| Rechtsklick | Menü mit den passenden Befehlen (Löschen, Ausschalten, Duplizieren, Körper wählen …); rechts ziehen = verschieben |
+| Rechtsklick | Menü mit den passenden Befehlen (Löschen, Ausschalten, Duplizieren, Körper wählen …); rechts ziehen = Ansicht drehen, Mitte ziehen = verschieben, links ins Leere ziehen = Auswahlrahmen |
 | Kopieren / Duplizieren | `Strg+C` / `Strg+V` / `Strg+D` – Skizzen, Features oder ganze Körper, um 10 mm versetzt |
 | Maß beim Ziehen | Beim Ziehen einer Fläche Zahl tippen + `Enter` = genaue Höhe/Breite/Radius |
 | Letztes Werkzeug | `Leertaste` (Maus nicht über einer Fläche) |

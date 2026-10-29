@@ -1619,7 +1619,7 @@ let rDown: { x: number; y: number } | null = null;
 el.addEventListener('pointerdown', e => { if (e.button === 2) rDown = { x: e.clientX, y: e.clientY }; });
 el.addEventListener('pointerup', e => {
   if (e.button !== 2 || !rDown) return;
-  const moved = Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 4; // Rechts ziehen = verschieben
+  const moved = Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 4; // rechts ziehen = Ansicht drehen, kein Menü
   rDown = null;
   if (moved) return;
   if (poly) return finishPoly(!endOpen()); // beim Zeichnen: Zug beenden wie Enter, kein Menü
