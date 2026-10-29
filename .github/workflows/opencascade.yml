@@ -1,0 +1,36 @@
+# Eigener OpenCascade-Build (WASM): replicad-opencascadejs 1.1.0 plus Klassen, die replicad nicht mitbringt.
+# Läuft nur von Hand (Actions → OpenCascade-Build → Run workflow). Ergebnis als Artefakt „occt“,
+# das nach vendor/replicad-opencascadejs/dist kopiert und eingecheckt wird.
+name: OpenCascade-Build
+on: workflow_dispatch
+
+env:
+  REPLICAD_REF: v1.1.0 # muss zur replicad-Version in package.json passen
+  IMAGE: ghcr.io/taucad/opencascade.js:canary-ebd263f1-single-threaded # aus replicad-opencascadejs/package.json dieser Version
+  EXTRA: BRepAlgoAPI_Defeaturing # zusätzliche Bindungen, durch Leerzeichen getrennt
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { repository: sgenoud/replicad, ref: '${{ env.REPLICAD_REF }}' }
+      - name: ytt installieren
+        run: |
+          mkdir -p ~/bin && curl -sSL https://github.com/carvel-dev/ytt/releases/download/v0.55.4/ytt-linux-amd64 -o ~/bin/ytt
+          chmod +x ~/bin/ytt && echo ~/bin >> $GITHUB_PATH
+      - name: Konfiguration erzeugen und ergänzen
+        working-directory: packages/replicad-opencascadejs
+        run: |
+          ytt -f build-source/ --output-files build-config
+          for s in $EXTRA; do sed -i "/^  - symbol: BRepAlgoAPI_Common$/a\  - symbol: $s" build-config/custom_build_single.yml; done
+          grep -n "symbol: BRepAlgoAPI_" build-config/custom_build_single.yml
+      - name: Linken
+        working-directory: packages/replicad-opencascadejs/build-config
+        run: |
+          docker run --rm -v "$(pwd):/src" -u "$(id -u):$(id -g)" $IMAGE link custom_build_single.yml
+          for s in $EXTRA; do grep -q "class $s" replicad_single.d.ts || { echo "$s fehlt im Build"; exit 1; }; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: occt
+          path: packages/replicad-opencascadejs/build-config/replicad_single.*
