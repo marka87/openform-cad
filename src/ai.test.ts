@@ -21,6 +21,8 @@ test('KI-Adapter: verständliche Fehler, kein Senden wenn aus (T8.2)', async () 
   await expect(chat({ ...S, on: false }, [])).rejects.toThrow('ausgeschaltet');
   await expect(chat(S, [], [], reply(401, {}))).rejects.toThrow('Schlüssel abgelehnt (401)');
   await expect(chat(S, [], [], reply(429, {}))).rejects.toThrow('Kontingent erschöpft (429)');
+  await expect(chat({ ...S, base: 'http://localhost:11434/v1' }, [], [], reply(403, {}))).rejects.toThrow('OLLAMA_ORIGINS'); // nicht „Schlüssel“
+  await expect(chat({ ...S, base: 'http://localhost:11434/v1' }, [], [], reply(404, {}))).rejects.toThrow('ollama pull');
   await expect(chat(S, [], [], async () => { throw new TypeError('Failed to fetch'); })).rejects.toThrow('nicht erreichbar');
   const hang = (_u: string, i: RequestInit) => new Promise<Response>((_, no) => i.signal!.addEventListener('abort', () => no(new Error('abgebrochen'))));
   await expect(chat(S, [], [], hang, 20)).rejects.toThrow('Keine Antwort nach 0 s');

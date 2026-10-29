@@ -22,8 +22,12 @@ export function loadSettings(): AiSettings {
 }
 export function saveSettings(s: AiSettings) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} }
 
-// Desktop: über tauri-plugin-http (keine CORS-Sperren des WebViews), Browser: normales fetch
-const defaultFetch: Fetch = async (url, init) => '__TAURI_INTERNALS__' in globalThis ? (await import('@tauri-apps/plugin-http')).fetch(url, init) : fetch(url, init);
+// Desktop: über tauri-plugin-http (keine CORS-Sperren des WebViews), Browser: normales fetch.
+// Ollama lehnt die Herkunft der Desktop-App (http://tauri.localhost) mit 403 ab, erlaubt aber http://localhost → für lokale Adressen setzen
+const local = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url);
+const defaultFetch: Fetch = async (url, init) => '__TAURI_INTERNALS__' in globalThis
+  ? (await import('@tauri-apps/plugin-http')).fetch(url, local(url) ? { ...init, headers: { ...init.headers as Record<string, string>, Origin: 'http://localhost' } } : init)
+  : fetch(url, init);
 
 // Eine Anfrage; Antwort als Text und/oder Werkzeugaufrufe. Fehler als verständliche Meldung (Error.message)
 export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], doFetch: Fetch = defaultFetch, timeoutMs = 60000) {
@@ -41,7 +45,8 @@ export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], d
     throw new Error(ctl.signal.aborted ? `Keine Antwort nach ${Math.round(timeoutMs / 1000)} s` : `Anbieter nicht erreichbar (${e instanceof Error ? e.message : e})`);
   } finally { clearTimeout(timer); }
   if (!res.ok) {
-    const why = res.status === 401 || res.status === 403 ? 'Schlüssel abgelehnt' : res.status === 404 ? 'Adresse oder Modell nicht gefunden'
+    const why = res.status === 401 ? 'Schlüssel abgelehnt' : res.status === 403 ? `Zugriff verweigert${local(s.base) ? ' – Ollama erlaubt diese Herkunft nicht (OLLAMA_ORIGINS)' : ' (Schlüssel oder Freigabe)'}`
+      : res.status === 404 ? 'Adresse oder Modell nicht gefunden (Modell geladen? „ollama pull …“)'
       : res.status === 429 ? 'Zu viele Anfragen oder Kontingent erschöpft' : 'Fehler beim Anbieter';
     throw new Error(`${why} (${res.status})`);
   }

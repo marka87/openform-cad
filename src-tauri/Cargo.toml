@@ -10,7 +10,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
-tauri-plugin-http = "2"
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] } # Origin für lokales Ollama setzen (siehe src/ai.ts)
 
 [profile.release]
 strip = true

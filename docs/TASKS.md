@@ -330,6 +330,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 Fix T8.2 (Rückmeldung des Nutzers, Ollama): Ollama lehnte die
+  Anfragen der Desktop-App mit 403 ab – geprüft gegen das laufende Ollama:
+  Origin http://tauri.localhost → 403, http://localhost / tauri://localhost
+  / ohne Origin → durch. Die App meldete fälschlich „Schlüssel abgelehnt“.
+  Jetzt: für localhost/127.0.0.1 setzt die Desktop-App Origin
+  http://localhost (tauri-plugin-http mit Feature unsafe-headers); 403 =
+  „Zugriff verweigert“, bei lokaler Adresse mit Hinweis auf OLLAMA_ORIGINS;
+  404 mit Hinweis „ollama pull“. Tests ergänzt. Nicht geprüft: dass das
+  Plugin den gesetzten Origin tatsächlich sendet (braucht einen Klick in
+  der Desktop-App; im Ollama-Protokoll nachsehen, ob danach 404/200 statt
+  403 kommt).
 - 2026-10-29 T8.3: src/aiTools.ts – Werkzeuge skizze_rechteck, skizze_kreis,
   extrudieren, bohrung (Durchmesser oder M3–M12 als Kernloch mit Namen
   „Gewinde Mx“, Tiefe oder „durch“); Flächen vorerst nur „oben“ auf einem
