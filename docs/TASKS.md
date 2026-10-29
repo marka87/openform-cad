@@ -117,7 +117,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T3.4 DONE — Toleranzen, Export nach SVG/PDF/DXF. Entscheidung:
       DXF bleibt reine Geometrie ohne Maße.
 
-- [ ] T3.6 TODO — Vorschau der Maßlinie beim Ablegen.
+- [x] T3.6 DONE — Vorschau der Maßlinie beim Ablegen (Länge, ⌀, R), gestrichelt.
 - [ ] T3.5 TODO — Maße in der Iso-Ansicht und an schräg gesehenen
       Kreisen.
 
@@ -323,6 +323,15 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T3.6: sheetEditor.ts preview(): sobald nur noch die Lage
+  fehlt, zeichnet die Mausbewegung Hilfs- und Maßlinie gestrichelt in die
+  vorhandene Hervorhebungsebene, Lage aus demselben offFor wie beim
+  Ablegen (Shift = schräg wirkt auch in der Vorschau). Geprüft im Browser:
+  Länge 80 in der Draufsicht, abgelegtes Maß liegt auf y = 60,85 wie die
+  Vorschau; ⌀ an einer Bohrung. Gelernt beim Testen: Kreise mit `ry`
+  (auch r = ry) baut der Kern als Ellipse, die sind als ⌀/R nicht
+  anklickbar — betrifft nur Ellipsen-Features, das Kreis-Werkzeug setzt
+  kein ry. Kein Kern-Test: reine Editor-Anzeige.
 - 2026-10-29 T2.5: Sweep.edges (at/dir/edge je Kante, wie EdgeOp) und
   Sweep.of (Körper der Kanten). Kern: anchorEdges je Kante, Patches und
   Bestätigungen kantenweise zusammengeführt, assembleWire → vorhandenes
@@ -332,8 +341,8 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   Kernlauf nach dem Nachtragen der Bezüge). Test: Rundstab an einer
   Quaderkante (Volumen exakt), zweite Kante um die Ecke. Im Browser:
   Quader 100 × 50 × 50, R 5 an zwei Kanten, Feature mit beiden Bezügen
-  gespeichert. Geschlossene Kantenzüge werden wie offene behandelt
-  (assembleWire schließt selbst, wenn die Kanten einen Ring bilden).
+  gespeichert. Nicht geprüft: geschlossene Kantenzüge (Ring um eine
+  Fläche) und Kanten in beliebiger Klickreihenfolge.
 - 2026-10-29 T1.14: anchorFaces (topo.ts) liefert patch at/more, wenn ein
   Punkt nicht mehr auf seiner über den Bezug gefundenen Fläche liegt.
   Ersatzpunkt: Flächenmitte, falls sie auf der Fläche liegt (bei Ringen

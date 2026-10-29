@@ -170,5 +170,23 @@ function move(e: PointerEvent) {
     drag.moved = true;
     return redraw();
   }
+  if ((mode === 'lin' && picks.length === 2) || ((mode === 'dia' || mode === 'rad') && picks.length === 1)) return preview(m, e.shiftKey);
   highlight(mode === 'sel' ? null : nearest(m));
+}
+// Vorschau der Maßlinie, solange nur noch die Lage fehlt (T3.6): gleiche Lage wie beim Ablegen (offFor), gestrichelt
+function preview(m: number[], shift: boolean) {
+  const g = q('.area').querySelector('.hl');
+  if (!g) return;
+  const L = (a: number[], b: number[]) => `M${a.join(' ')}L${b.join(' ')}`;
+  let d: string;
+  if (mode === 'lin') {
+    const [A, B] = picks.map(p => p.p), o = offFor({ t: 'lin' }, [A, B], 0, m, shift), n = dist(A, B) || 1;
+    const out = (P: number[]) => o.dir === 'h' ? [P[0], A[1] - o.off] : o.dir === 'v' ? [A[0] - o.off, P[1]]
+      : [P[0] + (B[1] - A[1]) / n * o.off, P[1] - (B[0] - A[0]) / n * o.off];
+    d = L(A, out(A)) + L(B, out(B)) + L(out(A), out(B));
+  } else {
+    const { c, r } = picks[0], k = dist(m, c) || 1, u = [(m[0] - c[0]) / k, (m[1] - c[1]) / k];
+    d = L(mode === 'dia' ? [c[0] - u[0] * r, c[1] - u[1] * r] : c, m);
+  }
+  g.innerHTML = `<path d="${d}" stroke-dasharray="1 0.6"/>`;
 }
