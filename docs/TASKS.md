@@ -167,12 +167,10 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       Leertaste weiter das Raster dorthin; ohne Raster „letztes Werkzeug“.
       Abweichung: bei liegenden Flächen ist „oben“ −z wie in der
       Draufsicht, nicht die y-Achse der Skizze (siehe Log).
-- [ ] T5.10 TODO — Sichtbarer Punkt am Zeiger: zeigt immer, wo der
-      nächste Klick landet. Rastet auf Raster-, Eck-, Mittel-,
-      Schnittpunkte und Linien. Farbe plus kurzes Wort („Mitte",
-      „Endpunkt", „Schnitt", „auf Linie"). Shift = frei setzen, jetzt
-      auch sichtbar. Dazu Rasterabstand nach Zoom (weit 10 mm, nah 1
-      bis 0,5 mm), die Auswahl unten links bekommt „Auto".
+- [x] T5.10 DONE — Sichtbarer Punkt am Zeiger beim Skizzieren (auch vor
+      dem ersten Linienpunkt): blau = Raster, weiß = frei (Shift),
+      orange = Punkt mit Wort „Endpunkt“, „Mitte“, „Ursprung“, „Schnitt“,
+      gelb = „auf Linie“. Raster „Auto“ nach Zoom, neu Standard.
 - [ ] T5.11 TODO — Hilfspunkte auf der Fläche, sobald ein Raster liegt:
       Flächenmitte, Ecken, Kantenmitten, Mitten von Bohrungen, alle
       einrastbar. Dazu gestrichelte Fluchtlinien, wenn der Zeiger auf
@@ -270,6 +268,17 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.10: sketchPoint zeigt den Einrastpunkt jetzt immer (vorher
+  nur bei Punkten/Linien), Farbe nach Art; Beschriftung „Mitte“ über
+  keyPoints(f, 'mid') (Seiten- und Kreismitten). Linie, Bogen, Spline und
+  Hilfslinie zeigen ihn schon vor dem ersten Klick. Raster „Auto“
+  (display.grid = 0): kleinster Schritt aus 0,1/0,5/1/5/10/50 mm, der
+  mindestens 8 px breit ist (autoStep, Test). Neuer Standard ist Auto;
+  gespeicherte Einstellungen bleiben, wer 1 mm gespeichert hat, stellt
+  unten links auf Auto. Nebenbei: flatMap(keyPoints) hätte mit dem neuen
+  Parameter den Index als 'mid' bekommen → überall als Lambda. Im Browser
+  geprüft (Zeiger über den Deckel geführt): Raster, Endpunkt, Mitte, auf
+  Linie, Ausrichten erscheinen; 49 Tests grün.
 - 2026-10-29 T5.9: lookAtWork() in main.ts: Leertaste mit liegendem Raster
   (Zeiger über derselben Ebene oder im Leeren) fliegt in 300 ms senkrecht
   auf die Rastermitte, Abstand so, dass der Umriss des Bauteils in dieser

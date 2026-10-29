@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, autoStep, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -537,14 +537,14 @@ function planeHit(pl: Frame) {
   return ray.ray.intersectPlane(P, new THREE.Vector3());
 }
 function toLocal(pl: Frame, p: THREE.Vector3) { const d = p.clone().sub(V(pl.o)); return [d.dot(V(pl.u)), d.dot(V(pl.v))]; }
-let gridStep = 1; // Rastergröße in mm (Auswahl unten links)
+const gridStep = () => display.grid || autoStep(pxSize()); // Rastergröße in mm (Auswahl unten links, 0 = Auto nach Zoom)
 // Einheit nur für Anzeige und Eingabe; das Modell rechnet immer in mm
 const U = () => display.unit === 'in' ? 25.4 : 1;
 const fmt = (mm: number, d = 1) => (mm / U()).toFixed(U() > 1 ? d + 2 : d);      // Zahl in der Anzeigeeinheit
 const len = (mm: number, d = 1) => `${fmt(mm, d)} ${display.unit}`;              // mit Einheit
 const uval = (mm: number) => +(mm / U()).toFixed(U() > 1 ? 4 : 2);               // Wert für Eingabefelder
 const mmOf = (inp: HTMLInputElement) => parseFloat(inp.value) * U();             // Eingabe → mm
-const snap = (x: number, e: PointerEvent, s = gridStep) => e.shiftKey ? x : Math.round(x / s) * s;
+const snap = (x: number, e: PointerEvent, s = gridStep()) => e.shiftKey ? x : Math.round(x / s) * s;
 // Parameter s auf der Geraden P0 + s*D, der dem Mausstrahl am nächsten liegt
 function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
   const R0 = ray.ray.origin, E = ray.ray.direction, w0 = P0.clone().sub(R0);
@@ -585,7 +585,7 @@ function setWorkPlane(h: Hit | null) {
   const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
   const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
   const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
-  const size = 20 * Math.ceil((Math.max(hi[0] - x, x - lo[0], hi[1] - y, y - lo[1]) + 10) / 10), fine = Math.max(gridStep, 1);
+  const size = 20 * Math.ceil((Math.max(hi[0] - x, x - lo[0], hi[1] - y, y - lo[1]) + 10) / 10), fine = Math.max(gridStep(), 1);
   faceGrid.children.forEach(g => (g as THREE.GridHelper).dispose());
   faceGrid.clear().add(new THREE.GridHelper(size, size / 10, 0x4da3ff, 0x4d86c4), new THREE.GridHelper(size, Math.round(size / fine), 0x4d86c4, 0x4d86c4));
   faceGrid.children.forEach((g, i) => Object.assign((g as THREE.GridHelper).material, { transparent: true, opacity: i ? 0.12 : 0.55, depthWrite: false })); // Körper bleibt sichtbar
@@ -676,7 +676,7 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
   const p = planeHit(pl);
   if (!p) return null;
   const pts = snapPoints(pl), s = !e.shiftKey && snapTo(p.toArray() as Vec, pts, snapSegs(pl), 8 * pxSize());
-  snapMark.visible = !!s;
+  snapMark.visible = true; // Punkt am Zeiger: wo der nächste Klick landet
   if (!s) { // waagrecht/senkrecht zu einem Punkt ausrichten, sonst Raster
     const raw = toLocal(pl, p), loc = pts.map(q => toLocal(pl, V(q)));
     const { ax, ay } = e.shiftKey ? { ax: null, ay: null } : alignTo(raw, loc, 8 * pxSize());
@@ -687,17 +687,24 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
     guides.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     guides.visible = !!(ax || ay);
     if (ax || ay) showSnapTip(world(q), ax && ay ? 'an zwei Punkten ausgerichtet' : ax ? 'senkrecht zum Punkt' : 'waagrecht zum Punkt');
+    else if (e.shiftKey) showSnapTip(world(q), 'frei');
+    markSnap(world(q), e.shiftKey ? 0xffffff : 0x4da3ff, 3); // Raster blau, frei weiß
     return q;
   }
-  snapMark.position.fromArray(s.p);
-  snapMark.scale.setScalar((s.kind === 'line' ? 3 : 5) * pxSize());
-  showSnapTip(snapMark.position, s.kind === 'line' ? 'auf Kante' : s.kind === 'cross' ? 'Schnittpunkt' : s.p.every(x => Math.abs(x) < 1e-9) ? 'Ursprung' : 'Punkt');
+  const mid = s.kind === 'point' && features.filter(isExtrude).some(f => keyPoints(f, 'mid').some(m => Math.hypot(...m.map((x, i) => x - s.p[i])) < 1e-6));
+  markSnap(V(s.p), s.kind === 'line' ? 0xffd75e : 0xff9a3c, s.kind === 'line' ? 3 : 5);
+  showSnapTip(snapMark.position, s.kind === 'line' ? 'auf Linie' : s.kind === 'cross' ? 'Schnitt' : s.p.every(x => Math.abs(x) < 1e-9) ? 'Ursprung' : mid ? 'Mitte' : 'Endpunkt');
   return toLocal(pl, V(s.p));
+}
+function markSnap(p: THREE.Vector3, color: number, size: number) {
+  snapMark.position.copy(p);
+  snapMark.scale.setScalar(size * pxSize());
+  (snapMark.material as THREE.MeshBasicMaterial).color.setHex(color);
 }
 const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
 function snapPoints(pl: Frame): Vec[] {
   const own = poly ? keyPoints({ ...poly.pl, id: 0, type: 'poly', p: {}, pts: poly.pts, d: 0 }) : []; // Punkte der Linie, die gerade entsteht
-  return [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(keyPoints)].filter(q => onPlane(pl, q));
+  return [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(f => keyPoints(f))].filter(q => onPlane(pl, q));
 }
 // Körperkanten und Linien flacher Skizzen
 function snapSegs(pl: Frame | null): Vec[][] {
@@ -832,7 +839,7 @@ function onDown(e: PointerEvent) {
   } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
     const P = edge ? V(edge.at) : h?.point;
     if (!P) return;
-    const pts = [...features.filter(isExtrude).filter(f => !f.hidden).flatMap(keyPoints), ...snapSegs(null).flat()];
+    const pts = [...features.filter(isExtrude).filter(f => !f.hidden).flatMap(f => keyPoints(f)), ...snapSegs(null).flat()];
     const s = snapTo(P.toArray() as Vec, pts, [], 8 * pxSize());
     if (measure.length === 2) { measure = []; measureN = []; }
     measure.push(s ? V(s.p) : P.clone());
@@ -883,7 +890,7 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   hideSnap();
-  if (!drag && ['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool)) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
+  if (!drag && (['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool) || (!poly && ['line', 'arc', 'spline', 'aux'].includes(tool)))) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
   if (poly && !drag) {
     const q = polyPoint(e);
     if (!q || !poly.pts.length) return;
@@ -937,7 +944,7 @@ function onMove(e: PointerEvent) {
       if (!drag.f) { drag.f = { id: nextId++, type: 'offset', at: drag.at, n: drag.n, d: 0, body: drag.body } satisfies Offset; add(drag.f); selId = drag.f.id; }
       const s = lineParam(drag.P0, drag.D);
       if (s === null) return;
-      drag.f.d = snap(s, e, Math.min(0.5, gridStep));
+      drag.f.d = snap(s, e, Math.min(0.5, gridStep()));
       rebuild();
       return showHud(e, `Versatz: ${len(drag.f.d)}`);
     }
@@ -949,14 +956,14 @@ function onMove(e: PointerEvent) {
         drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         add(drag.f); selId = drag.f.id;
       }
-      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep)));
+      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep())));
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${len(drag.f.r)}`);
     }
     if (drag.kind === 'plane') { // Ebene entlang ihrer Normalen verschieben
       const s = lineParam(drag.P0, drag.D);
       if (s === null) return;
-      drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep));
+      drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep()));
       rebuild();
       return showHud(e, `Abstand: ${len(drag.f.off)}`);
     }
@@ -976,7 +983,7 @@ function onMove(e: PointerEvent) {
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
-    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, Math.min(0.5, gridStep)), drag.i);
+    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, Math.min(0.5, gridStep())), drag.i);
     if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
@@ -1701,7 +1708,7 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 1, unit: 'mm' as 'mm' | 'in' };
+const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 0, unit: 'mm' as 'mm' | 'in' };
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
@@ -1743,7 +1750,7 @@ function applyDisplay() {
   $<HTMLInputElement>('bodyColor').value = display.color;
   $('secOff').style.display = display.section ? '' : 'none';
   $<HTMLInputElement>('secOff').value = String(display.secOff);
-  gridStep = display.grid; $<HTMLSelectElement>('gridStep').value = String(display.grid);
+  $<HTMLSelectElement>('gridStep').value = String(display.grid);
   $<HTMLSelectElement>('unit').value = display.unit;
 }
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };

@@ -307,16 +307,20 @@ export function alignTo(q: number[], pts: number[][], tol: number) {
 }
 
 // Punkte einer Skizze zum Einrasten (Ecken, Mitten gerader Seiten bzw. Kreismittelpunkt), unten und oben
-export function keyPoints(f: Extrude): Vec[] {
+// only 'mid' = nur Seitenmitten und Kreismitten (Beschriftung „Mitte“ beim Einrasten)
+export function keyPoints(f: Extrude, only?: 'mid'): Vec[] {
   const p = f.p, corners = f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]] : f.pts ?? [];
   const mids = f.smooth ? [] : corners.flatMap((a, i) => {
     if (f.open && i === corners.length - 1) return []; // offene Hilfslinie: kein Schlusssegment
     const b = corners[(i + 1) % corners.length];
     return a[2] ? [] : [[(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]];
   });
-  const pts = f.type === 'circle' ? [[p.cx, p.cy]] : [...corners, ...mids];
+  const pts = f.type === 'circle' ? [[p.cx, p.cy]] : only ? mids : [...corners, ...mids];
   return [0, f.d].flatMap(z => pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k] + z * f.n[k]) as Vec));
 }
+
+// Rasterabstand „Auto“ nach Zoom: der kleinste Schritt, der auf dem Bildschirm mindestens 8 Pixel breit ist (px = mm je Pixel)
+export const autoStep = (px: number) => [0.1, 0.5, 1, 5, 10, 50].find(s => s / px >= 8) ?? 100;
 
 // Kopie von f, verschoben um t und gedreht um die Achse ax (Einheitsvektor) durch c um angle (Bogenmaß)
 // Drehung um die Achse ax (Einheitsvektor) um angle (Rodrigues); Punkte zusätzlich um c gedreht und um t verschoben

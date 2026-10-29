@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -775,4 +775,14 @@ test('Skizze auf einer gekippten Fläche dreht sich mit, Bezug bleibt bis zur Be
   expect(measureVolume(r.body!)).toBeCloseTo(2200 - Math.PI * 2.25 * 2, 3);
   Object.assign(h, r.confirm.get(2));                                         // T1.15: bestätigen → grün
   expect(buildBody(fs).unsure).toEqual([]);
+});
+
+test('Raster „Auto“ nach Zoom und Seitenmitten zum Beschriften (T5.10)', () => {
+  expect(autoStep(0.01)).toBe(0.1);                                   // ganz nah: 0,1 mm = 10 px
+  expect(autoStep(0.125)).toBe(1);                                    // Bauteil 100 mm füllt 800 px
+  expect(autoStep(0.5)).toBe(5);
+  expect(autoStep(20)).toBe(100);
+  const r = { ...sketchFeature('rect', GROUND, [0, 0], [20, 10], 1, false)!, d: 0 };
+  expect(keyPoints(r, 'mid')).toContainEqual([10, 0, 0]);
+  expect(keyPoints(r, 'mid')).not.toContainEqual([0, 0, 0]);         // Ecke ist keine Mitte
 });
