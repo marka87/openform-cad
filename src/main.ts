@@ -1678,9 +1678,24 @@ addEventListener('keydown', e => {
   else if (k === 's') setTool('spline');
   else if (k === 'enter' && poly) finishPoly(!endOpen()); // Linie, Zug-Pfad und Hilfslinie: Enter = offen fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
-  else if (k === 'escape' && poly && tool === 'line' && !poly.smooth && poly.path === undefined && poly.pts.length >= 2) finishPoly(false); // Linienkette: Esc behält das Gezeichnete
-  else if (k === 'escape') { axisFor = null; patPickFor = null; if (workHit && !poly && !drag) return setWorkPlane(null), showHint(HINTS[tool]); typed = ''; clearSel(); ctx.style.display = 'none'; detachGizmo(); cancelPoly(); drag = null; disposeGroup(preview); controls.enabled = true; selId = null; setTool('select'); refresh(); }
+  else if (k === 'escape') escapeStep();
 });
+
+// Esc stufenweise, je Druck eine Stufe: Laufendes abbrechen (getippte Zahl, Kanten-/Bezugswahl, Zug, Ziehen; eine Linienkette
+// ab zwei Punkten endet offen, T5.12) → Werkzeug verlassen → Auswahl aufheben → Flächenraster aufheben
+function escapeStep() {
+  ctx.style.display = 'none';
+  if (typed) { typed = ''; hud.style.display = 'none'; return; }
+  if (axisFor !== null || patPickFor !== null) { axisFor = patPickFor = null; return showHint(HINTS[tool]); }
+  if (poly) {
+    if (tool === 'line' && !poly.smooth && poly.path === undefined && poly.pts.length >= 2) return finishPoly(false);
+    cancelPoly(); return showHint(HINTS[tool]);
+  }
+  if (drag) { drag = null; disposeGroup(preview); controls.enabled = true; return refresh(); }
+  if (tool !== 'select') return setTool('select');
+  if (selId !== null || selBody !== null || multi.size || edgeSel.length || gizmo.object) { clearSel(); detachGizmo(); return refresh(); }
+  if (workHit) { setWorkPlane(null); showHint(HINTS[tool]); }
+}
 
 // ---------- Körper: auswählen, verschieben/drehen (Griffe oder Zahlen), mit anderem Körper verrechnen ----------
 const gizmo = new TransformControls(camera, el), pivot = new THREE.Object3D(), gizmoStart = new THREE.Vector3();

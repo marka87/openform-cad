@@ -200,9 +200,10 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 - [x] T5.15 DONE — Winkel tippen: beim Linienzeichnen Länge tippen, Tab,
       Winkel (Grad zur x-Achse der Skizze, gegen den Uhrzeigersinn,
       Minus erlaubt), Enter. Nur Winkel (Tab zuerst) = Länge bis zur Maus.
-- [ ] T5.16 TODO — Esc stufenweise: erst laufenden Zug abbrechen, dann
-      Werkzeug verlassen, dann Raster aufheben. Heute passiert mehreres
-      auf einmal.
+- [x] T5.16 DONE — Esc stufenweise, je Druck eine Stufe: Laufendes
+      abbrechen (getippte Zahl, Kanten-/Bezugswahl, Zug, Ziehen; Linienkette
+      ab zwei Punkten endet offen) → Werkzeug verlassen → Auswahl aufheben
+      → Flächenraster aufheben.
 
 ## Epic 6: Modellieren
 - [x] T6.1 DONE — Fläche versetzen für ebene Flächen.
@@ -268,6 +269,14 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.16: escapeStep() ersetzt den Esc-Zweig, der bisher alles
+  auf einmal tat (Zug weg, Werkzeug weg, Auswahl weg) und das Raster
+  zuerst entfernte, sobald keine Linie lief. Kontextmenü schließt bei
+  jeder Stufe mit. Entscheidung aus T5.12 bleibt: Linienkette ab zwei
+  Punkten endet offen statt verworfen zu werden. Im Browser mit
+  Tastendruck-Ereignissen: Raster + Linie mit einem Punkt → Esc: Zug weg,
+  Werkzeug bleibt → Esc: Auswählen → Esc: Seitenfeld zu → Esc: Raster weg.
+  Kein Kern-Test (Tastatur). 54 Tests grün.
 - 2026-10-29 T5.15: Linie nutzt dasselbe Trennzeichen wie „B × T“ beim
   Rechteck (Tab bzw. x), Anzeige „L … mm · ∠ …°“. Entscheidung: Winkel
   absolut zur x-Achse der Skizze (wie die Anzeige in Shapr3D), nicht
