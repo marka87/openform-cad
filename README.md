@@ -17,7 +17,7 @@ Dann <http://localhost:5173> öffnen. Tests laufen mit `npm test`, den Build erz
 
 ### Als Desktop-App (Windows)
 
-Braucht zusätzlich Rust (rustup, im Benutzerordner) und LLVM-MinGW (`winget install MartinStorsjo.LLVM-MinGW.UCRT`); Admin-Rechte sind nicht nötig. Die passende Rust-Toolchain (`gnullvm`) legt `src-tauri/rust-toolchain.toml` fest und wird beim ersten Bau geholt.
+Braucht zusätzlich Rust (rustup, im Benutzerordner) und LLVM-MinGW (`winget install MartinStorsjo.LLVM-MinGW.UCRT`); Admin-Rechte sind nicht nötig. Einmalig `rustup set default-host x86_64-pc-windows-gnullvm` ausführen; die Toolchain wird dann beim ersten Bau geholt.
 
 ```bash
 npm run desktop

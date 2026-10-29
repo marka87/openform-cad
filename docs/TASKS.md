@@ -123,8 +123,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [x] T4.2 DONE — Öffnen/Speichern über System-Dialog, `.ofc` verknüpft.
 
-- [ ] T4.3 TODO — Installer ist neu gebaut (Stand T1.15, mit eigenem
-      OpenCascade-Build, 7,65 MB, src-tauri/target/release/bundle/nsis/).
+- [ ] T4.3 TODO — Installer ist neu gebaut (Stand T10.8, 7,99 MB,
+      src-tauri/target/release/bundle/nsis/) und startet jetzt auch ohne
+      LLVM-MinGW auf dem Rechner (siehe Log 2026-10-29 T4.3).
       Offen beim Nutzer: installieren und durchklicken — Öffnen,
       Speichern, Doppelklick auf eine `.ofc`-Datei, STEP- und
       STL-Export, Zeichnung. Dabei gleich T0.2 mitführen.
@@ -311,6 +312,18 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T4.3 (Installer neu gebaut, Durchklicken beim Nutzer offen):
+  Rust und LLVM-MinGW fehlten auf dem Rechner, per winget nachinstalliert.
+  rustup 1.29 lehnt `stable-x86_64-pc-windows-gnullvm` als Kanal ab →
+  rust-toolchain.toml auf `stable`, einmalig `rustup set default-host
+  x86_64-pc-windows-gnullvm` (README). Gefunden: die App brauchte
+  libunwind.dll (nur aus LLVM-MinGW im PATH) und WebView2Loader.dll, die
+  der Installer nicht mitlieferte → auf fremden Rechnern Absturz
+  0xC0000135, betraf vermutlich auch die älteren Installer. Behoben:
+  libunwind statisch (src-tauri/.cargo/config.toml, +crt-static),
+  WebView2Loader.dll über bundle.resources neben die exe. Geprüft: exe
+  startet ohne LLVM-MinGW im PATH (Fenster „OpenForm CAD“), 7z-Liste des
+  Installers zeigt openform-cad.exe und WebView2Loader.dll.
 - 2026-10-29 T10.8: Klick ohne Bewegung (< 4 px zwischen Drücken und
   Loslassen) „schärft“ die Form (drag.armed): sie bleibt aktiv, folgt der
   Maus, der nächste Klick beendet sie über denselben Weg wie das Ziehen.

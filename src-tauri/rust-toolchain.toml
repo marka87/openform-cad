@@ -1,4 +1,5 @@
 # Ohne Admin-Rechte baubar: Rust-Toolchain auf LLVM-MinGW statt Microsoft C++ Build Tools (Entscheidung T4.1, docs/TASKS.md).
 # Die gnu-Toolchain mit LLVM-MinGW im PATH stürzt in Build-Skripten ab (Zugriffsverletzung), gnullvm passt dazu.
 [toolchain]
-channel = "stable-x86_64-pc-windows-gnullvm"
+# rustup ≥ 1.29 verbietet den Host im Kanalnamen → einmalig: rustup set default-host x86_64-pc-windows-gnullvm
+channel = "stable"
