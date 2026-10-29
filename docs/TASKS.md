@@ -310,8 +310,30 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       schon vor dem Klick sichtbar. T5.17 (Fehlerbild des Nutzers) bleibt
       offen, bis die Feldnotizen da sind.
 
+### Rückmeldung des Nutzers nach dem Installer (2026-10-29)
+- [x] T10.9 DONE — Strg oder Shift + Klick nimmt Schritte einzeln in die
+      Auswahl auf oder wieder heraus (auch den zuerst gewählten), im
+      Modell, in der Schrittliste und bei Kanten; Rahmen mit Strg/Shift = dazu.
+- [x] T10.10 DONE — Alles auswählen (Strg+A) und „Alle Kreise auswählen“
+      (allgemein: alle Skizzen/Features gleicher Art) im Rechtsklickmenü.
+- [x] T10.11 DONE — Boden-Raster wächst mit dem Modell (bisher fest
+      400 × 400 mm), Zellen bleiben 10 mm bzw. 1 mm.
+
 ## Log
 (neueste oben)
+- 2026-10-29 T10.9–T10.11 (Rückmeldung des Nutzers, ein Commit, alles
+  Auswahl/Anzeige in main.ts): toggleSel() für Strg/Shift+Klick im Modell
+  und in der Schrittliste (der erste Schritt lässt sich jetzt auch
+  abwählen, der nächste rückt nach), Kanten und Rahmen nehmen Strg wie
+  Shift. selectWhere() bündelt Rahmen, Strg+A und den Menüeintrag „Alle
+  Kreise (Skizzen) auswählen“ (gleiche Art und gleich flach/extrudiert,
+  damit Bohrungsskizzen nicht mit Zylindern gemischt werden). fitGrid():
+  Bodenraster mindestens 400 mm, sonst 1,25 × größte Ausdehnung, auf
+  200 mm gerundet; läuft nach jedem Kernlauf. Geprüft im Browser mit
+  Testmodell (3 Kreis-Skizzen, extrudierter Kreis, Rechtecke, Quader bei
+  300 mm): Raster reicht über den Quader, Strg+A = 6, Strg-Klick ab/an,
+  Shift-Klick auf den ersten, Menü wählt genau die 3 Kreis-Skizzen. Kein
+  Kern-Test: reine Oberflächenlogik ohne Kernanteil.
 - 2026-10-29 T4.3 (Installer neu gebaut, Durchklicken beim Nutzer offen):
   Rust und LLVM-MinGW fehlten auf dem Rechner, per winget nachinstalliert.
   rustup 1.29 lehnt `stable-x86_64-pc-windows-gnullvm` als Kanal ab →

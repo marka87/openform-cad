@@ -19,7 +19,7 @@ type Tool = 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen (Shift = dazu) · rechts ziehen = drehen · Mitte ziehen = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen · Strg/Shift+Klick = einzeln dazu/weg · Strg+A = alles · rechts ziehen = drehen · Mitte ziehen = verschieben',
   rect:   'Klicken = Anfang, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei „20x10“ tippen + Enter = genaues Maß · Ende = an der Maus fertig',
   circle: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
   ngon:   'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
@@ -102,9 +102,23 @@ resetView();
 // ---------- Modell ----------
 let features: Feature[] = [], nextId = 1, selId: number | null = null, tool: Tool = 'select';
 let drag: any = null, ready = false;
-const multi = new Set<number>();  // weitere ausgewählte Features (Shift+Klick)
+const multi = new Set<number>();  // weitere ausgewählte Features (Strg/Shift+Klick)
 let edgeSel: { at: Vec; dir: Vec; body?: number }[] = []; // angeklickte Kanten, zum gemeinsamen Runden/Fasen
 const clearSel = () => { selId = selBody = null; multi.clear(); edgeSel = []; };
+// Strg/Shift+Klick: Schritt in die Auswahl aufnehmen oder herausnehmen; fällt der erste weg, rückt der nächste nach
+function toggleSel(id: number) {
+  if (selId === null) selId = id;
+  else if (id !== selId) multi.has(id) ? multi.delete(id) : multi.add(id);
+  else { const [next] = multi; selId = next ?? null; if (next !== undefined) multi.delete(next); }
+}
+// Alle sichtbaren Skizzen/Features auswählen, die pass erfüllen (Rahmen, Strg+A, „Alle Kreise“)
+function selectWhere(pass: (f: Extrude) => boolean, add = false) {
+  if (!add) { clearSel(); detachGizmo(); }
+  const hit = live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && pass(f)).map(f => f.id);
+  for (const id of hit) { if (selId === null) selId = id; else if (id !== selId) multi.add(id); }
+  refresh();
+  return hit.length;
+}
 const undoStack: string[] = [], redoStack: string[] = [];
 let meta: Record<number, BodyMeta> = {}; // Name, Sichtbarkeit, Farbe, Werkstoff je Körper
 let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werden berechnet, neue Schritte kommen dorthin
@@ -228,6 +242,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     disposeGroup(bodyGroup);
     for (const m of data.meshes) bodyGroup.add(bodyMesh(m));
     bodyGroup.updateMatrixWorld(true);
+    fitGrid();
     bodyIds = data.meshes.map(m => m.body);
     bodyVol = Object.fromEntries(data.meshes.map(m => [m.body, m.volume]));
     if (selBody !== null && !bodyIds.includes(selBody)) { selBody = null; renderPanel(); }
@@ -478,7 +493,7 @@ function renderTree() {
     if ((ev.target as HTMLElement).isContentEditable) return;
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
     else if (a === 'roll') { pushHistory(); roll = i + 1 >= features.length ? null : i + 1; }
-    else if (ev.shiftKey && selId !== null && selId !== f.id) multi.has(f.id) ? multi.delete(f.id) : multi.add(f.id);
+    else if (ev.shiftKey || ev.ctrlKey) toggleSel(f.id);
     else { clearSel(); selId = f.id; detachGizmo(); }
     refresh();
   });
@@ -1040,10 +1055,10 @@ function onDown(e: PointerEvent) {
       drag = { kind: 'offset', f: null, at: h.point.toArray() as Vec, n: h.n.toArray() as Vec, body: h.body, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
       controls.enabled = false; el.setPointerCapture(e.pointerId); return;
     }
-    if (!h) { drag = { kind: 'box', sx: e.clientX, sy: e.clientY, shift: e.shiftKey, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; } // Leere: Rahmen
+    if (!h) { drag = { kind: 'box', sx: e.clientX, sy: e.clientY, shift: e.shiftKey || e.ctrlKey, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; } // Leere: Rahmen
     if (!h.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; }
     const g = h.grip;
-    if (e.shiftKey && selId !== null && selId !== g.f.id) { multi.has(g.f.id) ? multi.delete(g.f.id) : multi.add(g.f.id); refresh(); return; }
+    if ((e.shiftKey || e.ctrlKey) && selId !== null) { toggleSel(g.f.id); refresh(); return; }
     if (!multi.has(g.f.id)) multi.clear();
     selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
     if (g.part === 'import') return; // Import ohne Körpernummer: nur auswählen
@@ -1196,7 +1211,7 @@ el.addEventListener('pointerup', e => {
   if (drag.kind === 'box') boxSelect(drag);
   if (drag.kind === 'edge' && !drag.started && !drag.f) {
     const near = (a: { at: Vec }) => V(a.at).distanceTo(V(drag.edge.at)) < 4 * pxSize();
-    edgeSel = e.shiftKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
+    edgeSel = e.shiftKey || e.ctrlKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
     selId = selBody = null; multi.clear();
   }
   if (drag.kind === 'line' && drag.arc && drag.started && poly) {
@@ -1549,16 +1564,11 @@ let dimLabels: { el: HTMLElement; p: THREE.Vector3 }[] = [];
 const boxSel = $('boxSel');
 function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift: boolean; started: boolean }) {
   boxSel.style.display = 'none';
-  if (!d.shift) { clearSel(); detachGizmo(); }
-  if (d.started) {
-    const r = el.getBoundingClientRect(), [x0, x1] = [Math.min(d.sx, d.ex!), Math.max(d.sx, d.ex!)], [y0, y1] = [Math.min(d.sy, d.ey!), Math.max(d.sy, d.ey!)];
-    const inside = (p: Vec) => { const s = V(p).project(camera), x = r.left + (s.x + 1) / 2 * r.width, y = r.top + (1 - s.y) / 2 * r.height; return s.z < 1 && x >= x0 && x <= x1 && y >= y0 && y <= y1; };
-    const hit = live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && keyPoints(f).every(inside)).map(f => f.id);
-    for (const id of hit) { if (selId === null) selId = id; else if (id !== selId) multi.add(id); }
-    refresh();
-    return showNotice(hit.length ? `${hit.length} ausgewählt${hit.length > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
-  }
-  refresh();
+  if (!d.started) { if (!d.shift) { clearSel(); detachGizmo(); } return refresh(); }
+  const r = el.getBoundingClientRect(), [x0, x1] = [Math.min(d.sx, d.ex!), Math.max(d.sx, d.ex!)], [y0, y1] = [Math.min(d.sy, d.ey!), Math.max(d.sy, d.ey!)];
+  const inside = (p: Vec) => { const s = V(p).project(camera), x = r.left + (s.x + 1) / 2 * r.width, y = r.top + (1 - s.y) / 2 * r.height; return s.z < 1 && x >= x0 && x <= x1 && y >= y0 && y <= y1; };
+  const n = selectWhere(f => keyPoints(f).every(inside), d.shift);
+  showNotice(n ? `${n} ausgewählt${n > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
 }
 // Maße an der ausgewählten Skizze: Seitenlängen, Bogenradien, Rechteck Breite/Tiefe, Kreisradius.
 // Klick auf ein Maß = Wert tippen; geschrieben wird über das passende Feld im Seitenfeld (gleiche Prüfung und Abhängigkeiten)
@@ -1716,6 +1726,7 @@ el.addEventListener('pointerup', e => {
 });
 el.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('pointerdown', e => { if (!ctx.contains(e.target as Node)) ctx.style.display = 'none'; }, true);
+const KINDS = { rect: 'Rechtecke', circle: 'Kreise', poly: 'Vielecke', line: 'Linien' };
 function openCtx(e: PointerEvent) {
   setRay(e);
   const { face: h, edge } = pick(), g = h?.grip, prev = getSel();
@@ -1726,6 +1737,7 @@ function openCtx(e: PointerEvent) {
       ['Duplizieren (Strg+D)', () => { copySel(); paste(); }], ['Kopieren (Strg+C)', copySel]);
     const b = sel.type === 'move' ? sel.body : sel.type !== 'combine' && sel.type !== 'plane' ? bodyOf(sel) : null;
     if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
+    if (isExtrude(sel)) items.push([`Alle ${KINDS[sel.type]} (${sel.d ? 'Körper' : 'Skizzen'}) auswählen`, () => showNotice(`${selectWhere(f => f.type === sel.type && !f.d === !sel.d)} ausgewählt`)]);
     if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details:not(.cons)'); if (d) d.open = true; }]);
     items.push(null);
   } else if (edge) items.push(['Kante runden / fasen …', () => { clearSel(); edgeSel = [edge]; refresh(); }], null);
@@ -1886,6 +1898,7 @@ addEventListener('keydown', e => {
   }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
+  else if (e.ctrlKey && k === 'a' && !(e.target as HTMLElement).isContentEditable) { e.preventDefault(); showNotice(`${selectWhere(() => true)} ausgewählt`); }
   else if (e.ctrlKey) return; // Strg+S/R/… sind keine Werkzeugtasten
   else if (k === 'v') setTool('select');
   else if (k === 'r') setTool('rect');
@@ -2120,6 +2133,17 @@ function lookAtWork() {
 }
 const samePlane = (a: Hit, b: Hit) => a.n.dot(b.n) > 0.9999 && Math.abs(a.n.dot(a.point.clone().sub(b.point))) < 1e-3;
 // Kamera so setzen, dass Körper und Skizzen ganz zu sehen sind
+// Boden-Raster wächst mit dem Modell (Zellen bleiben 10 mm / 1 mm), damit große Teile nicht über den Rand ragen
+function fitGrid() {
+  const b = new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group));
+  const ext = b.isEmpty() ? 0 : Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z);
+  const size = Math.max(400, 200 * Math.ceil(ext * 1.25 / 100));
+  if (size === grid.userData.size) return;
+  grid.userData.size = size;
+  for (const [g, n, c1, c2] of [[grid, size / 10, 0x555b66, 0x3a3f48], [fine, size, 0x2c3037, 0x2c3037]] as const) {
+    g.geometry.dispose(); g.geometry = new THREE.GridHelper(size, n, c1, c2).geometry;
+  }
+}
 function fitView() {
   const box = new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group));
   if (box.isEmpty()) return resetView();
