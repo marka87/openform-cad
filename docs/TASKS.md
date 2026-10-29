@@ -274,12 +274,11 @@ Vom Nutzer mit Screenshots aus Shapr3D gewünscht und freigegeben
 (Reihenfolge und Umsetzung nach eigenem Ermessen, „sie sollen am Ende
 funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
-- [ ] T10.1 TODO — Auswählen mit Rahmen: im Auswählen-Werkzeug Linksziehen
-      ins Leere zieht einen Rahmen auf, alles darin wird ausgewählt.
-      Drehen der Ansicht wandert auf die rechte Maustaste, Verschieben
-      auf die mittlere (Rechtsklick ohne Ziehen bleibt Kontextmenü).
-      Ausgewählte Skizzen zeigen ihre Maße direkt am Element (Breite,
-      Höhe, Radius), Klick auf ein Maß = neuen Wert tippen.
+- [x] T10.1 DONE — Linksziehen ins Leere = Auswahlrahmen (Shift = dazu),
+      Ansicht drehen = rechte Maustaste, verschieben = mittlere, Rad =
+      zoomen, Rechtsklick ohne Ziehen = Menü. Ausgewählte Skizzen zeigen
+      ihre Maße am Element (Rechteck B/T, Kreis R, Seitenlängen, Bogen R);
+      Klick auf ein Maß = Wert tippen, Enter.
 - [x] T10.2 DONE — Aufklappmenü (▸) an Rechteck (Diagonal, Mitte,
       3 Punkte) und Vieleck (3, 5, 6, 8 Ecken), gewählte Art steht neben
       dem Namen.
@@ -305,6 +304,19 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.1: OrbitControls.mouseButtons LEFT = keins, RIGHT = drehen,
+  MIDDLE = verschieben. Im Auswählen-Werkzeug startet Linksziehen ins
+  Leere drag 'box' (#boxSel), beim Loslassen werden alle Skizzen/Features
+  gewählt, deren keyPoints ganz im Rahmen liegen (selId + multi); Klick
+  ins Leere hebt die Auswahl wie bisher auf. buildDims zeigt jetzt auch
+  Rechteck, Kreis und Bogenradien; ein Maß ist anklickbar und schreibt
+  über das passende Feld im Seitenfeld (gleiche Prüfung, Abhängigkeiten,
+  Rückgängig). Gefunden: rebuild() baute die Maße neu und entfernte das
+  Eingabefeld, und der Mausdruck zog den Fokus weg → Sperre während der
+  Eingabe, Öffnen erst beim Klick. Im Browser: Rahmen über zwei Skizzen →
+  beide gewählt; Breite 30 → 45 am Maß getippt → Modell 45. Nicht mit
+  echter rechter Maustaste geprüft (Werkzeug kann nur links ziehen).
+  Kein Kern-Test (Oberfläche), 55 Tests grün.
 - 2026-10-29 T10.7: Kanten- und Flächenauswertung aus workPoints
   herausgezogen (edgeInfo, edgePoints, faceArea in main.ts), Messen nutzt
   sie: Rastpunkte = Skizzenpunkte (Mitten als „Mitte“ markiert) plus

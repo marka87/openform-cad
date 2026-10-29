@@ -91,6 +91,10 @@
   #dims { position:fixed; inset:0; pointer-events:none; }
   #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:var(--text); background:rgba(42,46,53,.85);
     border-radius:4px; padding:1px 4px; white-space:nowrap; }
+  #dims span { pointer-events:auto; cursor:text; }
+  #dims span:hover { outline:1px solid var(--accent); }
+  #dims input { position:absolute; transform:translate(-50%,-50%); width:6em; font:11px system-ui; pointer-events:auto; }
+  #boxSel { position:fixed; display:none; border:1px dashed var(--accent); background:rgba(255,154,60,.08); pointer-events:none; z-index:5; }
   #dims span.lock { background:var(--accent); color:#1e2126; font-weight:600; }
   #panel .cons input { width:58px; }
   #panel .cons input.lock { border-color:var(--accent); }
@@ -141,6 +145,7 @@
 <div id="snapTip"></div>
 <div id="ctx"></div>
 <div id="flyout"></div>
+<div id="boxSel"></div>
 <div id="measLabel"></div>
 <div id="snapMenu">
   <b>Einrasten an</b>

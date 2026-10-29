@@ -19,7 +19,7 @@ type Tool = 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' |
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = drehen · Rechts = verschieben',
+  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen (Shift = dazu) · rechts ziehen = drehen · Mitte ziehen = verschieben',
   rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · beim Ziehen „20x10“ tippen + Enter = genaues Maß',
   circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
   ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
@@ -93,7 +93,8 @@ el.addEventListener('pointerdown', onDown);
 const controls = new OrbitControls(camera, el);
 controls.enableDamping = true;
 controls.zoomToCursor = true; // Mausrad zoomt dorthin, wo die Maus steht
-controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+// Links gehört den Werkzeugen (Ziehen ins Leere = Rahmen), rechts drehen, Mitte verschieben, Rad zoomen (wie Shapr3D)
+controls.mouseButtons = { LEFT: null as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
 function resetView() { camera.position.set(140, 110, 160); controls.target.set(0, 0, 0); }
 resetView();
 
@@ -1011,7 +1012,8 @@ function onDown(e: PointerEvent) {
       drag = { kind: 'offset', f: null, at: h.point.toArray() as Vec, n: h.n.toArray() as Vec, body: h.body, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
       controls.enabled = false; el.setPointerCapture(e.pointerId); return;
     }
-    if (!h?.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; } // Leere: Orbit
+    if (!h) { drag = { kind: 'box', sx: e.clientX, sy: e.clientY, shift: e.shiftKey, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; } // Leere: Rahmen
+    if (!h.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; }
     const g = h.grip;
     if (e.shiftKey && selId !== null && selId !== g.f.id) { multi.has(g.f.id) ? multi.delete(g.f.id) : multi.add(g.f.id); refresh(); return; }
     if (!multi.has(g.f.id)) multi.clear();
@@ -1064,6 +1066,12 @@ function onMove(e: PointerEvent) {
     return;
   }
   setHover(false);
+  if (drag.kind === 'box') { // Auswahlrahmen aufziehen
+    if (!drag.started && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+    drag.started = true; drag.ex = e.clientX; drag.ey = e.clientY;
+    return void Object.assign(boxSel.style, { display: 'block', left: `${Math.min(drag.sx, e.clientX)}px`, top: `${Math.min(drag.sy, e.clientY)}px`,
+      width: `${Math.abs(e.clientX - drag.sx)}px`, height: `${Math.abs(e.clientY - drag.sy)}px` });
+  }
   if (drag.kind === 'line') {
     if (!drag.arc || !poly) return;
     if (!drag.started && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
@@ -1153,6 +1161,7 @@ el.addEventListener('pointerup', e => {
   onMove(e); // Endposition übernehmen
   hud.style.display = 'none';
   if (drag.kind === 'sketch') finishSketch();
+  if (drag.kind === 'box') boxSelect(drag);
   if (drag.kind === 'edge' && !drag.started && !drag.f) {
     const near = (a: { at: Vec }) => V(a.at).distanceTo(V(drag.edge.at)) < 4 * pxSize();
     edgeSel = e.shiftKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
@@ -1447,20 +1456,75 @@ function bindCons(f: Extrude) {
 // Maßzahlen an den Seiten der ausgewählten Skizze; festgelegte Maße orange, waagrecht/senkrecht als — / |
 const dims = $('dims');
 let dimLabels: { el: HTMLElement; p: THREE.Vector3 }[] = [];
+// Rahmenauswahl: alle Skizzen und Features, deren Eckpunkte ganz im Rahmen liegen; Klick ohne Ziehen = Auswahl aufheben
+const boxSel = $('boxSel');
+function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift: boolean; started: boolean }) {
+  boxSel.style.display = 'none';
+  if (!d.shift) { clearSel(); detachGizmo(); }
+  if (d.started) {
+    const r = el.getBoundingClientRect(), [x0, x1] = [Math.min(d.sx, d.ex!), Math.max(d.sx, d.ex!)], [y0, y1] = [Math.min(d.sy, d.ey!), Math.max(d.sy, d.ey!)];
+    const inside = (p: Vec) => { const s = V(p).project(camera), x = r.left + (s.x + 1) / 2 * r.width, y = r.top + (1 - s.y) / 2 * r.height; return s.z < 1 && x >= x0 && x <= x1 && y >= y0 && y <= y1; };
+    const hit = live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && keyPoints(f).every(inside)).map(f => f.id);
+    for (const id of hit) { if (selId === null) selId = id; else if (id !== selId) multi.add(id); }
+    refresh();
+    return showHint(hit.length ? `${hit.length} ausgewählt${hit.length > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
+  }
+  refresh();
+}
+// Maße an der ausgewählten Skizze: Seitenlängen, Bogenradien, Rechteck Breite/Tiefe, Kreisradius.
+// Klick auf ein Maß = Wert tippen; geschrieben wird über das passende Feld im Seitenfeld (gleiche Prüfung und Abhängigkeiten)
+let dimEditing = false; // Maß wird gerade an der Skizze getippt: nicht neu aufbauen, sonst verschwindet das Eingabefeld
 function buildDims() {
+  if (dimEditing) return;
   dims.replaceChildren();
   dimLabels = [];
   const f = getSel();
-  if (!f || !isExtrude(f) || f.type !== 'poly' || f.smooth) return;
-  const M = moveMatrix(movesAfter(features, features.indexOf(f))), pts = f.pts!, world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
-  pts.forEach((a, i) => {
-    if (a[2] || f.open && i === pts.length - 1) return; // offene Hilfslinie: kein Schlusssegment
-    const el = document.createElement('span'), c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i);
-    el.textContent = `${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`;
-    if (c('len')) el.className = 'lock';
+  if (!f || !isExtrude(f) || f.smooth || f.p.ry) return;
+  const M = moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
+  const label = (text: string, at: number[], target: string, lock = false) => {
+    const el = document.createElement('span');
+    el.textContent = text; if (lock) el.className = 'lock';
+    el.title = 'Klicken = Maß tippen';
+    el.onmousedown = e => e.preventDefault(); // Fokus nicht auf die Seite ziehen, sonst schließt das Eingabefeld sofort
+    el.onclick = e => { e.stopPropagation(); editDim(el, target); };
     dims.append(el);
-    dimLabels.push({ el, p: world(a).add(world(pts[(i + 1) % pts.length])).multiplyScalar(0.5).applyMatrix4(M) });
+    dimLabels.push({ el, p: world(at).applyMatrix4(M) });
+  };
+  const p = f.p;
+  if (f.type === 'rect') {
+    label(fmt(p.w), [p.x + p.w / 2, p.y], 'input[data-k="p.w"]');
+    label(fmt(p.h), [p.x + p.w, p.y + p.h / 2], 'input[data-k="p.h"]');
+    return;
+  }
+  if (f.type === 'circle') return label(`R ${fmt(p.r)}`, [p.cx + p.r, p.cy], 'input[data-k="p.r"]');
+  const pts = f.pts!;
+  pts.forEach((a, i) => {
+    if (f.open && i === pts.length - 1) return; // offene Linie: kein Schlusssegment
+    const b = pts[(i + 1) % pts.length], c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (a[2]) { // Bogen: Radius am Scheitel
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]), s = a[2] * L / 2, r = L * (1 + a[2] ** 2) / (4 * Math.abs(a[2]));
+      return label(`R ${fmt(r)}`, [mid[0] + (b[1] - a[1]) / L * s, mid[1] - (b[0] - a[0]) / L * s], `.cons input.rad[data-i="${i}"]`, c('rad'));
+    }
+    label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, mid, `.cons input.len[data-i="${i}"]`, c('len'));
   });
+}
+// Maß an der Skizze bearbeiten: Eingabefeld an Ort und Stelle, Enter übernimmt, Esc bricht ab
+function editDim(span: HTMLSpanElement, target: string) {
+  const field = panel.querySelector<HTMLInputElement>(target);
+  if (!field) return showHint('Dieses Maß lässt sich hier nicht tippen (z. B. offene Linie) – im Seitenfeld ändern');
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.step = '0.5'; inp.value = field.value;
+  inp.style.left = span.style.left; inp.style.top = span.style.top;
+  span.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  dimEditing = true;
+  const finish = (ok: boolean) => {
+    if (done) return; done = true; dimEditing = false;
+    if (ok && inp.value !== field.value) { field.value = inp.value; field.dispatchEvent(new Event('change')); }
+    inp.remove(); buildDims();
+  };
+  inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
+  inp.onblur = () => finish(true);
 }
 function updateDims() {
   for (const { el, p } of dimLabels) {
