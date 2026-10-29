@@ -753,6 +753,7 @@ function finishPoly(closed = true) {
     pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); return refresh();
   }
   const f = poly && polyFeature(poly.pl, poly.pts, nextId, poly.onFace, poly.smooth);
+  if (!f && poly) return showHint('Ergibt keine Fläche (mind. 3 Punkte, ohne Überkreuzung) · weiterzeichnen oder Esc'); // gezeichnete Punkte nicht verwerfen
   if (f) f.body = poly!.body ?? f.id;
   if (f && !f.smooth) { // genau waagrechte/senkrechte Seiten (durch Einrasten) bleiben es: Abhängigkeit setzen
     const pts = f.pts!, cons = pts.flatMap((a, i): Con[] => {
@@ -1340,7 +1341,9 @@ el.addEventListener('pointerup', e => {
   if (e.button !== 2 || !rDown) return;
   const moved = Math.hypot(e.clientX - rDown.x, e.clientY - rDown.y) > 4; // Rechts ziehen = verschieben
   rDown = null;
-  if (!moved) openCtx(e);
+  if (moved) return;
+  if (poly) return finishPoly(poly.path === undefined && !poly.aux); // beim Zeichnen: Zug beenden wie Enter, kein Menü
+  openCtx(e);
 });
 el.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('pointerdown', e => { if (!ctx.contains(e.target as Node)) ctx.style.display = 'none'; }, true);

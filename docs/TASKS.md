@@ -153,9 +153,9 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 - [x] T5.7 DONE — Leerer Bereich über (und unter) der Werkzeugliste:
       das Panel war oben und unten am Fenster festgemacht und hat die
       Werkzeuge mittig gesetzt. Jetzt nur so hoch wie die Werkzeuge.
-- [ ] T5.8 TODO — Rechtsklick während des Zeichnens beendet den Zug,
-      statt das normale Kontextmenü mit „Löschen" und „Fläche löschen"
-      zu öffnen (laut Screenshot heute so).
+- [x] T5.8 DONE — Rechtsklick während des Zeichnens beendet den Zug wie
+      Enter, statt das Kontextmenü zu öffnen. Ergibt der Zug keine
+      Fläche, bleiben die Punkte stehen (Hinweis), statt zu verschwinden.
 - [ ] T5.17 TODO — Messen überarbeiten. Der Nutzer meldet, dass es nicht
       richtig funktioniert; das genaue Fehlerbild steht noch aus und
       soll aus T0.2 kommen. Erst reproduzieren und beschreiben, dann
@@ -269,6 +269,14 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.8: Rechtsklick (ohne Ziehen) bei laufendem Zug = Enter:
+  Linie schließt zur Fläche, Hilfslinie und Zug-Pfad enden offen. Nebenbei
+  gefunden: Enter auf einem Zug, der keine Fläche ergibt (z. B. 2 Punkte),
+  hat die gezeichneten Punkte still verworfen → jetzt Hinweis, Punkte
+  bleiben, weiterzeichnen oder Esc. Offene normale Linien kommen mit
+  T5.12. Im Browser geprüft: 2 Punkte + Rechtsklick → Hinweis, kein Menü;
+  dritter Punkt + Rechtsklick → Dreieck. Kern-Test entfällt (reine
+  Oberfläche), 48 Tests grün.
 - 2026-10-29 T5.7: Ursache gefunden, kein WebView2-Sonderfall: #toolbar
   hatte top:120px und bottom:150px plus justify-content:center, wuchs
   also mit der Fensterhöhe, die Knöpfe saßen in der Mitte. Jetzt
