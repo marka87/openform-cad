@@ -286,9 +286,11 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       Spiegeln (ganzer Körper)“ – Reihe, Kreis, Spiegeln an X/Y/Z oder
       angeklickter Kante/Fläche. Skizze/Schritt: öffnet deren Muster/
       Spiegeln wie bisher. Erledigt damit auch T6.4.
-- [ ] T10.4 TODO — Text als Skizze (replicad drawText, opentype ist schon
-      installiert) mit einer mitgelieferten freien Schrift (OFL),
-      extrudieren oder gravieren. Nur wenn machbar ohne neue Lizenzfolgen.
+- [ ] T10.4 BLOCKED(Schriftdatei fehlt: im Projekt liegt keine, eine
+      herunterzuladen braucht die Freigabe des Nutzers, siehe Offene
+      Fragen) — Text als Skizze (replicad drawText/loadFont, opentype ist
+      installiert), extrudieren oder gravieren. Technisch machbar: eigenes
+      Feature `text` im Kern, Schrift wird dem Worker übergeben.
 - [x] T10.5 DONE — Transformieren-Menü (▸ an „Verschieben / Drehen“):
       Griffe, Werte (verschieben/drehen/skalieren), Drehen um Achse
       (Kante anklicken, Winkel aus dem Feld), Ausrichten (Fläche des
@@ -746,6 +748,13 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
+- 2026-10-29 Text (T10.4): Woher kommt die Schrift? (a) Eine freie Schrift
+  (z. B. DejaVu Sans, Lizenz frei mit Hinweis, ca. 0,7 MB, oder Liberation
+  Sans, OFL, ca. 0,4 MB) einmal herunterladen und mitliefern – braucht
+  die Freigabe für den Download. (b) Der Nutzer wählt eine Schriftdatei
+  von seinem Rechner (z. B. aus C:\Windows\Fonts); sie wird mit dem Modell
+  gespeichert (Datei wird größer, Lizenz der Schrift liegt beim Nutzer).
+  Vorschlag: (a) mit DejaVu Sans.
 - 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
   nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
   reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
