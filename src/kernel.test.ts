@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -854,4 +854,15 @@ test('Tangential an Bögen beim Zeichnen: gemerkte Abhängigkeiten lassen sich l
   const c = dir(1), h = -2 * Math.atan(out[1][2]), start = [c[0] * Math.cos(h) - c[1] * Math.sin(h), c[0] * Math.sin(h) + c[1] * Math.cos(h)]; // Anfangsrichtung = Sehne um −h gedreht
   expect(start[0] * dir(0)[0] + start[1] * dir(0)[1]).toBeCloseTo(1, 4);         // Bogen setzt Seite 1 fort
   expect(t(1)[0] * dir(2)[0] + t(1)[1] * dir(2)[1]).toBeCloseTo(1, 4);           // Seite 3 setzt den Bogen fort
+});
+
+test('Rechteck aus drei Punkten: Kante plus Breite, immer gegen den Uhrzeigersinn (T10.2)', () => {
+  const area = (p: number[][]) => p.reduce((s, q, i) => s + q[0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * q[1], 0) / 2;
+  const up = rect3Pts([0, 0], [10, 0], 4), down = rect3Pts([0, 0], [10, 0], -4);
+  expect(up).toEqual([[0, 0], [10, 0], [10, 4], [0, 4]]);
+  expect(area(up)).toBeCloseTo(40);
+  expect(area(down)).toBeCloseTo(40);                                            // andere Seite, gleiche Drehrichtung
+  const tilted = rect3Pts([0, 0], [3, 4], 2);                                   // schräge Kante (Länge 5)
+  expect(Math.hypot(tilted[2][0] - tilted[1][0], tilted[2][1] - tilted[1][1])).toBeCloseTo(2);
+  expect(area(tilted)).toBeCloseTo(10);
 });

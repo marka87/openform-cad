@@ -66,6 +66,13 @@
   #snapTip { position:fixed; pointer-events:none; font:11px system-ui; color:#1e2126; background:#ffd2a8; border-radius:4px; padding:1px 5px; display:none; }
   #hud b { display:inline-block; min-width:34px; background:#1e2126; color:var(--accent); border-radius:4px; padding:0 4px; margin:0 2px; text-align:right; }
   #hud b.on { outline:2px solid #1e2126; background:#fff; color:#1e2126; }
+  #toolbar .dd { float:right; margin-left:6px; padding:0 4px; border-radius:4px; color:var(--muted); }
+  #toolbar .dd:hover { background:#454b55; color:var(--text); }
+  #toolbar small.mode { color:var(--muted); font-size:11px; margin-left:3px; }
+  #flyout { position:fixed; display:none; z-index:20; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px; }
+  #flyout button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:5px 12px; cursor:pointer; font:inherit; }
+  #flyout button:hover { background:#353a42; }
+  #flyout button.on { color:var(--accent); }
   #ctx { position:fixed; display:none; z-index:20; min-width:190px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px;
     box-shadow:0 6px 24px rgba(0,0,0,.4); }
   #ctx button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
@@ -98,10 +105,10 @@
 <body>
 <div id="toolbar">
   <button data-tool="select">Auswählen / Ziehen <kbd>V</kbd></button>
-  <button data-tool="rect">Rechteck <kbd>R</kbd></button>
+  <button data-tool="rect">Rechteck <small class="mode"></small><kbd>R</kbd><span class="dd" data-menu="rect" title="Art wählen">▸</span></button>
   <button data-tool="circle">Kreis <kbd>C</kbd></button>
   <button data-tool="ellipse">Ellipse <kbd>I</kbd></button>
-  <button data-tool="ngon">Vieleck <kbd>N</kbd></button>
+  <button data-tool="ngon">Vieleck <small class="mode"></small><kbd>N</kbd><span class="dd" data-menu="ngon" title="Ecken wählen">▸</span></button>
   <button data-tool="slot">Langloch <kbd>O</kbd></button>
   <button data-tool="line">Linie <kbd>L</kbd></button>
   <button data-tool="aux" title="Hilfslinie: bildet keine Fläche, nur zum Einrasten">Hilfslinie <kbd>G</kbd></button>
@@ -127,6 +134,7 @@
 <div id="hud"></div>
 <div id="snapTip"></div>
 <div id="ctx"></div>
+<div id="flyout"></div>
 <div id="cube"></div>
 <div id="tree"></div>
 <div id="dims"></div>

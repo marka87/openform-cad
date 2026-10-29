@@ -131,6 +131,13 @@ export function ngonPts(a: number[], b: number[], n: number): number[][] {
   return Array.from({ length: n }, (_, i) => [a[0] + r * Math.cos(t0 + 2 * Math.PI * i / n), a[1] + r * Math.sin(t0 + 2 * Math.PI * i / n)]);
 }
 
+// Rechteck aus drei Punkten: Kante a–b, Breite w quer dazu (Vorzeichen = Seite), immer gegen den Uhrzeigersinn
+export function rect3Pts(a: number[], b: number[], w: number): number[][] {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, n = [-(b[1] - a[1]) / L * w, (b[0] - a[0]) / L * w];
+  const pts = [a, b, [b[0] + n[0], b[1] + n[1]], [a[0] + n[0], a[1] + n[1]]].map(p => [p[0], p[1]]);
+  return w < 0 ? pts.reverse() : pts;
+}
+
 // Langloch im Rechteck a–b: halbrunde Enden an der kürzeren Seite (gegen den Uhrzeigersinn)
 export function slotPts(a: number[], b: number[]): number[][] {
   const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);

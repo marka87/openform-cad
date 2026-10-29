@@ -280,8 +280,9 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       auf die mittlere (Rechtsklick ohne Ziehen bleibt Kontextmenü).
       Ausgewählte Skizzen zeigen ihre Maße direkt am Element (Breite,
       Höhe, Radius), Klick auf ein Maß = neuen Wert tippen.
-- [ ] T10.2 TODO — Werkzeuge mit Aufklappmenü: Rechteck (Mitte,
-      Diagonal, 3 Punkte), Vieleck (3, 5, 6, 8 Ecken).
+- [x] T10.2 DONE — Aufklappmenü (▸) an Rechteck (Diagonal, Mitte,
+      3 Punkte) und Vieleck (3, 5, 6, 8 Ecken), gewählte Art steht neben
+      dem Namen.
 - [ ] T10.3 TODO — Verschieben/Drehen, Spiegeln, Muster (linear und Kreis)
       als eigene Werkzeuge in der Leiste, für Skizzen und ganze Körper
       (bisher nur im Seitenfeld einer Skizze). Erledigt T6.4 mit.
@@ -302,6 +303,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.2: #flyout in index.html, MENUS in main.ts. Rechteck
+  „Mitte“: Zugpunkt = Mitte, getippte Maße gelten als ganze Breite/Tiefe.
+  „3 Punkte“: erst Kante ziehen (Linie als Vorschau), dann Breite mit der
+  Maus (Vorschau „B × T“), Klick legt ein Vieleck mit drei ⟂-
+  Abhängigkeiten an, damit es beim Ziehen rechtwinklig bleibt;
+  rect3Pts() in model.ts (Test: beide Seiten gegen den Uhrzeigersinn,
+  schräge Kante). Vieleck-Menü setzt die Eckenzahl, + / − beim Ziehen
+  aktualisiert die Anzeige. Esc bricht das halbe 3-Punkt-Rechteck ab.
+  Abkürzung: beim 3-Punkt-Rechteck lassen sich keine Maße tippen. Im
+  Browser: Menü, 3 Punkte (57,8 × 22,73, rechte Winkel), Mitte (zentriert
+  auf dem Startpunkt). 55 Tests grün.
 - 2026-10-29 T5.16: escapeStep() ersetzt den Esc-Zweig, der bisher alles
   auf einmal tat (Zug weg, Werkzeug weg, Auswahl weg) und das Raster
   zuerst entfernte, sobald keine Linie lief. Kontextmenü schließt bei
