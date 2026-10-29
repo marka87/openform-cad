@@ -18,7 +18,7 @@ Ordnung, diese Liste ist die zeitliche.
 
 ## Epic 0: Hygiene
 
-- [ ] T0.1 TODO — Statusabgleich gegen den Code. Anlass: T5.4 und T6.3
+- [x] T0.1 DONE — Statusabgleich gegen den Code. Anlass: T5.4 und T6.3
       führten Teile als erledigt, die offen sind (siehe dort). Jedes
       DONE-Paket gegen den Code prüfen, bei Abweichung zurücksetzen und
       den offenen Teil in ein eigenes Paket schreiben. Ergebnis als
@@ -149,8 +149,8 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       prüfen, ob sich replicad-opencascadejs geändert hat; wenn ja, den
       Workflow mit neuer REPLICAD_REF/IMAGE laufen lassen, sonst bricht
       „Fläche löschen“. Danach voller Regressionslauf.
-      Zustand: Das Update auf 1.2.0 ist laut Log vom 2026-10-29 bereits
-      erledigt (gleiches OCCT-Image, 47 Tests grün). Siehe Offene Fragen.
+      Zustand: aktuell. package.json steht auf replicad ^1.2.0 (installiert
+      1.2.0, Commit 4b91aa7); bleibt TODO als Pflicht für das nächste Update.
 
 ## Epic 8: KI-Assistent (M4 aus PLAN.md)
 Erst beginnen, wenn Epic 1 bis 7 abgeräumt sind: Der Assistent setzt auf
@@ -169,6 +169,17 @@ dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T0.1: Jedes DONE-Paket gegen Code, Tests und Log geprüft.
+  Beleg je Paket: Kern-Test mit Paketnummer im Namen (T1.3a–d, T1.4–T1.9,
+  T1.12, T2.1, T2.2, T3.1, T3.4, T5.1, T5.2, T5.4, T6.1–T6.3, T6.1b) oder
+  benannte Prüfung im Log (T1.0/T1.1 = Dokumente, T1.1b ohne Code, T1.10,
+  T2.3, T2.4, T4.1, T4.2, T5.3 im Browser bzw. in der gebauten App).
+  Zwei Lücken ohne Beleg gefunden und mit Test geschlossen, kein Zurücksetzen
+  nötig: Radius-Maß (T3.3, war weder getestet noch im Log genannt) und
+  „Rundungen/Fasen werden mitkopiert“ (T6.3, Fase am Bohrungsrand
+  mitgespiegelt). Die schon korrigierten Teile von T5.4/T6.3 liegen in
+  T5.6/T6.4. replicad: package.json steht auf ^1.2.0 → Offene Frage
+  gestrichen, T7.2 bleibt als Pflicht fürs nächste Update.
 - 2026-10-29 replicad 1.1.0 → 1.2.0: bringt dieselbe OpenCascade-Konfiguration
   (replicad-opencascadejs bleibt 1.1.0, gleiches Image), der eigene Build in
   vendor/ gilt also weiter; nur REPLICAD_REF im Workflow nachgezogen. 47 Tests

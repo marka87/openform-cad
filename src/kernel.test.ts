@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -585,20 +585,22 @@ test('Maße in der Zeichnung: Bezug auf Modellpunkte und Kanten, folgen Änderun
     { id: 1, v: 0, t: 'lin', a, b, dir: 'h', off: 8 },
     { id: 2, v: 1, t: 'dia', e: edgeRef(nm, rim, s)!, off: 6, tol: 'H7' },
     { id: 3, v: 1, t: 'ang', e: edgeRef(nm, e1, s)!, e2: edgeRef(nm, e2, s)!, off: 6 },
+    { id: 4, v: 1, t: 'rad', e: edgeRef(nm, rim, s)!, off: 4 },
   ];
-  expect(resolveDims(dims, r.bodies, r.names).ok.map(d => +d.val.toFixed(3))).toEqual([20, 6, 90]);
+  expect(resolveDims(dims, r.bodies, r.names).ok.map(d => +d.val.toFixed(3))).toEqual([20, 6, 90, 3]);
   const wide = box(); wide.p.w = 40;                                   // Quader breiter, Bohrung größer
   const big = hole(-4); big.p.r = 4;
   r = buildBody([wide, big]);
   const res = resolveDims(dims, r.bodies, r.names);
   expect(res.bad).toEqual([]);
-  expect(res.ok.map(d => +d.val.toFixed(3))).toEqual([40, 8, 90]);
+  expect(res.ok.map(d => +d.val.toFixed(3))).toEqual([40, 8, 90, 4]);
   const svg = sheetSVG(r.body!, { sheet: 'A4', title: 'T', material: '', date: '' }, res.ok);
   expect(svg).toContain('>40<');
   expect(svg).toContain('⌀8 H7');
   expect(svg).toContain('>90°<');
-  r = buildBody([wide]);                                                 // Bohrung weg → Maß 2 und nur dieses wird gemeldet
-  expect(resolveDims(dims, r.bodies, r.names).bad.map(x => x[0])).toEqual([2]);
+  expect(svg).toContain('>R4<');
+  r = buildBody([wide]);                                                 // Bohrung weg → Maße 2 und 4 werden gemeldet
+  expect(resolveDims(dims, r.bodies, r.names).bad.map(x => x[0])).toEqual([2, 4]);
 });
 
 test('Zeichnung in Zoll: Gesamt- und Einzelmaße umgerechnet (T3.4)', () => {
@@ -720,6 +722,12 @@ test('Spiegeln an einer Ebene, die nicht durch den Ursprung geht; Kopie verliert
   const rot = movedCopy(h, 4, [0, 0, 0], [0, 1, 0], Math.PI, [10, 0, -5]);          // 180° um die Hochachse durch die Deckelmitte
   expect(rot.face).toBeUndefined();
   expect(buildBody([...fs, rot]).failed).toEqual([]);
+  // Fase am Bohrungsrand wird mitgespiegelt, wie addCopies in main.ts: Punkt/Richtung abbilden, Kantenbezug weg
+  const ch: EdgeOp = { id: 5, type: 'chamfer', at: [7, 10, -5], dir: [0, 0, 1], r: 0.5 };
+  const chM: EdgeOp = { ...ch, id: 6, at: mirrorPt(ch.at, [1, 0, 0], [10, 0, 0]), dir: mirrorDir(ch.dir, [1, 0, 0]) };
+  const r2 = buildBody([...fs, ch, m, chM]);
+  expect(r2.failed).toEqual([]);
+  expect(r2.origins.get(1)!.filter(o => o?.tag === 'chamfer').length).toBe(2);
 });
 
 test('Fläche löschen: Bohrung und Rundung verschwinden, Nachbarflächen wachsen zu (T6.1b)', () => {
