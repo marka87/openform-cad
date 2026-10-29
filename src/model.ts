@@ -28,7 +28,8 @@ export interface Extrude extends Frame {
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
 // Abhängigkeit einer Vieleck-Seite i (von Punkt i zu i+1): Länge val, waagrecht, senkrecht; mit Seite j parallel, rechtwinklig, gleich lang,
 // Winkel val (Grad) zwischen den Seiten; fix = Punkt i bleibt bei p stehen
-export interface Con { t: 'len' | 'h' | 'v' | 'par' | 'perp' | 'eq' | 'ang' | 'fix'; i: number; j?: number; val?: number; p?: number[] }
+// rad = Radius der Bogen-Seite i; tan = Seiten i und j berühren sich tangential (mind. eine ist ein Bogen)
+export interface Con { t: 'len' | 'h' | 'v' | 'par' | 'perp' | 'eq' | 'ang' | 'fix' | 'rad' | 'tan'; i: number; j?: number; val?: number; p?: number[] }
 export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: Vec; r: number; edge?: EdgeRef; hidden?: boolean; body?: number } // edge: Bezug, vom Kern nachgetragen
 // Importierter Körper (STEP-Text); wird mit dem Modell vereinigt
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)

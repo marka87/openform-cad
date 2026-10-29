@@ -141,8 +141,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       waren hier fälschlich als erledigt geführt. Sie sind offen und
       leben in T5.6, weil der Löser Bögen nur als Sehne kennt.
 
-- [ ] T5.6 TODO — Bögen im Löser als echte Kreisbögen (planegcs arc):
-      Radius-Maß und Tangente Linie–Bogen.
+- [x] T5.6 DONE — Bögen im Löser als echte Kreisbögen (planegcs arc), sobald
+      ein Radius- oder Tangenten-Maß daran hängt: Seitenfeld „Bogen n R“
+      und Knöpfe „tangential an Seite k“ (◠k). Bögen ohne solches Maß
+      verhalten sich wie bisher (Sehne mit festem Winkel).
 - [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen)
       und an den Körper gebunden.
 
@@ -262,6 +264,18 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.6: Con 'rad' (Radius der Bogen-Seite i) und 'tan' (Seiten
+  i, j tangential). sketchSolver legt für jede Bogen-Seite mit so einem
+  Maß Mittelpunkt + planegcs-arc + arc_rules an (Anfang/Ende im
+  Gegenuhrzeigersinn, bei negativem bulge vertauscht), arc_radius bzw.
+  tangent_la/tangent_aa; danach neuer bulge aus Mitte und Endpunkten.
+  Entscheidung: nur Bögen mit Bogen-Maß werden echte Bögen, damit
+  bestehende Skizzen beim Ziehen genau wie vorher reagieren. Tests: R 8
+  bei waagrechter Nachbarseite, tangential → Mitte senkrecht über dem
+  Anschluss, ohne Maß bulge unverändert, R 2 bei festen Enden (Sehne 10)
+  = Widerspruch. Im Browser: R 15 eingetippt → Bogen 15,000, dann
+  tangential an Seite 1 → Radius ⟂ Seite 1 (Skalarprodukt 3e-6), R hält.
+  Offen bleibt der tangentiale Fang beim Zeichnen (T5.14). 52 Tests grün.
 - 2026-10-29 T5.18: linePlane() in model.ts: gerade Linie ohne Bögen →
   RefPlane durch die Linienmitte, u = Linienrichtung, n = Linie ×
   Skizzennormale, ausgeblendet; dazu ein Split auf den Körper der Linie.

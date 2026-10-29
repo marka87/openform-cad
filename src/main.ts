@@ -1250,8 +1250,9 @@ const angleOf = (pts: number[][], i: number, j: number) => {
   const d = (k: number) => [pts[(k + 1) % pts.length][0] - pts[k][0], pts[(k + 1) % pts.length][1] - pts[k][1]], a = d(i), b = d(j);
   return Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1])) * 180 / Math.PI;
 };
-const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=', ang: '∠', fix: 'fest' };
-const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${len(c.val!, 2)}` : c.t === 'fix' ? `Punkt ${c.i + 1} fest`
+const CON_TEXT = { len: 'Länge', h: 'waagrecht', v: 'senkrecht', par: '∥', perp: '⟂', eq: '=', ang: '∠', fix: 'fest', rad: 'R', tan: 'tangential an' };
+const arcR = (pts: number[][], i: number) => { const a = pts[i], b = pts[(i + 1) % pts.length], c = a[2]; return Math.hypot(b[0] - a[0], b[1] - a[1]) * (1 + c * c) / (4 * Math.abs(c)); };
+const conText = (c: Con) => c.t === 'len' ? `Seite ${c.i + 1} = ${len(c.val!, 2)}` : c.t === 'fix' ? `Punkt ${c.i + 1} fest` : c.t === 'rad' ? `Bogen ${c.i + 1}: R ${len(c.val!, 2)}`
   : c.t === 'ang' ? `Seite ${c.i + 1} ∠ Seite ${c.j! + 1} = ${+c.val!.toFixed(2)}°` : c.j === undefined ? `Seite ${c.i + 1} ${CON_TEXT[c.t]}` : `Seite ${c.i + 1} ${CON_TEXT[c.t]} Seite ${c.j + 1}`;
 function consHtml(f: Extrude) {
   const pts = f.pts!, sides = pts.map((_, i) => i).filter(i => !pts[i][2]), has = (t: Con['t'], i: number) => f.cons?.some(c => c.t === t && c.i === i);
@@ -1259,6 +1260,12 @@ function consHtml(f: Extrude) {
   return `<details open class="cons"><summary>Maße und Abhängigkeiten</summary>` +
     sides.map(i => `<label>Seite ${i + 1} <span><input type="number" step="0.5" class="len${has('len', i) ? ' lock' : ''}" data-i="${i}" value="${uval(sideLen(pts, i))}">` +
       `<button class="hv${has('h', i) ? ' on' : ''}" data-t="h" data-i="${i}" title="waagrecht">—</button><button class="hv${has('v', i) ? ' on' : ''}" data-t="v" data-i="${i}" title="senkrecht">|</button></span></label>`).join('') +
+    pts.map((_, i) => i).filter(i => pts[i][2]).map(i => { // Bogen: Radius und tangential an die Nachbarseiten
+      const nb = [(i + pts.length - 1) % pts.length, (i + 1) % pts.length].filter((j, k, a) => j !== i && a.indexOf(j) === k);
+      const tan = (j: number) => f.cons?.some(c => c.t === 'tan' && ((c.i === i && c.j === j) || (c.i === j && c.j === i)));
+      return `<label>Bogen ${i + 1} R <span><input type="number" step="0.5" class="rad${has('rad', i) ? ' lock' : ''}" data-i="${i}" value="${uval(arcR(pts, i))}">` +
+        nb.map(j => `<button class="tan${tan(j) ? ' on' : ''}" data-i="${i}" data-j="${j}" title="tangential an Seite ${j + 1}">◠${j + 1}</button>`).join('') + `</span></label>`;
+    }).join('') +
     (sides.length > 1 ? `<label>Seiten <span><select class="sa">${opts}</select> <select class="sb">${opts}</select></span></label>
       <div class="pair"><button data-t="par" title="parallel">∥</button><button data-t="perp" title="rechtwinklig">⟂</button><button data-t="eq" title="gleich lang">=</button>
       <button data-t="ang" title="Winkel zwischen den Seiten">∠</button><input class="angv" type="number" step="1" value="${+angleOf(pts, 0, 1).toFixed(1)}" style="width:4.5em">°</div>` : '') +
@@ -1279,6 +1286,15 @@ function bindCons(f: Extrude) {
     const i = +inp.dataset.i!, v = mmOf(inp);
     if (isFinite(v) && v > 0) addCon({ t: 'len', i, val: v });
     else if (f.cons) remove(c => !(c.t === 'len' && c.i === i)); // leer = Maß lösen
+  });
+  panel.querySelectorAll<HTMLInputElement>('.cons input.rad').forEach(inp => inp.onchange = () => {
+    const i = +inp.dataset.i!, v = mmOf(inp);
+    if (isFinite(v) && v > 0) addCon({ t: 'rad', i, val: v });
+    else if (f.cons) remove(c => !(c.t === 'rad' && c.i === i));
+  });
+  panel.querySelectorAll<HTMLButtonElement>('.cons .tan').forEach(b => b.onclick = () => { // nochmal = lösen
+    const i = +b.dataset.i!, j = +b.dataset.j!, same = (c: Con) => c.t === 'tan' && ((c.i === i && c.j === j) || (c.i === j && c.j === i));
+    if (f.cons?.some(same)) remove(c => !same(c)); else addCon({ t: 'tan', i, j });
   });
   panel.querySelectorAll<HTMLButtonElement>('.cons .hv').forEach(b => b.onclick = () => {
     const t = b.dataset.t as Con['t'], i = +b.dataset.i!;

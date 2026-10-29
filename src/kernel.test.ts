@@ -809,3 +809,24 @@ test('Körper an einer offenen Linie teilen: Linie wird zur senkrechten Schnitte
   expect(linePlane({ ...L, pts: [[-5, -5], [5, -5], [5, 5]] }, 8)).toBeNull(); // Knick: keine Ebene
   expect(linePlane({ ...L, pts: [[-5, -5, 0.3], [5, -5]] }, 8)).toBeNull();   // Bogen: keine Ebene
 });
+
+test('Bögen als echte Kreisbögen im Löser: Radius-Maß und tangential an eine Linie (T5.6)', async () => {
+  const { make_gcs_wrapper } = await import('@salusoft89/planegcs');
+  const { solveSketch } = await import('./sketchSolver');
+  const gcs = await make_gcs_wrapper();
+  const R = (p: number[][], i: number) => { const a = p[i], b = p[(i + 1) % p.length], c = a[2]; return Math.hypot(b[0] - a[0], b[1] - a[1]) * (1 + c * c) / (4 * Math.abs(c)); };
+  const centre = (p: number[][], i: number) => { const a = p[i], b = p[(i + 1) % p.length], c = a[2], L = Math.hypot(b[0] - a[0], b[1] - a[1]), k = L / 2 * (1 - c * c) / (2 * c);
+    return [(a[0] + b[0]) / 2 - (b[1] - a[1]) / L * k, (a[1] + b[1]) / 2 + (b[0] - a[0]) / L * k]; };
+  const pts = [[0, 0], [20, 0, 0.3], [20, 10], [0, 10]];                       // rechte Seite (1→2) als Bogen nach außen
+  let out = solveSketch(gcs, pts, [{ t: 'h', i: 0 }, { t: 'rad', i: 1, val: 8 }], [0])!;
+  expect(out).not.toBeNull();
+  expect(R(out, 1)).toBeCloseTo(8, 4);                                         // Radius gilt
+  expect(out[0][1]).toBeCloseTo(out[1][1], 6);                                 // Seite 1 bleibt waagrecht
+  expect(Math.sign(out[1][2])).toBe(1);                                        // Bogen bleibt nach außen gewölbt
+  out = solveSketch(gcs, pts, [{ t: 'h', i: 0 }, { t: 'tan', i: 0, j: 1 }], [0])!;  // Bogen schließt tangential an die waagrechte Seite an
+  expect(out).not.toBeNull();
+  expect(centre(out, 1)[0]).toBeCloseTo(out[1][0], 4);                         // Mitte senkrecht über dem Anschlusspunkt
+  expect(solveSketch(gcs, pts, [{ t: 'h', i: 0 }])![1][2]).toBe(0.3);          // ohne Bogen-Maß: Bogen bleibt Sehne mit gleichem Winkel
+  expect(R(solveSketch(gcs, pts, [{ t: 'rad', i: 1, val: 2 }])!, 1)).toBeCloseTo(2, 4); // Endpunkte frei: rücken zusammen
+  expect(solveSketch(gcs, pts, [{ t: 'rad', i: 1, val: 2 }], [1, 2])).toBeNull(); // Endpunkte fest, Sehne 10 > 2·R: geht nicht
+});
