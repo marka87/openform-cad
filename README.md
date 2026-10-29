@@ -48,7 +48,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Ausrichten | Liegt der Zeiger waagrecht oder senkrecht zu einem Punkt, rastet er dort ein (orange Hilfslinie) |
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
 | Rundung / Fase | Kante anfassen: vom Körper wegziehen = Rundung, in den Körper hineinschieben = Fase; Maß im Seitenfeld |
-| Export | STL (3D-Druck) oder STEP (CAD, Fertigung) |
+| Export | STL (3D-Druck) oder STEP (CAD, Fertigung); 3MF unter „Zeichnung / mehr“ |
 | STEP-Import | „Öffnen“ und eine .step/.stp-Datei wählen |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |

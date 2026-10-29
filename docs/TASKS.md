@@ -245,7 +245,7 @@ die Zustimmung zur Nutzung der Daten fürs Training — bei CAD-Geometrie
 inakzeptabel als Standard. KI bleibt abschaltbar und ist standardmäßig
 aus.
 
-- [ ] T8.1 TODO — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
+- [x] T8.1 DONE (Freigabe offen, siehe docs/adr/0002-ki-assistent.md) — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
       im bestehenden Datenmodell über Tool-Calls mit festem Schema,
       niemals replicad-Code, der ausgeführt wird, und niemals Meshes.
       Jeder Schritt landet im Baum, ist nachbearbeitbar und rückgängig.
@@ -326,6 +326,14 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T8.1: docs/adr/0002-ki-assistent.md. Kern des Entwurfs: KI
+  ruft nur Werkzeuge mit festem Schema auf (7 Werkzeuge in Stufe 1), die
+  App prüft und setzt sie in normale Features um, ein Rückgängig-Schritt
+  je Anfrage, höchstens zwei Korrekturrunden bei Kernfehlern. Bezüge über
+  die vorhandenen Origin-Namen ({f, tag}) und die aktuelle Auswahl.
+  Gesendet: Feature-JSON, Hüllquader, Auswahl, Einheit – keine STEP-Daten
+  oder Pfade. Drei Fragen an den Nutzer unter „Offene Fragen“. T8.2 wartet
+  auf die Freigabe (Frage 3 betrifft eine neue Abhängigkeit).
 - 2026-10-29 T7.1: to3MF + zipStore (kernel.ts), keine neue Abhängigkeit:
   ZIP ohne Kompression (Slicer lesen das), CRC32 selbst. OCCT vernetzt je
   Fläche mit doppelten Eckpunkten → zusammengelegt (auf 1e-6 mm gerundet),
@@ -870,6 +878,10 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
+- 2026-10-29 KI-Assistent (ADR 0002, blockiert T8.2): (1) KI-Ergebnis direkt
+  einfügen mit „Übernehmen / Verwerfen“ oder erst Vorschau? (2) API-Schlüssel
+  im App-Speicher (v1) oder Windows-Schlüsselspeicher (weiteres Plugin)?
+  (3) tauri-plugin-http als neue Abhängigkeit für Anfragen ohne CORS-Probleme?
 - 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
   nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
   reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
