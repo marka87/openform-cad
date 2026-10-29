@@ -308,8 +308,10 @@ type Anchor<T> = T & { patch?: Record<string, unknown>; sure: boolean };
 const sub3 = (a: ArrayLike<number>, b: ArrayLike<number>) => [0, 1, 2].map(i => a[i] - b[i]);
 const fail = (r: { why: 'lost' | 'ambiguous' }, what: string) => new Error(`${what} ${r.why === 'lost' ? 'nicht mehr vorhanden' : 'nicht eindeutig'}`);
 
-// Skizze auf einer Fläche: verschiebt sich die Fläche entlang ihrer Normalen, wandert die Skizze mit
-// shortcut: nur Verschieben entlang der Normalen; kippt die Fläche, wird abgebrochen → Skizzenebene neu aus der Fläche ableiten
+// Skizze auf einer Fläche: verschiebt sich die Fläche, wandert die Skizze mit; kippt sie, dreht sich die Skizze um die
+// Schnittgerade von alter und neuer Ebene (das Scharnier, z. B. die stehen gebliebene Kante einer Vieleckseite).
+// Gekippt bleibt der Bezug unsicher (gelb), bis der Nutzer ihn bestätigt (T1.15).
+// shortcut: Lage in der Ebene nur über das Scharnier, nicht über Kanten der Fläche; reicht für Kippen um eine Kante
 export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Anchor<{ f: Extrude }> {
   if (!f.onFace || !s) return { f, sure: true };
   if (!f.face) {
@@ -323,8 +325,15 @@ export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Ancho
   }
   const r = resolveFace(f.face, s, named);
   if (!r.ok) throw fail(r, 'Fläche der Skizze');
-  if (Math.abs(dot(r.shape.normalAt(r.shape.center).toTuple(), f.n)) < 0.999) throw new Error('Fläche der Skizze hat sich gedreht');
-  const d = dot(sub3(r.shape.center.toTuple(), f.o), f.n);
+  const C = r.shape.center.toTuple(), N0 = r.shape.normalAt(r.shape.center).toTuple(), N = N0.map(x => x / Math.hypot(...N0)) as Vec;
+  const k = dot(N, f.n), A = [f.n[1] * N[2] - f.n[2] * N[1], f.n[2] * N[0] - f.n[0] * N[2], f.n[0] * N[1] - f.n[1] * N[0]], sn = Math.hypot(...A);
+  if (k < -0.999) throw new Error('Fläche der Skizze hat sich umgedreht');
+  if (k < 0.999999) { // gekippt: Drehung um die Schnittgerade, die n in N überführt
+    const h1 = dot(f.o, f.n), h2 = dot(C, N), c1 = (h1 - h2 * k) / (1 - k * k), c2 = (h2 - h1 * k) / (1 - k * k);
+    const g = movedCopy(f, f.id, [0, 0, 0], A.map(x => x / sn) as Vec, Math.atan2(sn, k), f.n.map((x, i) => c1 * x + c2 * N[i]) as Vec);
+    return { f: g, sure: r.sure, patch: { o: g.o, n: g.n, u: g.u, v: g.v, ...g.and && { and: g.and }, ...g.not && { not: g.not }, ...g.axisLine && { axisLine: g.axisLine } } };
+  }
+  const d = dot(sub3(C, f.o), f.n);
   if (Math.abs(d) < 1e-6) return { f, sure: r.sure };
   const g = movedCopy(f, f.id, f.n.map(x => x * d) as Vec);
   return { f: g, sure: r.sure, patch: { o: g.o, ...g.and && { and: g.and }, ...g.not && { not: g.not } } };

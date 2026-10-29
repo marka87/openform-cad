@@ -63,9 +63,8 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T1.12 DONE — Schale prüft ihr Ergebnis mit BRepCheck und meldet
       ungültige Körper als Fehler.
 
-- [ ] T1.13 TODO — Skizze auf gekippter Fläche: Ebene aus der aufgelösten
-      Fläche neu ableiten statt abbrechen (heute nur Verschieben entlang
-      der Normalen). Datenverlust im Alltag, deshalb vorgezogen.
+- [x] T1.13 DONE — Skizze auf gekippter Fläche dreht sich um die
+      Schnittgerade von alter und neuer Ebene mit, statt abzubrechen.
 - [ ] T1.15 TODO — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
       „Bezug übernehmen“ schreibt die gefundene Fläche als neuen Bezug.
       Ohne das ist die gelbe Markierung aus T1.7 eine Sackgasse.
@@ -169,6 +168,15 @@ dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T1.13: anchorSketch dreht die Skizze, wenn ihre Fläche kippt:
+  Drehachse = Schnittgerade von alter Skizzenebene und neuer Fläche
+  (Scharnier), Winkel = n → N; Ebene, Bereiche und Drehachse werden als
+  patch nachgeführt. Entscheidung: gekippt bleibt der Bezug gelb, weil der
+  Fingerabdruck (alte Normale) nicht passt; bestätigen kommt mit T1.15,
+  nicht still. Umdrehen um mehr als ~90° = sichtbarer Fehler. Test:
+  Vieleckecke wandert, Seite kippt um die stehende Kante, Bohrung bleibt
+  5 mm vom Scharnier in der neuen Ebene. Im Browser geprüft (17,49 cm³,
+  Bohrung gelb auf der schrägen Stirnseite).
 - 2026-10-29 T0.1: Jedes DONE-Paket gegen Code, Tests und Log geprüft.
   Beleg je Paket: Kern-Test mit Paketnummer im Namen (T1.3a–d, T1.4–T1.9,
   T1.12, T2.1, T2.2, T3.1, T3.4, T5.1, T5.2, T5.4, T6.1–T6.3, T6.1b) oder

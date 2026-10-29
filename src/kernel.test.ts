@@ -744,3 +744,25 @@ test('Fläche löschen: Bohrung und Rundung verschwinden, Nachbarflächen wachse
   r = buildBody([box(), del([10, 10, -5])]);                                            // Deckel des Quaders: nichts schließt die Lücke
   expect(r.failed).toEqual([9]);
 });
+
+test('Skizze auf einer gekippten Fläche dreht sich mit, Bezug bleibt bis zur Bestätigung gelb (T1.13)', () => {
+  // Vieleck-Quader 20 × 10 × 10 auf dem Boden, Bohrung auf der Seite x = 20 (Mitte 5 mm vom Scharnier z = 0)
+  const P = { ...polyFeature(GROUND, [[0, 0], [20, 0], [20, 10], [0, 10]], 1, false)!, d: 10 };
+  const SIDE = { o: [20, 5, -5], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] } as any;
+  const h = { ...sketchFeature('circle', SIDE, [0, 0], [1.5, 0], 2, true)!, d: -2 };
+  const fs: Feature[] = [P, h], fix = (r: ReturnType<typeof buildBody>) => { for (const [id, p] of r.fixes) Object.assign(fs.find(f => f.id === id)!, p); };
+  fix(buildBody(fs));
+  expect(h.face).toBeTruthy();
+  P.pts![2] = [24, 10];                                    // Ecke wandert: Seite kippt um die senkrechte Kante bei x = 20, z = 0
+  let r = buildBody(fs);
+  expect(r.failed).toEqual([]);
+  expect(r.unsure).toContain(2);
+  fix(r);
+  expect(10 * (h.o[0] - 20) + 4 * h.o[2]).toBeCloseTo(0, 6);                  // Mitte liegt in der neuen Seitenebene …
+  expect(Math.hypot(h.o[0] - 20, h.o[2])).toBeCloseTo(5, 6);                  // … gleich weit vom Scharnier
+  expect(h.n.map(x => +x.toFixed(6) + 0)).toEqual([10 / Math.sqrt(116), 0, 4 / Math.sqrt(116)].map(x => +x.toFixed(6) + 0));
+  r = buildBody(fs);
+  expect(r.failed).toEqual([]);
+  expect(r.fixes.size).toBe(0);                                                // steht jetzt, nichts mehr nachzuführen
+  expect(measureVolume(r.body!)).toBeCloseTo(2200 - Math.PI * 2.25 * 2, 3);
+});
