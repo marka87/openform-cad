@@ -57,7 +57,10 @@ const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
 // Raster auf einer Fläche (Doppelklick): dort weiterskizzieren, auch über den Rand der Fläche hinaus
 const faceGrid = new THREE.Group(); faceGrid.visible = false; scene.add(faceGrid);
+const workMarks = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: false, depthTest: false }));
+workMarks.visible = false; workMarks.renderOrder = 2; workMarks.frustumCulled = false; scene.add(workMarks); // Rastpunkte der Fläche
 let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizzen ins Leere landen dort statt auf dem Boden
+let workPts: { p: Vec; mid: boolean }[] = []; // shortcut: beim Anlegen des Rasters berechnet, nach einem Umbau des Körpers erst mit neuem Raster aktuell // Rastpunkte der Fläche unter dem Raster (Mitte, Ecken, Kantenmitten, Kreismitten)
 let workView: { c: THREE.Vector3; r: number } | null = null, lookBack: { p: THREE.Vector3; t: THREE.Vector3 } | null = null; // Raster-Mitte/-Größe; Ansicht vor „auf die Fläche schauen“
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
@@ -483,17 +486,17 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number };
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[] }; // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
 let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
 // Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
 let hoverSketch: THREE.Mesh | null = null;
+const range = (groups: Int32Array, i: number) => { for (let k = 0; k < groups.length; k += 2) if (i >= groups[k] && i < groups[k] + groups[k + 1]) return [groups[k], groups[k + 1]]; };
 function setHover(on: boolean) {
   for (const m of bodyGroup.children) m.userData.hf.visible = m.userData.he.visible = false;
   if (hoverSketch) { (hoverSketch.material as THREE.MeshStandardMaterial).opacity = 0.4; hoverSketch = null; }
   const { fh, eh } = lastPick;
   if (!on) return;
-  const range = (groups: Int32Array, i: number) => { for (let k = 0; k < groups.length; k += 2) if (i >= groups[k] && i < groups[k] + groups[k + 1]) return [groups[k], groups[k + 1]]; };
   if (eh) {
     const m = eh.object.parent!, r = m.userData.edges && range(m.userData.edges, eh.index!);
     if (r) { m.userData.he.geometry.setDrawRange(r[0], r[1]); m.userData.he.visible = true; }
@@ -522,7 +525,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
     const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
-    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body };
+    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3) };
   }
   if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
     const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
@@ -572,12 +575,20 @@ function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
 // Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
 const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
 // Ziel einer neuen Skizze: angeklickte Fläche, sonst das Flächenraster, sonst der Boden
-const sketchOn = (h: Hit | null) => h ?? workHit;
+// Das Raster wirkt innerhalb der Fläche wie eine echte Ebene: trifft der Strahl es vor der Fläche darunter (Blick in eine
+// Bohrung), gilt das Raster. shortcut: „innerhalb“ = Rechteck um die Rastpunkte der Fläche, bei L-förmigen Flächen zu groß
+const sketchOn = (h: Hit | null) => {
+  if (!h || !workHit || !workPts.length) return h ?? workHit;
+  const pl = planeFor(workHit), q = planeHit(pl), o = ray.ray.origin;
+  if (!q || q.distanceTo(o) >= h.point.distanceTo(o) - 1e-3) return h;
+  const loc = workPts.map(w => toLocal(pl, V(w.p))), x = toLocal(pl, q);
+  return [0, 1].every(k => x[k] >= Math.min(...loc.map(l => l[k])) - 1e-6 && x[k] <= Math.max(...loc.map(l => l[k])) + 1e-6) ? workHit : h;
+};
 function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
-  faceGrid.visible = !!workHit && grid.visible;
+  faceGrid.visible = workMarks.visible = !!workHit && grid.visible;
   lookBack = null;
-  if (!workHit) { workView = null; return; }
+  if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
   // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
   // die Linien bleiben auf dem Einrastraster der Skizzenebene
   const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
@@ -592,9 +603,43 @@ function setWorkPlane(h: Hit | null) {
   faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
     .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
+  workPts = workPoints(workHit, pl);
+  workMarks.geometry.setFromPoints(workPts.map(q => V(q.p)));
+  workMarks.visible = faceGrid.visible;
   workView = { c: V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y), r: size / 2 };
   showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
     + 'Raster auf der Fläche: hier weiterskizzieren · Leertaste = senkrecht draufschauen · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
+}
+// Rastpunkte der Fläche unter dem Raster: Flächenmitte (Schwerpunkt der Dreiecke), dazu aus den Kanten in dieser Ebene
+// Ecken, Mitten gerader Kanten und Mittelpunkte von Bögen/Kreisen (Umkreis aus drei Kantenpunkten)
+function workPoints(h: Hit, pl: Frame): { p: Vec; mid: boolean }[] {
+  const m = h.body !== undefined ? bodyMeshOf(h.body) as THREE.Mesh | undefined : undefined;
+  if (!m) return [];
+  const out: [THREE.Vector3, boolean][] = [], g = m.geometry, idx = g.index!, pos = g.attributes.position as THREE.BufferAttribute;
+  if (h.tri) {
+    const c = new THREE.Vector3(), t = [0, 1, 2].map(() => new THREE.Vector3());
+    let A = 0;
+    for (let k = h.tri[0]; k < h.tri[0] + h.tri[1]; k += 3) {
+      t.forEach((q, j) => q.fromBufferAttribute(pos, idx.getX(k + j)));
+      const a = t[1].clone().sub(t[0]).cross(t[2].clone().sub(t[0])).length() / 2;
+      c.addScaledVector(t[0].clone().add(t[1]).add(t[2]).divideScalar(3), a); A += a;
+    }
+    if (A > 0) out.push([c.divideScalar(A), true]);
+  }
+  const lp = (m.children[0] as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute, groups: Int32Array = m.userData.edges ?? new Int32Array();
+  for (let k = 0; k < groups.length; k += 2) {
+    const pts: THREE.Vector3[] = [];
+    for (let i = groups[k]; i < groups[k] + groups[k + 1]; i++) if (i === groups[k] || (i - groups[k]) % 2) pts.push(new THREE.Vector3().fromBufferAttribute(lp, i)); // Anfang + Segmentenden
+    if (pts.length < 2 || !pts.every(q => onPlane(pl, q.toArray()))) continue;
+    const a = pts[0], z = pts.at(-1)!, closed = a.distanceTo(z) < 1e-6, ab = z.clone().sub(a);
+    const straight = !closed && pts.every(q => q.clone().sub(a).cross(ab).length() / ab.length() < 1e-3);
+    if (!closed) out.push([a, false], [z, false]);
+    if (straight) { out.push([a.clone().add(z).multiplyScalar(0.5), true]); continue; }
+    const [p, q, r] = closed ? [a, pts[Math.floor(pts.length / 3)], pts[Math.floor(2 * pts.length / 3)]] : [a, pts[Math.floor(pts.length / 2)], z];
+    const u = q.clone().sub(p), v = r.clone().sub(p), w = u.clone().cross(v), w2 = w.lengthSq();
+    if (w2 > 1e-12) out.push([p.clone().add(w.clone().cross(u).multiplyScalar(v.lengthSq()).add(v.clone().cross(w).multiplyScalar(u.lengthSq())).divideScalar(2 * w2)), true]);
+  }
+  return out.filter(([q], i) => out.findIndex(([x]) => x.distanceTo(q) < 1e-4) === i).map(([q, mid]) => ({ p: q.toArray() as Vec, mid }));
 }
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
@@ -691,7 +736,7 @@ function sketchPoint(pl: Frame, e: PointerEvent) {
     markSnap(world(q), e.shiftKey ? 0xffffff : 0x4da3ff, 3); // Raster blau, frei weiß
     return q;
   }
-  const mid = s.kind === 'point' && features.filter(isExtrude).some(f => keyPoints(f, 'mid').some(m => Math.hypot(...m.map((x, i) => x - s.p[i])) < 1e-6));
+  const mid = s.kind === 'point' && (workPts.some(q => q.mid && Math.hypot(...q.p.map((x, i) => x - s.p[i])) < 1e-6) || features.filter(isExtrude).some(f => keyPoints(f, 'mid').some(m => Math.hypot(...m.map((x, i) => x - s.p[i])) < 1e-6)));
   markSnap(V(s.p), s.kind === 'line' ? 0xffd75e : 0xff9a3c, s.kind === 'line' ? 3 : 5);
   showSnapTip(snapMark.position, s.kind === 'line' ? 'auf Linie' : s.kind === 'cross' ? 'Schnitt' : s.p.every(x => Math.abs(x) < 1e-9) ? 'Ursprung' : mid ? 'Mitte' : 'Endpunkt');
   return toLocal(pl, V(s.p));
@@ -704,7 +749,7 @@ function markSnap(p: THREE.Vector3, color: number, size: number) {
 const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
 function snapPoints(pl: Frame): Vec[] {
   const own = poly ? keyPoints({ ...poly.pl, id: 0, type: 'poly', p: {}, pts: poly.pts, d: 0 }) : []; // Punkte der Linie, die gerade entsteht
-  return [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(f => keyPoints(f))].filter(q => onPlane(pl, q));
+  return [[0, 0, 0] as Vec, ...own, ...workPts.map(q => q.p), ...features.filter(isExtrude).flatMap(f => keyPoints(f))].filter(q => onPlane(pl, q));
 }
 // Körperkanten und Linien flacher Skizzen
 function snapSegs(pl: Frame | null): Vec[][] {
@@ -1719,7 +1764,7 @@ function applyDisplay() {
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   grid.visible = fine.visible = !display.render && !display.section; // Raster schiene durch die Schnittfläche
-  faceGrid.visible = !!workHit && grid.visible;
+  faceGrid.visible = workMarks.visible = !!workHit && grid.visible;
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
     const box = new THREE.Box3().setFromObject(bodyGroup), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);

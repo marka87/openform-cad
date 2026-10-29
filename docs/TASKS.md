@@ -171,10 +171,11 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       dem ersten Linienpunkt): blau = Raster, weiß = frei (Shift),
       orange = Punkt mit Wort „Endpunkt“, „Mitte“, „Ursprung“, „Schnitt“,
       gelb = „auf Linie“. Raster „Auto“ nach Zoom, neu Standard.
-- [ ] T5.11 TODO — Hilfspunkte auf der Fläche, sobald ein Raster liegt:
-      Flächenmitte, Ecken, Kantenmitten, Mitten von Bohrungen, alle
-      einrastbar. Dazu gestrichelte Fluchtlinien, wenn der Zeiger auf
-      Höhe eines dieser Punkte steht.
+- [x] T5.11 DONE — Rastpunkte auf der Fläche unter dem Raster: Mitte,
+      Ecken, Kantenmitten, Bohrungs-/Bogenmitten, als weiße Punkte
+      sichtbar und einrastbar; Fluchtlinien über das vorhandene
+      Ausrichten. Im Bereich der Fläche gilt das Raster auch über einer
+      Bohrung (Mitte der Bohrung erreichbar).
 - [ ] T5.12 TODO — Linienkette wie in Shapr3D (Weg A): Punkt A, Punkt B,
       weiter in einer Kette. Ende durch Doppelklick, Klick auf den
       letzten Punkt, Esc oder Rechtsklick (siehe T5.8). Klick auf den
@@ -268,6 +269,21 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.11: workPoints() in main.ts beim Anlegen des Rasters:
+  Flächenmitte = flächengewichteter Schwerpunkt der Dreiecke der
+  angeklickten B-Rep-Fläche (Hit trägt jetzt deren Dreiecksbereich), aus
+  den Kanten in der Ebene: Enden, Mitten gerader Kanten, Mittelpunkte
+  gekrümmter Kanten (Umkreis aus drei Kantenpunkten, Kreis aus zwei
+  Hälften ergibt denselben Punkt). Weiß markiert, in snapPoints, damit
+  auch Fluchtlinien und Beschriftung „Mitte“/„Endpunkt“. Gefunden beim
+  Prüfen: über einer Bohrung traf der Strahl deren Boden, die Skizze wäre
+  dort gelandet → sketchOn: liegt das Raster vor der getroffenen Fläche
+  und innerhalb des Rechtecks um die Rastpunkte, gilt das Raster (sonst
+  bleibt z. B. die Vorderseite erreichbar). Abkürzungen: Punkte werden
+  beim Anlegen berechnet, nach Umbau erst mit neuem Raster aktuell;
+  „innerhalb“ ist ein Rechteck. Im Browser geprüft (Zeiger-Durchlauf):
+  Flächenmitte, Kantenmitte, Bohrungsmitte = „Mitte“, Ecke = „Endpunkt“.
+  Kein Kern-Test (arbeitet auf dem Anzeige-Netz), 49 Tests grün.
 - 2026-10-29 T5.10: sketchPoint zeigt den Einrastpunkt jetzt immer (vorher
   nur bei Punkten/Linien), Farbe nach Art; Beschriftung „Mitte“ über
   keyPoints(f, 'mid') (Seiten- und Kreismitten). Linie, Bogen, Spline und
