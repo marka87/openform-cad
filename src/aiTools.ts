@@ -1,30 +1,34 @@
 // KI-Werkzeuge (ADR 0002): Schemata für das Modell und ihre Umsetzung in normale Features. Reine Funktionen, ohne Oberfläche.
 // Stufe T8.3: Rechteck, Kreis, Extrudieren, Bohrung. Als Fläche nur die Oberseite eines extrudierten Schritts; mehr, wenn es gebraucht wird.
-import type { Tool, ToolCall } from './ai';
+import type { Msg, Tool, ToolCall } from './ai';
 import { bodyOf, GROUND, isExtrude, sketchFeature, THREADS, type Extrude, type Feature, type Frame } from './model';
 
 const num = (desc: string) => ({ type: 'number', description: desc });
-const ebene = { description: 'Wo skizziert wird: "boden" oder eine Fläche eines vorhandenen Schritts',
-  anyOf: [{ type: 'string', enum: ['boden'] }, { type: 'object', properties: { schritt: { type: 'integer' }, seite: { type: 'string', enum: ['oben'] } }, required: ['schritt', 'seite'] }] };
+// Flache Parameter: kleine Modelle (7B, lokal) füllen verschachtelte oder „entweder–oder“-Felder unzuverlässig aus
+const auf = { type: 'integer', description: 'weglassen = auf dem Boden (neues Teil); sonst Nummer des Schritts, auf dessen Oberseite skizziert wird' };
 const fn = (name: string, description: string, properties: Record<string, unknown>, required: string[]): Tool =>
   ({ type: 'function', function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } } });
 
 export const TOOLS: Tool[] = [
   fn('skizze_rechteck', 'Rechteck skizzieren, optional gleich extrudiert (hoehe). Ecke links vorne bei x, y.',
-    { ebene, x: num('mm'), y: num('mm'), breite: num('mm, in x'), tiefe: num('mm, in y'), hoehe: num('mm, optional; negativ = in den Körper hinein') }, ['ebene', 'x', 'y', 'breite', 'tiefe']),
+    { auf_schritt: auf, x: num('mm, Standard 0'), y: num('mm, Standard 0'), breite: num('Länge in x, mm'), tiefe: num('Länge in y, mm (nicht die Dicke)'), hoehe: num('Dicke bzw. Höhe nach oben, mm; negativ = in den Körper hinein') }, ['breite', 'tiefe']),
   fn('skizze_kreis', 'Kreis skizzieren, optional gleich extrudiert (hoehe).',
-    { ebene, x: num('Mitte, mm'), y: num('Mitte, mm'), radius: num('mm'), hoehe: num('mm, optional; negativ = in den Körper hinein') }, ['ebene', 'x', 'y', 'radius']),
+    { auf_schritt: auf, x: num('Mitte, mm, Standard 0'), y: num('Mitte, mm, Standard 0'), radius: num('mm'), hoehe: num('mm, optional; negativ = in den Körper hinein') }, ['radius']),
   fn('extrudieren', 'Vorhandene Skizze auf eine Höhe ziehen (negativ = hineindrücken).', { schritt: { type: 'integer' }, hoehe: num('mm') }, ['schritt', 'hoehe']),
   fn('bohrung', 'Runde Bohrung in eine Fläche: Durchmesser oder metrisches Gewinde (Kernloch), Tiefe in mm oder durch.',
-    { flaeche: ebene.anyOf[1], x: num('Mitte, mm'), y: num('Mitte, mm'), durchmesser: num('mm, wenn kein Gewinde'),
-      gewinde: { type: 'string', enum: Object.keys(THREADS) }, tiefe: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['durch'] }] } }, ['flaeche', 'x', 'y', 'tiefe']),
+    { schritt: { type: 'integer', description: 'Nummer des Schritts, in dessen Oberseite gebohrt wird' }, x: num('Mitte, mm'), y: num('Mitte, mm'), durchmesser: num('mm, wenn kein Gewinde'),
+      gewinde: { type: 'string', enum: Object.keys(THREADS) }, tiefe: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['durch'] }] } }, ['schritt', 'x', 'y', 'tiefe']),
 ];
 
 export const SYSTEM = `Du steuerst das CAD-Programm OpenForm über Werkzeuge. Antworte ausschließlich mit Werkzeugaufrufen, ohne Text.
-Einheiten: mm. Koordinaten: x nach rechts, y nach hinten, Höhe nach oben. Auf der Fläche „oben“ eines Schritts gelten
+Einheiten: mm. Koordinaten: x nach rechts, y nach hinten, Höhe nach oben. Auf der Oberseite eines Schritts gelten
 dieselben x und y wie in dessen Skizze. Jeder Aufruf, der etwas anlegt, bekommt die nächste freie Schritt-Nummer, der Reihe nach
 (steht im Kontext als naechste_nummer). Bohrungen in den Ecken: üblich ist ein Randabstand vom 1,5- bis 2-Fachen des Durchmessers.
-Schlägt ein Aufruf fehl, kommt der Grund zurück; korrigiere nur diesen Aufruf.`;
+Gewinde (M3–M12) immer über „gewinde“ angeben, nicht als Durchmesser. Schlägt ein Aufruf fehl, kommt der Grund zurück;
+korrigiere nur diesen Aufruf. Rufe die Werkzeuge nacheinander auf, bis alles angelegt ist; erst dann antworte nur mit „fertig“.
+Beispiel für „Platte 80×40×4 mit 2 Bohrungen M4 links und rechts mittig“ im leeren Modell: zuerst skizze_rechteck mit breite 80,
+tiefe 40, hoehe 4 (ohne auf_schritt, wird Schritt 1), danach bohrung mit schritt 1, x 8, y 20, gewinde M4, tiefe durch, und
+bohrung mit schritt 1, x 72, y 20, gewinde M4, tiefe durch.`;
 
 // Was die KI über das Modell erfährt (ADR 0002, Abschnitt 5): Schritte mit Maßen, keine Namen von Dateien oder Körpern
 export function aiContext(fs: Feature[], nextId: number, unit: 'mm' | 'in') {
@@ -50,12 +54,12 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
     if (!f || !isExtrude(f) || f.type === 'line' || f.aux) throw new Error(`Schritt ${id} ist keine Skizze`);
     return f;
   };
-  // Ebene der neuen Skizze; auf der Oberseite dieselben u/v wie die Skizze darunter, damit x/y gleich bleiben
-  const plane = (e: unknown): { pl: Frame; onFace: boolean; body?: number; under?: Extrude } => {
-    if (e === 'boden') return { pl: GROUND, onFace: false };
-    const { schritt, seite } = (e ?? {}) as { schritt?: unknown; seite?: unknown };
-    const f = sketch(schritt);
-    if (seite !== 'oben') throw new Error('seite: nur "oben"');
+  // Ebene der neuen Skizze: ohne Schritt der Boden, sonst die Oberseite des Schritts mit dessen u/v (x/y bleiben gleich)
+  const plane = (schritt: unknown): { pl: Frame; onFace: boolean; body?: number; under?: Extrude } => {
+    if (schritt === undefined || schritt === null) return { pl: GROUND, onFace: false };
+    const f = fs.find(g => g.id === schritt);
+    if (!f) throw new Error(`Schritt ${schritt} gibt es nicht${fs.length ? ` (vorhanden: ${fs.map(g => g.id).join(', ')})` : ''} – ein neues Teil ohne auf_schritt anlegen`);
+    if (!isExtrude(f)) throw new Error(`Schritt ${schritt} ist keine Skizze`);
     if (!(f.d > 0)) throw new Error(`Schritt ${schritt} ist nicht nach oben extrudiert`);
     return { pl: { o: f.o.map((x, i) => x + f.d * f.n[i]) as Frame['o'], n: f.n, u: f.u, v: f.v }, onFace: true, body: bodyOf(f), under: f };
   };
@@ -74,10 +78,10 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
       const a = c.args;
       let f: Extrude & { name?: string };
       if (c.name === 'skizze_rechteck') {
-        const where = plane(a.ebene), x = coord(a.x, 'x'), y = coord(a.y, 'y');
+        const where = plane(a.auf_schritt), x = coord(a.x ?? 0, 'x'), y = coord(a.y ?? 0, 'y');
         f = place(sketchFeature('rect', where.pl, [x, y], [x + len(a.breite, 'breite'), y + len(a.tiefe, 'tiefe')], nextId, where.onFace), where, a.hoehe);
       } else if (c.name === 'skizze_kreis') {
-        const where = plane(a.ebene), x = coord(a.x, 'x'), y = coord(a.y, 'y');
+        const where = plane(a.auf_schritt), x = coord(a.x ?? 0, 'x'), y = coord(a.y ?? 0, 'y');
         f = place(sketchFeature('circle', where.pl, [x, y], [x + len(a.radius, 'radius'), y], nextId, where.onFace), where, a.hoehe);
       } else if (c.name === 'extrudieren') {
         f = sketch(a.schritt);
@@ -85,7 +89,8 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
         if (f.onFace ? d > 0 : d < 0) throw new Error(f.onFace ? 'Skizze auf einer Fläche: nur hinein (negativ)' : 'Skizze auf dem Boden: nur nach oben');
         f.d = d;
       } else if (c.name === 'bohrung') {
-        const where = plane(a.flaeche), dia = a.gewinde !== undefined ? THREADS[a.gewinde as string] : len(a.durchmesser, 'durchmesser');
+        if (a.schritt === undefined) throw new Error('schritt fehlt: in welchen Schritt wird gebohrt?');
+        const where = plane(a.schritt), dia = a.gewinde !== undefined ? THREADS[a.gewinde as string] : len(a.durchmesser, 'durchmesser');
         if (!dia) throw new Error(`Gewinde ${a.gewinde} unbekannt (${Object.keys(THREADS).join(', ')})`);
         const depth = a.tiefe === 'durch' ? Math.abs(where.under!.d) : len(a.tiefe, 'tiefe');
         const x = coord(a.x, 'x'), y = coord(a.y, 'y');
@@ -98,4 +103,25 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
     }
   }
   return { fs, nextId, results };
+}
+
+// Eine Anfrage bis zum Ende: die KI darf mehrere Runden lang Werkzeuge aufrufen (kleine Modelle schicken oft einen Aufruf je Antwort),
+// jedes Ergebnis geht zurück. Schluss, wenn sie ohne Werkzeug antwortet, nach 12 Runden oder nach 3 Runden mit Fehlern hintereinander
+export async function runRequest(ask: (m: Msg[]) => Promise<{ content: string | null; toolCalls: ToolCall[]; message: Msg }>,
+  features: Feature[], nextId: number, unit: 'mm' | 'in', text: string, status: (t: string) => void = () => {}) {
+  const msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, unit)}
+
+Auftrag: ${text}` }];
+  let fs = features, made = 0, failing = 0, reply = '', problems: string[] = [];
+  for (let round = 0; round < 12 && failing < 3; round++) {
+    status(round ? `KI arbeitet … (${made} angelegt)` : 'KI arbeitet …');
+    const r = await ask(msgs);
+    if (!r.toolCalls.length) { reply = r.content ?? ''; break; }
+    const out = applyCalls(fs, r.toolCalls, nextId), bad = out.results.filter(x => !x.ok);
+    fs = out.fs; nextId = out.nextId; made += out.results.length - bad.length;
+    problems = bad.map(x => x.text);
+    failing = bad.length ? failing + 1 : 0;
+    msgs.push(r.message, ...out.results.map((x): Msg => ({ role: 'tool', tool_call_id: x.id, content: x.text })));
+  }
+  return { fs, nextId, made, problems, reply };
 }

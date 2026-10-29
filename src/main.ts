@@ -9,8 +9,8 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
-import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings, type Msg } from './ai';
-import { aiContext, applyCalls, SYSTEM, TOOLS } from './aiTools';
+import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
+import { runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
 import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
@@ -1867,31 +1867,21 @@ function svgToDXF(svg: string) {
   return [...out, '0', 'ENDSEC', '0', 'EOF'].join('\n');
 }
 // Sichtbare Körper als OBJ, Z oben wie STEP/STL
-// KI (T8.3, ADR 0002): Werkzeugaufrufe prüfen und als ein Rückgängig-Schritt einfügen; Prüffehler gehen bis zu zweimal zurück an die KI
+// KI (T8.3, ADR 0002): Werkzeugaufrufe prüfen und als ein Rückgängig-Schritt einfügen; Ablauf und Korrekturrunden in runRequest
 // shortcut: Fehler des Kerns (z. B. Rundung zu groß) gehen noch nicht an die KI zurück → T8.6
 function askAi() {
   if (!loadSettings().on) return openAiSettings();
   openAiPrompt(async text => {
     if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
-    const s = loadSettings(), msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, display.unit)}
-
-Auftrag: ${text}` }];
-    let fs = features, id = nextId, made = 0, last = '';
-    try {
-      for (let round = 0; round < 3; round++) {
-        aiStatus(round ? `KI korrigiert (${round}) …` : 'KI arbeitet …');
-        const r = await chat(s, msgs, TOOLS);
-        if (!r.toolCalls.length) { last = r.content ?? ''; break; }
-        const out = applyCalls(fs, r.toolCalls, id), bad = out.results.filter(x => !x.ok);
-        fs = out.fs; id = out.nextId; made += out.results.length - bad.length;
-        last = bad.map(x => x.text).join(' · ');
-        if (!bad.length) break;
-        msgs.push(r.message, ...out.results.map((x): Msg => ({ role: 'tool', tool_call_id: x.id, content: x.text })));
-      }
-    } catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
-    if (!made) return aiStatus(`Nichts angelegt${last ? `: ${last}` : ''}`);
-    pushHistory(); features = fs; nextId = id; clearSel(); refresh();
-    aiStatus(`${made} Schritt${made > 1 ? 'e' : ''} angelegt${last ? ` (nicht umgesetzt: ${last})` : ''}`, undo);
+    const s = loadSettings();
+    let r: Awaited<ReturnType<typeof runRequest>>;
+    try { r = await runRequest(m => chat(s, m, TOOLS), features, nextId, display.unit, text, aiStatus); }
+    catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
+    const left = r.problems.length ? ` (nicht umgesetzt: ${r.problems.join(' · ')})` : '';
+    if (!r.made) return aiStatus(`Nichts angelegt${left || (r.reply ? `: ${r.reply}` : '')}`);
+    const n = r.fs.length - features.length; // neue Schritte im Baum (Extrudieren ändert nur)
+    pushHistory(); features = r.fs; nextId = r.nextId; clearSel(); refresh();
+    aiStatus(`${n ? `${n} Schritt${n > 1 ? 'e' : ''} angelegt` : 'Geändert'}${left}`, undo);
   });
 }
 function exportOBJ() {

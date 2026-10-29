@@ -704,16 +704,16 @@ test('3MF-Export: ZIP mit geschlossenem, einheitlich ausgerichtetem Netz je Kör
 });
 
 test('KI: Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken aus Werkzeugaufrufen (T8.3)', async () => {
-  const hole = (id: string, x: number, y: number) => ({ id, name: 'bohrung', raw: '', args: { flaeche: { schritt: 1, seite: 'oben' }, x, y, gewinde: 'M5', tiefe: 'durch' } });
+  const hole = (id: string, x: number, y: number) => ({ id, name: 'bohrung', raw: '', args: { schritt: 1, x, y, gewinde: 'M5', tiefe: 'durch' } });
   const calls = [
-    { id: 'p', name: 'skizze_rechteck', raw: '', args: { ebene: 'boden', x: 0, y: 0, breite: 100, tiefe: 60, hoehe: 5 } },
+    { id: 'p', name: 'skizze_rechteck', raw: '', args: { x: 0, y: 0, breite: 100, tiefe: 60, hoehe: 5 } },
     hole('a', 8, 8), hole('b', 92, 8), hole('c', 8, 52), hole('d', 92, 52),
-    { id: 'x', name: 'bohrung', raw: '', args: { flaeche: { schritt: 99, seite: 'oben' }, x: 0, y: 0, durchmesser: 3, tiefe: 2 } }, // gibt es nicht
+    { id: 'x', name: 'bohrung', raw: '', args: { schritt: 99, x: 0, y: 0, durchmesser: 3, tiefe: 2 } }, // gibt es nicht
     { id: 'y', name: 'extrudieren', raw: '{kaputt', args: null },
   ];
   const r = applyCalls([], calls, 1);
   expect(r.results.map(x => x.ok)).toEqual([true, true, true, true, true, false, false]);
-  expect(r.results[5].text).toContain('keine Skizze');
+  expect(r.results[5].text).toContain('Schritt 99 gibt es nicht');
   expect([r.fs.length, r.nextId]).toEqual([5, 6]);                         // fünf Schritte wie von Hand
   expect(r.fs.slice(1).every(f => f.name === 'Gewinde M5')).toBe(true);
   const b = buildBody(r.fs);
@@ -721,7 +721,7 @@ test('KI: Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken aus Werkzeugaufrufen
   expect(measureVolume(b.body!)).toBeCloseTo(100 * 60 * 5 - 4 * Math.PI * 2.1 ** 2 * 5, 1);
   const back = await loadStep(await forExport(b.body!).blobSTEP().text());   // STEP hin und zurück
   expect(measureVolume(back)).toBeCloseTo(measureVolume(b.body!), 1);
-  expect(applyCalls([], [{ id: 'z', name: 'skizze_kreis', raw: '', args: { ebene: 'boden', x: 0, y: 0, radius: 5, hoehe: -3 } }], 1).results[0].text)
+  expect(applyCalls([], [{ id: 'z', name: 'skizze_kreis', raw: '', args: { x: 0, y: 0, radius: 5, hoehe: -3 } }], 1).results[0].text)
     .toContain('nur nach oben');                                             // Wertebereich geprüft, nicht geraten
 });
 

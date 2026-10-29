@@ -330,6 +330,18 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T8.3 mit echtem Modell (Ollama qwen2.5:7b, RTX 4070): erst
+  0 von 1 – das Modell verschachtelte „ebene“ falsch, schickte einen Aufruf
+  je Antwort, ließ x/y weg und schrieb ein JSON-Beispiel aus der Anweisung
+  als Text ab. Geändert: flache Parameter (auf_schritt weglassen = Boden,
+  bohrung.schritt), x/y bei Skizzen Standard 0, Fehlermeldungen sagen, was
+  stattdessen richtig ist, Beispiel als Fließtext, Ablauf runRequest
+  (aiTools.ts) fragt bis zu 12 Runden weiter, bis die KI ohne Werkzeug
+  antwortet (Abbruch nach 3 Fehlerrunden in Folge), Meldung zählt neue
+  Schritte. Danach 3 von 3 Läufen richtig: Platte 100 × 60 × 5, vier M5 mit
+  7,5 bzw. 10 mm Randabstand, Volumen exakt, 6–8 s je Anfrage (erster Aufruf
+  nach dem Laden des Modells ~90 s). Test für den Ablauf mit vorgetäuschtem
+  Modell (ai.test.ts). docs/CHANGELOG.md angelegt, README-Status aktualisiert.
 - 2026-10-29 Fix T8.2 (Rückmeldung des Nutzers, Ollama): Ollama lehnte die
   Anfragen der Desktop-App mit 403 ab – geprüft gegen das laufende Ollama:
   Origin http://tauri.localhost → 403, http://localhost / tauri://localhost
