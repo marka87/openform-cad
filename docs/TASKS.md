@@ -286,6 +286,10 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       Spiegeln (ganzer Körper)“ – Reihe, Kreis, Spiegeln an X/Y/Z oder
       angeklickter Kante/Fläche. Skizze/Schritt: öffnet deren Muster/
       Spiegeln wie bisher. Erledigt damit auch T6.4.
+- [x] T10.8 DONE — Formen per Klick-Klick (Wunsch des Nutzers): Rechteck,
+      Kreis, Ellipse, Vieleck, Langloch: einmal klicken, die Form folgt der
+      Maus, nochmal klicken = fertig; oder Maß tippen + Enter, oder Ende =
+      an der Maus fertig. Ziehen geht weiter wie bisher.
 - [x] T10.4 DONE — Text (Werkzeug „Text“): Klick auf Boden oder Fläche,
       auf einer Fläche graviert (−1 mm), sonst erhaben (2 mm); Text,
       Schrifthöhe und Höhe im Seitenfeld. Schrift DejaVu Sans 2.37
@@ -307,6 +311,14 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.8: Klick ohne Bewegung (< 4 px zwischen Drücken und
+  Loslassen) „schärft“ die Form (drag.armed): sie bleibt aktiv, folgt der
+  Maus, der nächste Klick beendet sie über denselben Weg wie das Ziehen.
+  Getippte Maße und Esc wirken wie beim Ziehen, Ende (Taste) beendet an
+  der Maus, auch Linienketten (wie Enter). Werkzeugwechsel verwirft eine
+  halb gesetzte Form. Im Browser: Rechteck Klick-Klick 33 × 19, Kreis
+  Klick + „15“ Enter = R 15, Rechteck gezogen, Langloch mit Ende.
+  Kein Kern-Test (Oberfläche), 57 Tests grün.
 - 2026-10-29 T10.4: Feature `text` (model.ts TextFeature): Kern baut mit
   replicad drawText aus der beim Start des Workers geladenen Schrift
   (loadFont, vendor/fonts/DejaVuSans.ttf, offizielles Release 2.37,

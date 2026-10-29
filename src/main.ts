@@ -20,12 +20,12 @@ const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[])
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
   select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen (Shift = dazu) · rechts ziehen = drehen · Mitte ziehen = verschieben',
-  rect:   'Auf Boden oder Fläche ziehen, um ein Rechteck zu skizzieren · beim Ziehen „20x10“ tippen + Enter = genaues Maß',
-  circle: 'Vom Mittelpunkt aus ziehen, um einen Kreis zu skizzieren · beim Ziehen Zahl tippen + Enter = Radius',
-  ngon:   'Vom Mittelpunkt aus ziehen = Vieleck · beim Ziehen + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
-  ellipse: 'Vom Mittelpunkt aus ziehen = Ellipse · Zahl tippen + Enter = Halbachsen „a x b“',
+  rect:   'Klicken = Anfang, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei „20x10“ tippen + Enter = genaues Maß · Ende = an der Maus fertig',
+  circle: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
+  ngon:   'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
+  ellipse: 'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · Zahl tippen + Enter = Halbachsen „a x b“',
   arc:    'Anfang, Ende, dann Punkt auf dem Bogen klicken · weiter mit Bogen oder L (Linie) · Klick auf den ersten Punkt = schließen · Esc = abbrechen',
-  slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
+  slot:   'Klicken, nochmal klicken (oder aufziehen) = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
   plane:  'Fläche anklicken = Hilfsebene 10 mm davor · Ebene ziehen = Abstand ändern · darauf skizzieren wie auf einer Fläche',
   text:   'Text: Punkt auf Boden oder Fläche klicken (Anfang der Grundlinie) · auf einer Fläche wird graviert, sonst erhaben · Text, Größe und Höhe im Seitenfeld',
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
@@ -922,6 +922,9 @@ function onDown(e: PointerEvent) {
   setRay(e);
   if (gizmo.object) (gizmo as any).pointerHover({ x: ndc.x, y: ndc.y, button: 0 }); // Treffer auch ohne vorherige Mausbewegung
   if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
+  if (drag?.kind === 'sketch' && drag.armed) { // Form per Klick-Klick: zweiter Klick setzt den Endpunkt
+    onMove(e); finishSketch(); drag = null; hud.style.display = 'none'; controls.enabled = true; return refresh();
+  }
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
   if (tool === 'trim') return trimAt(e);
@@ -992,7 +995,7 @@ function onDown(e: PointerEvent) {
     const t = sketchOn(h), pl = planeFor(t); // auf Boden, Fläche oder Flächenraster skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane', body: t?.body };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane', body: t?.body, sx: e.clientX, sy: e.clientY };
   } else if (tool === 'measure') {
     if (measureMode === 'obj') return measureObject();
     const s = measurePoint();
@@ -1185,6 +1188,10 @@ el.addEventListener('pointerup', e => {
   if (!drag) return;
   onMove(e); // Endposition übernehmen
   hud.style.display = 'none';
+  if (drag.kind === 'sketch' && !drag.armed && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) { // nur geklickt: Form folgt der Maus bis zum nächsten Klick
+    drag.armed = true; controls.enabled = true;
+    return showHud(e, 'nochmal klicken = fertig · Maß tippen + Enter · Esc = abbrechen');
+  }
   if (drag.kind === 'sketch') finishSketch();
   if (drag.kind === 'box') boxSelect(drag);
   if (drag.kind === 'edge' && !drag.started && !drag.f) {
@@ -1235,6 +1242,7 @@ addEventListener('pointerdown', e => { if (!flyout.contains(e.target as Node)) f
 modeLabels();
 function setTool(t: Tool) {
   rect3 = null;
+  if (drag?.kind === 'sketch' && drag.armed) { drag = null; disposeGroup(preview); hud.style.display = 'none'; } // halb gesetzte Form verwerfen
   const keep = poly && !poly.smooth && ['line', 'arc'].includes(t) && ['line', 'arc'].includes(tool); // zwischen Linie und Bogen wechseln
   if (t !== tool && !keep) { cancelPoly(); measure = []; measureN = []; setMeasureLabel(null); }
   if (poly) poly.arcEnd = undefined;
@@ -1896,7 +1904,8 @@ addEventListener('keydown', e => {
   else if (k === 't') setTool('trim');
   else if (k === 'p') projectEdges();
   else if (k === 's') setTool('spline');
-  else if (k === 'enter' && poly) finishPoly(!endOpen()); // Linie, Zug-Pfad und Hilfslinie: Enter = offen fertig
+  else if ((k === 'enter' || k === 'end') && poly) finishPoly(!endOpen()); // Linie, Zug-Pfad und Hilfslinie: Enter/Ende = offen fertig
+  else if (k === 'end' && drag?.kind === 'sketch') { finishSketch(); drag = null; hud.style.display = 'none'; controls.enabled = true; refresh(); } // Form an der Maus fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') escapeStep();
 });
@@ -1912,7 +1921,7 @@ function escapeStep() {
     if (tool === 'line' && !poly.smooth && poly.path === undefined && poly.pts.length >= 2) return finishPoly(false);
     cancelPoly(); return showHint(HINTS[tool]);
   }
-  if (drag) { drag = null; disposeGroup(preview); controls.enabled = true; return refresh(); }
+  if (drag) { drag = null; disposeGroup(preview); hud.style.display = 'none'; controls.enabled = true; return refresh(); }
   if (tool !== 'select') return setTool('select');
   if (selId !== null || selBody !== null || multi.size || edgeSel.length || gizmo.object) { clearSel(); detachGizmo(); return refresh(); }
   if (workHit) { setWorkPlane(null); showHint(HINTS[tool]); }
