@@ -254,7 +254,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     confirms = new Map(data.confirm);
     if (selId !== null && confirms.has(selId) !== !!panel.querySelector('.confirm')) renderPanel(); // Knopf ein-/ausblenden
     renderTree();
-    showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || (poly?.path !== undefined ? PATH_HINT : HINTS[tool]));
+    showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || (poly?.path !== undefined ? pathHint() : HINTS[tool]));
     notice = '';
     busy = false;
     // Vom Kern nachgetragene Bezüge und mitgewanderte Lagen übernehmen (kein Rückgängig-Schritt, ergibt sich aus dem Modell).
@@ -766,7 +766,7 @@ function applyTyped() {
 
 // ---------- Linien-Werkzeug: Vieleck Punkt für Punkt ----------
 // path = ID der Profilskizze: der Linienzug wird Pfad eines Zugs (Sweep) statt Skizze
-let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean; cons?: Con[] } | null = null;
+let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean; cons?: Con[]; edges?: EdgeHit[] } | null = null; // edges: Zug-Pfad aus Körperkanten
 let snapKind = ''; // woran der letzte Zeigerpunkt eingerastet ist: point, align, grid
 let dirHit: { t: Con['t']; k?: number } | null = null; // Richtungsfang des letzten Linienpunkts; k = eigene Seite, an der er hängt
 const DIR_TEXT: Record<string, string> = { h: 'waagrecht', v: 'senkrecht', par: 'parallel', perp: 'rechtwinklig', tan: 'tangential' };
@@ -883,11 +883,14 @@ function startPath(f: Extrude, ax: 'u' | 'v') {
   showPoly(poly.pts);
   showHint(PATH_HINT);
 }
-const PATH_HINT = 'Zug: Pfad Punkt für Punkt klicken (vom Profil weg) · Enter = offen fertig · Klick auf den Anfang = geschlossen · Esc = abbrechen';
+const PATH_HINT = 'Zug: Pfad Punkt für Punkt klicken (vom Profil weg) oder Körperkanten nacheinander anklicken · Enter = offen fertig · Klick auf den Anfang = geschlossen · Esc = abbrechen';
+const pathHint = () => poly?.edges ? `${poly.edges.length} Kante${poly.edges.length > 1 ? 'n' : ''} im Pfad · weitere anklicken (anschließend) · Enter = fertig · Esc = abbrechen` : PATH_HINT;
 // Zug-Pfad als Feature; closed = über Klick auf den Anfang geschlossen
 function sweepOf(pts: number[][], closed: boolean): Sweep | null {
   const P = poly?.path !== undefined ? getById(poly.path) : undefined;
-  if (!P || !isExtrude(P) || pts.length < (closed ? 3 : 2)) return null;
+  const ed = poly!.edges;
+  if (!P || !isExtrude(P) || !ed && pts.length < (closed ? 3 : 2)) return null;
+  if (ed) return { id: nextId, type: 'sweep', profile: P.id, ...structuredClone(poly!.pl), pts: [], edges: ed.map(({ at, dir }) => ({ at, dir })), of: ed[0].body, body: P.body ?? ed[0].body ?? nextId };
   return { id: nextId, type: 'sweep', profile: P.id, ...structuredClone(poly!.pl), pts: structuredClone(pts), ...closed && { closed }, body: P.body ?? nextId };
 }
 function previewPath(pts: number[][]) { pathPreview = sweepOf(pts, false); requestBuild(); }
@@ -971,6 +974,13 @@ function onDown(e: PointerEvent) {
     // shortcut: Achse als feste Gerade gespeichert, nicht an die Kante gebunden → EdgeRef wie bei Rundungen, wenn sie mitwandern soll
     pushHistory(); f.axisLine = { p: edge.at, d: edge.dir }; delete f.axis; f.rev ||= 360;
     return refresh();
+  }
+  if (poly?.path !== undefined && (poly.edges || edge && poly.pts.length === 1)) { // Zug-Pfad aus Körperkanten (T2.5): Kanten in Reihenfolge, alle vom selben Körper
+    if (!edge) return showHint('Kante anklicken · Enter = fertig · Esc = abbrechen');
+    if (poly.edges && edge.body !== poly.edges[0].body) return showHint('Alle Pfadkanten müssen zum selben Körper gehören');
+    (poly.edges ??= []).push(edge);
+    pathPreview = sweepOf([], false); requestBuild();
+    return showHint(pathHint());
   }
   if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
@@ -1094,7 +1104,7 @@ function onMove(e: PointerEvent) {
       return showHud(e, b ? 'Punkt auf dem Bogen' : 'auf einer Linie');
     }
     showPoly([...poly.pts, q]);
-    if (poly.path !== undefined) previewPath([...poly.pts, q]);
+    if (poly.path !== undefined && !poly.edges) previewPath([...poly.pts, q]);
     if (typed) return showTyped();
     return showHud(e, `${len(Math.hypot(q[0] - last[0], q[1] - last[1]))} · Zahl tippen`);
   }

@@ -342,7 +342,7 @@ export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Ancho
 }
 
 // Rundung/Fase: Kante über den Bezug, sonst über den Punkt at; at/dir werden an die Kante nachgeführt
-export function anchorEdges(f: EdgeOp, s: Shape3D, named: Named): Anchor<{ edges: Edge[] }> {
+export function anchorEdges(f: Pick<EdgeOp, 'at' | 'edge'>, s: Shape3D, named: Named): Anchor<{ edges: Edge[] }> {
   if (!f.edge) {
     const edges = new EdgeFinder().withinDistance(0.1, f.at).find(s);
     if (!edges.length) throw new Error('Kante nicht gefunden');

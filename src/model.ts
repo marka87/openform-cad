@@ -44,7 +44,9 @@ export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: n
 // pts wie beim Vieleck [x, y, bulge?], offen oder geschlossen (closed). Knicke auf Gehrung; runde Ecken = Bögen im Pfad
 // (OCCTs RoundCorner ergibt hier ungültige Körper).
 // Das Profil sollte am Pfadanfang liegen; es wird so mitgeführt, wie es gezeichnet ist.
-export interface Sweep extends Frame { id: number; type: 'sweep'; profile: number; pts: number[][]; closed?: boolean; sub?: boolean; body?: number; hidden?: boolean }
+// edges: Pfad aus angeklickten Körperkanten statt pts (in Klickreihenfolge, aneinanderhängend), of = deren Körper (T2.5)
+export interface Sweep extends Frame { id: number; type: 'sweep'; profile: number; pts: number[][]; closed?: boolean; sub?: boolean; body?: number; hidden?: boolean;
+  edges?: { at: Vec; dir: Vec; edge?: EdgeRef }[]; of?: number }
 // Ebene Fläche des Körpers um d entlang ihrer Normalen versetzen (d > 0 = nach außen, Material dazu); at/n = Klickpunkt und Normale,
 // face = Bezug (vom Kern nachgetragen). Für Flächen ohne eigenes Feature, z. B. aus STEP-Importen oder nach Booleschen Operationen
 export interface Offset { id: number; type: 'offset'; at: Vec; n: Vec; d: number; face?: FaceRef; body?: number; hidden?: boolean }

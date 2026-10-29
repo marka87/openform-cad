@@ -636,6 +636,22 @@ test('Schale: Punkt wandert mit der aufgelösten Fläche, wenn sich die Höhe ä
   expect(buildBody([{ ...b, d: 15 }, { ...withRef, at }]).fixes.get(9)?.at).toBeUndefined(); // kein Nachführen mehr
 });
 
+test('Zug entlang angeklickter Körperkanten, mit Bezug (T2.5)', () => {
+  // Kreis R 1 an der vorderen oberen Kante (x 0 → 20 bei y = 10, z = 0), Profil am Kantenanfang quer dazu
+  const pl = { o: [0, 10, 0], n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] } as any;
+  const prof: Extrude = { ...sketchFeature('circle', pl, [0, 0], [1, 0], 2, true)!, d: 0, body: 1 };
+  const sw: Sweep = { id: 3, type: 'sweep', profile: 2, ...pl, pts: [], body: 1, of: 1, edges: [{ at: [10, 10, 0], dir: [1, 0, 0] }] };
+  const r = buildBody([box(), prof, sw]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 + 0.75 * Math.PI * 20, 0); // drei Viertel des Rundstabs ragen heraus
+  const fixed = r.fixes.get(3)!.edges as Sweep['edges'];
+  expect(fixed![0].edge).toBeTruthy();                                      // Bezug auf die Kante nachgetragen
+  // zwei Kanten hintereinander: um die Ecke bei x = 20 weiter nach hinten
+  const two = buildBody([box(), prof, { ...sw, edges: [...fixed!, { at: [20, 10, -5], dir: [0, 0, -1] }] }]);
+  expect(two.failed).toEqual([]);
+  expect(measureVolume(two.body!)).toBeGreaterThan(2000 + 0.75 * Math.PI * 25);
+});
+
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {
   const aux: Extrude = { id: 7, ...GROUND, type: 'poly', p: {}, pts: [[0, 0], [10, 0], [10, 10]], d: 0, aux: true, open: true };
   expect(keyPoints(aux).length).toBe(2 * (3 + 2));                     // 3 Ecken + 2 Mitten (kein Schlusssegment), je unten/oben

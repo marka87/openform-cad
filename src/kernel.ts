@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -137,8 +137,18 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         const P = moved.get(f.profile) ?? features.find(g => g.id === f.profile);
         if (!P || !isExtrude(P) || !isFlat(P)) throw new Error('Profil für den Zug fehlt');
         if (f.sub && !body) continue;
-        const prof = sketchOf(P) as Sketch & { wire: Wire }, path = pathSketch(f); // beide festhalten: replicads GC löscht sonst die Drähte
-        try { [s, nS] = sweep(f, P, prof.wire, path.wire); } finally { prof.delete(); path.delete(); }
+        if (f.edges?.length) { // Pfad aus Körperkanten, über Bezüge wie bei Rundungen; Lagen und Bezüge je Kante nachtragen
+          const ok = key(f.of ?? k), E = bodies.get(ok);
+          if (!E) throw new Error('Körper mit den Pfadkanten fehlt');
+          const nm = names.get(ok) ?? [], got = f.edges.map(e => anchorEdges(e, E, nm));
+          const merged = (part: 'patch' | 'confirm') => got.some(g => g[part]) && { [part]: { edges: f.edges!.map((e, i) => ({ ...e, ...got[i][part] })) } };
+          anchor(f.id, { sure: got.every(g => g.sure), ...merged('patch'), ...merged('confirm') });
+          const prof = sketchOf(P) as Sketch & { wire: Wire }, spine = assembleWire(got.flatMap(g => g.edges));
+          try { [s, nS] = sweep(f, P, prof.wire, spine); } finally { prof.delete(); spine.delete(); }
+        } else {
+          const prof = sketchOf(P) as Sketch & { wire: Wire }, path = pathSketch(f); // beide festhalten: replicads GC löscht sonst die Drähte
+          try { [s, nS] = sweep(f, P, prof.wire, path.wire); } finally { prof.delete(); path.delete(); }
+        }
       } else if (f.type === 'text') {
         if (f.d < 0 && !body) continue; // Gravur ohne Körper: nichts zu gravieren
         [s, nS] = textSolid(f);

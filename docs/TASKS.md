@@ -104,8 +104,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T2.3 DONE — Pfadauswahl und Live-Vorschau im Viewport.
 - [x] T2.4 DONE — Pfadpunkte nachträglich ziehen.
 
-- [ ] T2.5 TODO — Pfad aus vorhandenen Körperkanten übernehmen (Kante
-      anklicken statt zeichnen).
+- [x] T2.5 DONE — Pfad aus vorhandenen Körperkanten: nach „Zug: Pfad
+      zeichnen“ Kanten nacheinander anklicken, Enter. Kanten mit Bezug,
+      Vorschau läuft mit. Einschränkung: das Profil wandert nicht mit,
+      wenn sich die Kanten verschieben (wie beim gezeichneten Pfad).
 
 ## Epic 3: Einzelbemaßung Zeichnung
 - [x] T3.1 DONE — Maßobjekt im Zeichnungsmodell (Typ, Bezug, Position).
@@ -321,6 +323,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T2.5: Sweep.edges (at/dir/edge je Kante, wie EdgeOp) und
+  Sweep.of (Körper der Kanten). Kern: anchorEdges je Kante, Patches und
+  Bestätigungen kantenweise zusammengeführt, assembleWire → vorhandenes
+  sweep(). UI: im Pfadmodus nimmt der erste Klick auf eine Kante statt
+  eines Punkts den Kantenmodus an (danach nur Kanten, alle vom selben
+  Körper); Hinweis zählt die Kanten (pathHint, übersteht den zweiten
+  Kernlauf nach dem Nachtragen der Bezüge). Test: Rundstab an einer
+  Quaderkante (Volumen exakt), zweite Kante um die Ecke. Im Browser:
+  Quader 100 × 50 × 50, R 5 an zwei Kanten, Feature mit beiden Bezügen
+  gespeichert. Geschlossene Kantenzüge werden wie offene behandelt
+  (assembleWire schließt selbst, wenn die Kanten einen Ring bilden).
 - 2026-10-29 T1.14: anchorFaces (topo.ts) liefert patch at/more, wenn ein
   Punkt nicht mehr auf seiner über den Bezug gefundenen Fläche liegt.
   Ersatzpunkt: Flächenmitte, falls sie auf der Fläche liegt (bei Ringen
