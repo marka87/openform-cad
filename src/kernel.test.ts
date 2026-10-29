@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -797,4 +797,15 @@ test('Offene Linie (Linienkette): eigene Art, bildet keine Fläche, auch auf ein
   const rect = { ...sketchFeature('rect', TOP, [-8, -8], [8, 8], 6, true)!, d: 0 };
   expect(regionFeature([rect, L], rect, [10, 10, -5], 7)).toBeNull();      // Linie teilt (noch) keine Bereiche (Weg B, Epic 9)
   expect(movePoint(L, structuredClone(L), 2, [-5, -5])).toBe(true);        // Punkte ziehen ohne Flächenprüfung
+});
+
+test('Körper an einer offenen Linie teilen: Linie wird zur senkrechten Schnittebene (T5.18)', () => {
+  const L: Extrude = { id: 5, ...TOP, type: 'line', p: {}, pts: [[-5, -5], [0, -5], [5, -5]], d: 0, onFace: true, open: true }; // quer über den Deckel bei x = 15
+  const pl = linePlane(L, 6)!;
+  expect(Math.abs(pl.n[0])).toBeCloseTo(1);                                // Ebene x = 15
+  const r = buildBody([box(), L, pl, { id: 7, type: 'split', body: 1, plane: 6 }]);
+  expect(r.failed).toEqual([]);
+  expect([...r.bodies.values()].map(b => Math.round(measureVolume(b))).sort((a, b) => a - b)).toEqual([500, 1500]);
+  expect(linePlane({ ...L, pts: [[-5, -5], [5, -5], [5, 5]] }, 8)).toBeNull(); // Knick: keine Ebene
+  expect(linePlane({ ...L, pts: [[-5, -5, 0.3], [5, -5]] }, 8)).toBeNull();   // Bogen: keine Ebene
 });

@@ -9,7 +9,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, autoStep, noFace, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
+import { cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -1103,7 +1103,15 @@ function renderFeaturePanel() {
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   if (isExtrude(f) && noFace(f)) {
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">${f.aux ? 'Bildet keine Fläche, dient zum Einrasten.' : 'Offene Linie, bildet keine Fläche (Klick auf den Anfangspunkt beim Zeichnen schließt zur Fläche).'} Punkte ziehen = ändern.</p><button class="del">Löschen</button>`;
+    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">${f.aux ? 'Bildet keine Fläche, dient zum Einrasten.' : 'Offene Linie, bildet keine Fläche (Klick auf den Anfangspunkt beim Zeichnen schließt zur Fläche).'} Punkte ziehen = ändern.</p>`
+      + (f.type === 'line' && bodyIds.includes(bodyOf(f)) ? linePlane(f, 0) ? `<button class="act cut">Körper hier teilen</button>` : `<p style="color:var(--muted);margin:4px 0">Teilen geht nur an einer geraden Linie.</p>` : '')
+      + `<button class="del">Löschen</button>`;
+    const cut = panel.querySelector<HTMLButtonElement>('.cut');
+    if (cut) cut.onclick = () => { // Schnittebene senkrecht durch die Linie (ausgeblendet) + Teilen; beide Hälften sind eigene Körper
+      const pl = linePlane(f, nextId++)!;
+      const sp = { id: nextId++, type: 'split' as const, body: bodyOf(f), plane: pl.id };
+      pushHistory(); add({ ...pl, name: `Schnittebene (Linie #${f.id})` }, sp); selId = sp.id; refresh();
+    };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'sweep') {

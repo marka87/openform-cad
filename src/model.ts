@@ -321,6 +321,20 @@ export function keyPoints(f: Extrude, only?: 'mid'): Vec[] {
   return [0, f.d].flatMap(z => pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k] + z * f.n[k]) as Vec));
 }
 
+// Schnittebene aus einer geraden offenen Linie: enthält die Linie und steht senkrecht auf ihrer Skizzenebene (Körper teilen, T5.18).
+// null, wenn die Linie Bögen hat oder nicht gerade ist
+export function linePlane(f: Extrude, id: number): RefPlane | null {
+  const pts = f.pts ?? [], w = pts.map(([x, y]) => [0, 1, 2].map(k => f.o[k] + x * f.u[k] + y * f.v[k]) as Vec);
+  if (pts.length < 2 || pts.some(p => p[2])) return null;
+  const a = w[0], z = w.at(-1)!, L = Math.hypot(...sub(z, a));
+  if (L < 1e-6) return null;
+  const u = sub(z, a).map(x => x / L) as Vec;
+  if (w.some(p => { const q = sub(p, a), t = dot(q, u); return Math.hypot(...q.map((x, k) => x - t * u[k])) > 1e-6; })) return null;
+  const n = [u[1] * f.n[2] - u[2] * f.n[1], u[2] * f.n[0] - u[0] * f.n[2], u[0] * f.n[1] - u[1] * f.n[0]] as Vec;
+  const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]] as Vec;
+  return { id, type: 'plane', c: a.map((x, k) => (x + z[k]) / 2) as Vec, n, u, v, off: 0, hidden: true };
+}
+
 // Rasterabstand „Auto“ nach Zoom: der kleinste Schritt, der auf dem Bildschirm mindestens 8 Pixel breit ist (px = mm je Pixel)
 export const autoStep = (px: number) => [0.1, 0.5, 1, 5, 10, 50].find(s => s / px >= 8) ?? 100;
 

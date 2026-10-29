@@ -181,14 +181,11 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       offen, Klick auf den Anfangspunkt schließt zur Fläche. Offene Linien
       sind eigene Art `type: 'line'` (nicht `aux`), durchgezogen, bilden
       keine Bereiche.
-- [ ] T5.18 TODO — Körper an einer offenen Linie teilen: Linie auf einer
-      Fläche auswählen → „Körper hier teilen". Die Linie wird senkrecht
-      zur Skizzenebene zur Schnittebene, der Rest läuft über das
-      vorhandene Teilen (T1.3d, Schnittfläche tag split). Beide Hälften
-      bleiben eigene Körper, einzeln löschbar.
-      Abgrenzung: Das teilt KÖRPER, nicht Skizzenflächen. Eine Linie
-      quer durch ein Rechteck ergibt weiterhin keine zwei extrudierbaren
-      Bereiche — das ist Epic 9.
+- [x] T5.18 DONE — Körper an einer geraden offenen Linie teilen:
+      Seitenfeld der Linie → „Körper hier teilen“. Senkrechte
+      Schnittebene durch die Linie (ausgeblendet im Baum) + vorhandenes
+      Teilen; beide Hälften eigene Körper. Teilt KÖRPER, keine
+      Skizzenbereiche (das bleibt Epic 9).
 - [ ] T5.13 TODO — Fänge beim Zeichnen: waagrecht, senkrecht, parallel
       und rechtwinklig zu einer vorhandenen Kante. Hilfslinie zeigt es
       an, beim Absetzen entsteht eine Abhängigkeit, die beim Ziehen
@@ -265,6 +262,16 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.18: linePlane() in model.ts: gerade Linie ohne Bögen →
+  RefPlane durch die Linienmitte, u = Linienrichtung, n = Linie ×
+  Skizzennormale, ausgeblendet; dazu ein Split auf den Körper der Linie.
+  Knick oder Bogen → kein Knopf, Hinweis „nur an einer geraden Linie“.
+  Entscheidung: zwei Schritte im Baum (Ebene + Teilen) statt eines neuen
+  Feature-Typs, weil Teilen an Ebenen schon benannt und getestet ist
+  (T1.3d). Abkürzung: die Ebene ist eine Momentaufnahme der Linie,
+  wandert die Linie, bleibt die Ebene stehen. Test: Quader 20×10×10,
+  Linie quer bei x = 15 → Körper 1500 + 500 mm³. Im Browser: Knopf,
+  Körper #1 und #4, Naht an der Linie. 51 Tests grün.
 - 2026-10-29 T5.12: Extrude.type 'line' (mit open: true, damit Einrasten,
   Trimmen/Verlängern und Punktziehen der offenen Hilfslinien ohne
   Sonderfälle greifen); noFace() fasst Hilfslinie und Linie zusammen
