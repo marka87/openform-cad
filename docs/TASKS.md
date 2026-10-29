@@ -271,6 +271,36 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T1.15: Die Anker liefern bei unsicherem Treffer `confirm` =
+  Bezug auf das Gefundene (Skizze: face, Rundung/Fase: edge, Schale und
+  Fläche löschen: faces, Versetzen: face); buildBody gibt sie als Map
+  `confirm` weiter, der Worker reicht sie durch. Seitenfeld eines gelben
+  Schritts zeigt „Bezug übernehmen“ (mit Rückgängig-Schritt), danach baut
+  der Schritt sicher. Entscheidung: nur auf Knopfdruck, nie automatisch
+  (T1.7: nicht still umschreiben). Tests: Grundkörper neu gezeichnet →
+  Bohrung und Fase bestätigen → nichts mehr gelb; gekippte Seite (T1.13)
+  → bestätigen → grün. Im Browser geprüft: Bohrung auf gekippter Stirnseite
+  gelb, Knopf, danach grün, Bezug trägt die neue Normale.
+- 2026-10-29 T1.13: anchorSketch dreht die Skizze, wenn ihre Fläche kippt:
+  Drehachse = Schnittgerade von alter Skizzenebene und neuer Fläche
+  (Scharnier), Winkel = n → N; Ebene, Bereiche und Drehachse werden als
+  patch nachgeführt. Entscheidung: gekippt bleibt der Bezug gelb, weil der
+  Fingerabdruck (alte Normale) nicht passt; bestätigen kommt mit T1.15,
+  nicht still. Umdrehen um mehr als ~90° = sichtbarer Fehler. Test:
+  Vieleckecke wandert, Seite kippt um die stehende Kante, Bohrung bleibt
+  5 mm vom Scharnier in der neuen Ebene. Im Browser geprüft (17,49 cm³,
+  Bohrung gelb auf der schrägen Stirnseite).
+- 2026-10-29 T0.1: Jedes DONE-Paket gegen Code, Tests und Log geprüft.
+  Beleg je Paket: Kern-Test mit Paketnummer im Namen (T1.3a–d, T1.4–T1.9,
+  T1.12, T2.1, T2.2, T3.1, T3.4, T5.1, T5.2, T5.4, T6.1–T6.3, T6.1b) oder
+  benannte Prüfung im Log (T1.0/T1.1 = Dokumente, T1.1b ohne Code, T1.10,
+  T2.3, T2.4, T4.1, T4.2, T5.3 im Browser bzw. in der gebauten App).
+  Zwei Lücken ohne Beleg gefunden und mit Test geschlossen, kein Zurücksetzen
+  nötig: Radius-Maß (T3.3, war weder getestet noch im Log genannt) und
+  „Rundungen/Fasen werden mitkopiert“ (T6.3, Fase am Bohrungsrand
+  mitgespiegelt). Die schon korrigierten Teile von T5.4/T6.3 liegen in
+  T5.6/T6.4. replicad: package.json steht auf ^1.2.0 → Offene Frage
+  gestrichen, T7.2 bleibt als Pflicht fürs nächste Update.
 - 2026-10-29 replicad 1.1.0 → 1.2.0: bringt dieselbe OpenCascade-Konfiguration
   (replicad-opencascadejs bleibt 1.1.0, gleiches Image), der eigene Build in
   vendor/ gilt also weiter; nur REPLICAD_REF im Workflow nachgezogen. 47 Tests
