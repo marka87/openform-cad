@@ -708,7 +708,7 @@ function applyTyped() {
 let poly: { pl: Frame; pts: number[][]; onFace: boolean; smooth: boolean; hover?: number[]; body?: number; arcEnd?: number[]; path?: number; aux?: boolean; cons?: Con[] } | null = null;
 let snapKind = ''; // woran der letzte Zeigerpunkt eingerastet ist: point, align, grid
 let dirHit: { t: Con['t']; k?: number } | null = null; // Richtungsfang des letzten Linienpunkts; k = eigene Seite, an der er hängt
-const DIR_TEXT: Record<string, string> = { h: 'waagrecht', v: 'senkrecht', par: 'parallel', perp: 'rechtwinklig' };
+const DIR_TEXT: Record<string, string> = { h: 'waagrecht', v: 'senkrecht', par: 'parallel', perp: 'rechtwinklig', tan: 'tangential' };
 // Punkt der Linie unter dem Zeiger; ohne Punktfang rastet die neue Strecke waagrecht, senkrecht, parallel oder rechtwinklig
 // zu den eigenen Seiten und zu geraden Kanten (≥ 5 mm) in der Ebene ein (Shift = frei)
 function polyPoint(e: PointerEvent) {
@@ -717,6 +717,8 @@ function polyPoint(e: PointerEvent) {
   if (!q || !poly!.pts.length || e.shiftKey || snapKind === 'point' || poly!.smooth || poly!.arcEnd || !['line', 'aux'].includes(tool)) return q;
   const pl = poly!.pl, pts = poly!.pts, a = pts.at(-1)!;
   const refs: { d: number[]; tag: { t: Con['t']; k?: number } }[] = [{ d: [1, 0], tag: { t: 'h' } }, { d: [0, 1], tag: { t: 'v' } }];
+  const k0 = pts.length - 2;
+  if (k0 >= 0 && pts[k0][2]) refs.unshift({ d: endTangent(pts[k0], a, pts[k0][2]), tag: { t: 'tan', k: k0 } }); // nach einem Bogen: tangential weiter (gewinnt bei Gleichstand)
   const add = (d: number[], k?: number) => {
     const L = Math.hypot(d[0], d[1]);
     if (L > 1e-9) refs.push({ d: [d[0] / L, d[1] / L], tag: { t: 'par', k } }, { d: [-d[1] / L, d[0] / L], tag: { t: 'perp', k } });
@@ -736,7 +738,7 @@ function polyPoint(e: PointerEvent) {
   guides.geometry.setAttribute('color', new THREE.Float32BufferAttribute([...col, ...col], 3));
   guides.visible = true;
   markSnap(world(s.q), 0x4da3ff, 3);
-  showSnapTip(world(s.q), DIR_TEXT[s.tag.t] + (s.tag.k !== undefined ? ` zu Seite ${s.tag.k + 1}` : ''));
+  showSnapTip(world(s.q), DIR_TEXT[s.tag.t] + (s.tag.k !== undefined ? ` ${s.tag.t === 'tan' ? 'an Bogen' : 'zu Seite'} ${s.tag.k + 1}` : ''));
   return s.q;
 }
 function showPoly(pts: number[][]) {
@@ -905,7 +907,7 @@ function onDown(e: PointerEvent) {
     if (!arc && poly.pts.length >= 3 && nearPt(q, poly.pts[0])) finishPoly();
     else if (!arc && q && !(last && q[0] === last[0] && q[1] === last[1])) {
       poly.pts.push(q);
-      if (dirHit?.k !== undefined && (dirHit.t === 'par' || dirHit.t === 'perp')) (poly.cons ??= []).push({ t: dirHit.t, i: poly.pts.length - 2, j: dirHit.k }); // hält beim Ziehen
+      if (dirHit?.k !== undefined && (dirHit.t === 'par' || dirHit.t === 'perp' || dirHit.t === 'tan')) (poly.cons ??= []).push({ t: dirHit.t, i: poly.pts.length - 2, j: dirHit.k }); // hält beim Ziehen
     }
   } else if (tool === 'arc') { // Bogen durch drei Punkte: Anfang (nur beim ersten Mal), Ende, Punkt auf dem Bogen
     const t = sketchOn(h);
@@ -1097,8 +1099,9 @@ el.addEventListener('pointerup', e => {
   }
   if (drag.kind === 'line' && drag.arc && drag.started && poly) {
     const q = polyPoint(e), first = poly.pts[0];
-    if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); finishPoly(); } // Bogen schließt die Form
-    else if (q) poly.pts = arcPts(q);
+    const tan = { t: 'tan' as const, i: poly.pts.length - 1, j: poly.pts.length - 2 }; // gezogener Bogen schließt tangential an: als Abhängigkeit merken
+    if (q && nearPt(q, first)) { poly.pts = arcPts(first).slice(0, -1); (poly.cons ??= []).push(tan); finishPoly(); } // Bogen schließt die Form
+    else if (q) { poly.pts = arcPts(q); (poly.cons ??= []).push(tan); }
   }
   if (drag.kind === 'line' && drag.arc && !drag.started && poly && tool === 'line' && !poly.smooth) { drag = null; controls.enabled = true; return finishPoly(false); } // Klick auf den letzten Punkt
   hideSnap();

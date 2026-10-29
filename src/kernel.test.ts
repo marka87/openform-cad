@@ -839,3 +839,19 @@ test('Richtungsfang beim Linienzeichnen: waagrecht, rechtwinklig, sonst nichts (
   expect(dirSnap([2, 2], [7.1, 7], refs)).toMatchObject({ tag: 'par' });                      // 45°-Kante
   expect(dirSnap([0, 0], [10, 2], refs)).toBeNull();                                          // 11° daneben: frei
 });
+
+test('Tangential an Bögen beim Zeichnen: gemerkte Abhängigkeiten lassen sich lösen und halten beim Ziehen (T5.14)', async () => {
+  const { make_gcs_wrapper } = await import('@salusoft89/planegcs');
+  const { solveSketch } = await import('./sketchSolver');
+  const gcs = await make_gcs_wrapper();
+  // im Browser gezeichnet: Linie, gezogener Bogen, tangential weiter, geschlossen
+  const pts = [[-33, -33], [17, -33, 0.5225], [33, -10], [24.8591, 11.9477]];
+  const cons = [{ t: 'h' as const, i: 0 }, { t: 'tan' as const, i: 1, j: 0 }, { t: 'tan' as const, i: 2, j: 1 }];
+  const moved = structuredClone(pts); moved[3] = [20, 15];                    // Punkt 4 ziehen
+  const out = solveSketch(gcs, moved, cons, [3])!;
+  expect(out).not.toBeNull();
+  const t = (k: number) => endTangent(out[k], out[k + 1], out[k][2] ?? 0), dir = (k: number) => { const d = [out[k + 1][0] - out[k][0], out[k + 1][1] - out[k][1]], L = Math.hypot(d[0], d[1]); return [d[0] / L, d[1] / L]; };
+  const c = dir(1), h = -2 * Math.atan(out[1][2]), start = [c[0] * Math.cos(h) - c[1] * Math.sin(h), c[0] * Math.sin(h) + c[1] * Math.cos(h)]; // Anfangsrichtung = Sehne um −h gedreht
+  expect(start[0] * dir(0)[0] + start[1] * dir(0)[1]).toBeCloseTo(1, 4);         // Bogen setzt Seite 1 fort
+  expect(t(1)[0] * dir(2)[0] + t(1)[1] * dir(2)[1]).toBeCloseTo(1, 4);           // Seite 3 setzt den Bogen fort
+});

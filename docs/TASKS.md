@@ -193,8 +193,10 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       in der Ebene), 3° Fangbereich, Wort am Zeiger. Zu eigenen Seiten
       entsteht beim Absetzen ∥/⟂ als Abhängigkeit (hält beim Ziehen),
       waagrecht/senkrecht wie bisher. Shift = frei.
-- [ ] T5.14 TODO — Tangentialer Fang an Bögen, Ergänzung zu T5.13.
-      ABHÄNGIG von T5.6 (Löser kennt Bögen bisher nur als Sehne).
+- [x] T5.14 DONE — Tangential an Bögen: nach einem Bogen rastet die
+      nächste Strecke tangential ein („tangential an Bogen n“), ein
+      gezogener Bogen schließt tangential an; beides wird als
+      Abhängigkeit gemerkt und hält beim Ziehen (über T5.6).
 - [ ] T5.15 TODO — Winkel tippen: Tab schaltet beim Zeichnen vom
       Längen- ins Winkelfeld, wie in Shapr3D.
 - [ ] T5.16 TODO — Esc stufenweise: erst laufenden Zug abbrechen, dann
@@ -265,6 +267,15 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.14: polyPoint nimmt nach einer Bogen-Seite deren
+  Endtangente vorn in die Fangrichtungen (gewinnt bei Gleichstand gegen
+  waagrecht/senkrecht); beim Absetzen Con tan(neue Seite, Bogen). Der
+  vom letzten Punkt gezogene Bogen war schon geometrisch tangential,
+  jetzt merkt er sich das auch als Con tan(Bogen, Vorgänger), auch wenn
+  er die Form schließt. Test: im Browser gezeichnete Form (Linie, Bogen,
+  tangential weiter) mit h + 2× tan, Punkt 4 gezogen → beide Übergänge
+  bleiben tangential. Im Browser: „tangential an Bogen 2“, geschlossen,
+  Endtangente exakt (cos = 1). 54 Tests grün.
 - 2026-10-29 T5.13: dirSnap() in model.ts (Test) legt den Zeigerpunkt auf
   die nächste Richtung innerhalb 3°, polyPoint() in main.ts sammelt die
   Richtungen: Achsen der Skizze, eigene gerade Seiten (∥ und ⟂), gerade
