@@ -69,6 +69,11 @@
   #toolbar .dd { float:right; margin-left:6px; padding:0 4px; border-radius:4px; color:var(--muted); }
   #toolbar .dd:hover { background:#454b55; color:var(--text); }
   #toolbar small.mode { color:var(--muted); font-size:11px; margin-left:3px; }
+  #snapMenu { position:fixed; display:none; z-index:20; left:270px; bottom:14px; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 12px; flex-direction:column; gap:5px; }
+  #snapMenu b { margin-top:4px; color:var(--muted); font-weight:600; }
+  #snapMenu label { display:flex; align-items:center; gap:6px; }
+  #snapMenu small { color:var(--muted); }
+  #snapMenu select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
   #flyout { position:fixed; display:none; z-index:20; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px; }
   #flyout button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:5px 12px; cursor:pointer; font:inherit; }
   #flyout button:hover { background:#353a42; }
@@ -135,6 +140,19 @@
 <div id="snapTip"></div>
 <div id="ctx"></div>
 <div id="flyout"></div>
+<div id="snapMenu">
+  <b>Einrasten an</b>
+  <label><input type="checkbox" data-snap="grid"> Raster</label>
+  <label><input type="checkbox" data-snap="lines"> Hilfslinien (ausrichten, waagrecht, parallel …)</label>
+  <label><input type="checkbox" data-snap="points"> Punkte der Skizzen</label>
+  <label><input type="checkbox" data-snap="body"> Punkte am Körper (Flächenraster)</label>
+  <label><input type="checkbox" data-snap="edges"> Körperkanten</label>
+  <b>Anzeigen</b>
+  <label><input type="checkbox" data-snap="showPts"> Rastpunkte</label>
+  <label><input type="checkbox" data-snap="hints"> Hinweise am Zeiger</label>
+  <label title="Rastergröße beim Skizzieren">Raster <select id="gridStep"><option value="0">Auto</option><option>0.1</option><option>0.5</option><option selected>1</option><option>5</option><option>10</option></select> mm</label>
+  <small>Shift beim Zeichnen = frei, ohne Einrasten</small>
+</div>
 <div id="cube"></div>
 <div id="tree"></div>
 <div id="dims"></div>
@@ -146,7 +164,7 @@
   <button data-show="section" title="Schnitt durch die Mitte: aus → X → Y → Z">Schnitt</button><button data-show="render">Render</button>
   <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
   <label title="Farbe des Körpers"><input type="color" id="bodyColor" value="#c9ced6"></label>
-  <label title="Rastergröße beim Skizzieren">Raster <select id="gridStep"><option value="0">Auto</option><option>0.1</option><option>0.5</option><option selected>1</option><option>5</option><option>10</option></select> mm</label>
+  <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
   <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
 </div>
 <div id="palette"><input placeholder="Werkzeug oder Befehl suchen …"><div></div></div>

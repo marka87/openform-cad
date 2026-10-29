@@ -80,6 +80,7 @@ const snapTip = document.getElementById('snapTip')!;
 const hideSnap = () => { snapMark.visible = false; guides.visible = false; snapTip.style.display = 'none'; };
 // Beschriftung neben dem Einrastpunkt, wie in SketchUp
 function showSnapTip(p: THREE.Vector3, text: string) {
+  if (!display.snap.hints) return;
   const s = p.clone().project(camera), r = el.getBoundingClientRect();
   snapTip.textContent = text;
   snapTip.style.display = 'block';
@@ -549,7 +550,7 @@ const fmt = (mm: number, d = 1) => (mm / U()).toFixed(U() > 1 ? d + 2 : d);     
 const len = (mm: number, d = 1) => `${fmt(mm, d)} ${display.unit}`;              // mit Einheit
 const uval = (mm: number) => +(mm / U()).toFixed(U() > 1 ? 4 : 2);               // Wert für Eingabefelder
 const mmOf = (inp: HTMLInputElement) => parseFloat(inp.value) * U();             // Eingabe → mm
-const snap = (x: number, e: PointerEvent, s = gridStep()) => e.shiftKey ? x : Math.round(x / s) * s;
+const snap = (x: number, e: PointerEvent, s = gridStep()) => e.shiftKey || !display.snap.grid ? x : Math.round(x / s) * s;
 // Parameter s auf der Geraden P0 + s*D, der dem Mausstrahl am nächsten liegt
 function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
   const R0 = ray.ray.origin, E = ray.ray.direction, w0 = P0.clone().sub(R0);
@@ -588,7 +589,8 @@ const sketchOn = (h: Hit | null) => {
 };
 function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
-  faceGrid.visible = workMarks.visible = !!workHit && grid.visible;
+  faceGrid.visible = !!workHit && grid.visible;
+  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
   lookBack = null;
   if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
   // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
@@ -607,7 +609,7 @@ function setWorkPlane(h: Hit | null) {
   faceGrid.matrixAutoUpdate = false;
   workPts = workPoints(workHit, pl);
   workMarks.geometry.setFromPoints(workPts.map(q => V(q.p)));
-  workMarks.visible = faceGrid.visible;
+  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
   workView = { c: V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y), r: size / 2 };
   showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
     + 'Raster auf der Fläche: hier weiterskizzieren · Leertaste = senkrecht draufschauen · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
@@ -733,7 +735,7 @@ const DIR_TEXT: Record<string, string> = { h: 'waagrecht', v: 'senkrecht', par: 
 function polyPoint(e: PointerEvent) {
   const q = poly && sketchPoint(poly.pl, e);
   dirHit = null;
-  if (!q || !poly!.pts.length || e.shiftKey || snapKind === 'point' || poly!.smooth || poly!.arcEnd || !['line', 'aux'].includes(tool)) return q;
+  if (!q || !poly!.pts.length || e.shiftKey || !display.snap.lines || snapKind === 'point' || poly!.smooth || poly!.arcEnd || !['line', 'aux'].includes(tool)) return q;
   const pl = poly!.pl, pts = poly!.pts, a = pts.at(-1)!;
   const refs: { d: number[]; tag: { t: Con['t']; k?: number } }[] = [{ d: [1, 0], tag: { t: 'h' } }, { d: [0, 1], tag: { t: 'v' } }];
   const k0 = pts.length - 2;
@@ -743,7 +745,7 @@ function polyPoint(e: PointerEvent) {
     if (L > 1e-9) refs.push({ d: [d[0] / L, d[1] / L], tag: { t: 'par', k } }, { d: [-d[1] / L, d[0] / L], tag: { t: 'perp', k } });
   };
   pts.slice(0, -1).forEach((p, k) => { if (!p[2]) add([pts[k + 1][0] - p[0], pts[k + 1][1] - p[1]], k); });
-  for (const [x, y] of snapSegs(pl)) {
+  for (const [x, y] of snapSegs(pl, display.snap.edges)) {
     if (!onPlane(pl, x) || !onPlane(pl, y) || V(x).distanceTo(V(y)) < 5) continue;
     const lx = toLocal(pl, V(x)), ly = toLocal(pl, V(y));
     add([ly[0] - lx[0], ly[1] - lx[1]]);
@@ -773,12 +775,12 @@ function showPoly(pts: number[][]) {
 function sketchPoint(pl: Frame, e: PointerEvent) {
   const p = planeHit(pl);
   if (!p) return null;
-  const pts = snapPoints(pl), s = !e.shiftKey && snapTo(p.toArray() as Vec, pts, snapSegs(pl), 8 * pxSize());
+  const pts = snapPoints(pl), s = !e.shiftKey && snapTo(p.toArray() as Vec, pts, snapSegs(pl, display.snap.edges), 8 * pxSize());
   snapMark.visible = true; // Punkt am Zeiger: wo der nächste Klick landet
   snapKind = s ? 'point' : 'grid';
   if (!s) { // waagrecht/senkrecht zu einem Punkt ausrichten, sonst Raster
     const raw = toLocal(pl, p), loc = pts.map(q => toLocal(pl, V(q)));
-    const { ax, ay } = e.shiftKey ? { ax: null, ay: null } : alignTo(raw, loc, 8 * pxSize());
+    const { ax, ay } = e.shiftKey || !display.snap.lines ? { ax: null, ay: null } : alignTo(raw, loc, 8 * pxSize());
     const q = [ax ? ax[0] : snap(raw[0], e), ay ? ay[1] : snap(raw[1], e)];
     const world = (r: number[]) => V(pl.o).addScaledVector(V(pl.u), r[0]).addScaledVector(V(pl.v), r[1]);
     guides.geometry.setFromPoints([ax, ay].filter(a => a).flatMap(a => [world(a!), world(q)]));
@@ -804,12 +806,13 @@ function markSnap(p: THREE.Vector3, color: number, size: number) {
 const onPlane = (pl: Frame, q: ArrayLike<number>) => Math.abs(V(q).sub(V(pl.o)).dot(V(pl.n))) < 1e-3;
 function snapPoints(pl: Frame): Vec[] {
   const own = poly ? keyPoints({ ...poly.pl, id: 0, type: 'poly', p: {}, pts: poly.pts, d: 0 }) : []; // Punkte der Linie, die gerade entsteht
-  return [[0, 0, 0] as Vec, ...own, ...workPts.map(q => q.p), ...features.filter(isExtrude).flatMap(f => keyPoints(f))].filter(q => onPlane(pl, q));
+  const S = display.snap;
+  return [...S.points ? [[0, 0, 0] as Vec, ...own, ...features.filter(isExtrude).flatMap(f => keyPoints(f))] : [], ...S.body ? workPts.map(q => q.p) : []].filter(q => onPlane(pl, q));
 }
 // Körperkanten und Linien flacher Skizzen
-function snapSegs(pl: Frame | null): Vec[][] {
+function snapSegs(pl: Frame | null, bodyEdges = true): Vec[][] {
   const segs: Vec[][] = [];
-  for (const mesh of bodyGroup.children) {
+  if (bodyEdges) for (const mesh of bodyGroup.children) {
     const lines = (mesh.children[0] as THREE.LineSegments).geometry.attributes.position.array;
     for (let i = 0; i < lines.length; i += 6) segs.push([[lines[i], lines[i + 1], lines[i + 2]], [lines[i + 3], lines[i + 4], lines[i + 5]]]);
   }
@@ -1904,7 +1907,8 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 0, unit: 'mm' as 'mm' | 'in' };
+const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 0, unit: 'mm' as 'mm' | 'in',
+  snap: { grid: true, lines: true, points: true, body: true, edges: true, showPts: true, hints: true } as Record<string, boolean> }; // Einrasten-Menü
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
 const cut = new THREE.Plane();
@@ -1915,7 +1919,8 @@ function applyDisplay() {
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   grid.visible = fine.visible = !display.render && !display.section; // Raster schiene durch die Schnittfläche
-  faceGrid.visible = workMarks.visible = !!workHit && grid.visible;
+  faceGrid.visible = !!workHit && grid.visible;
+  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
     const box = new THREE.Box3().setFromObject(bodyGroup), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);
@@ -1952,6 +1957,15 @@ function applyDisplay() {
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
 $<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); buildDims(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
+// Einrasten-Menü: Schalter je Fangart, Anzeige, Rastergröße (alles lokal gemerkt wie die übrige Darstellung)
+const snapMenu = $('snapMenu');
+display.snap = { grid: true, lines: true, points: true, body: true, edges: true, showPts: true, hints: true, ...display.snap };
+snapMenu.querySelectorAll<HTMLInputElement>('[data-snap]').forEach(c => {
+  c.checked = display.snap[c.dataset.snap!];
+  c.onchange = () => { display.snap[c.dataset.snap!] = c.checked; applyDisplay(); };
+});
+$('bSnap').onclick = () => { snapMenu.style.display = snapMenu.style.display === 'flex' ? 'none' : 'flex'; };
+addEventListener('pointerdown', e => { if (!snapMenu.contains(e.target as Node) && e.target !== $('bSnap')) snapMenu.style.display = 'none'; }, true);
 
 // Symbole und Tooltips für die Werkzeugleiste
 const ICONS: Partial<Record<Tool, string>> = {

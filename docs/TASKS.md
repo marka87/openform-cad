@@ -292,10 +292,10 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 - [ ] T10.5 TODO — Transformieren-Menü: Verschieben/Drehen, Skalieren,
       Verschieben um Werte, Drehen um eine angeklickte Achse (Kante),
       Ausrichten (Fläche auf Fläche), Spiegeln, Muster.
-- [ ] T10.6 TODO — Einrasten-Menü (Magnet): einzeln schaltbar Raster,
-      Hilfslinien (Ausrichten/Fluchten), Hilfspunkte der Skizze, Punkte
-      am Körper, entfernte Kanten; anzeigen: Hilfspunkte, Hinweise;
-      Rastergröße im selben Menü.
+- [x] T10.6 DONE — Einrasten-Menü (Knopf „Einrasten ▸“ unten links):
+      Raster, Hilfslinien, Punkte der Skizzen, Punkte am Körper,
+      Körperkanten einzeln schaltbar; Rastpunkte und Hinweise ein/aus;
+      Rastergröße im selben Menü. Wird mit der Darstellung gemerkt.
 - [ ] T10.7 TODO — Messen in drei Arten: Objekt anklicken = seine Maße
       (Kantenlänge, Radius/Durchmesser, Fläche), Punkt-zu-Punkt-Abstand,
       Winkel über drei Punkte. Zusammen mit T5.17 (Fehlerbild aus den
@@ -303,6 +303,14 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.6: display.snap (lokal gemerkt) schaltet: snap() aufs
+  Raster (auch Zieh-Maße), alignTo und Richtungsfang (Hilfslinien),
+  Ursprung/Skizzenpunkte (snapPoints), Flächenraster-Punkte (workPts),
+  Körperkanten in snapSegs (neuer Parameter, Trimmen nutzt weiter alle
+  Kanten), Hinweise (showSnapTip), weiße Rastpunkte. Rastergröße aus der
+  Ansichtsleiste ins Menü verschoben. Im Browser: Menü offen, Raster aus →
+  gezogenes Rechteck 140,76 × 159,73 statt auf mm gerundet. Kein
+  Kern-Test (nur Oberfläche). 55 Tests grün.
 - 2026-10-29 T10.2: #flyout in index.html, MENUS in main.ts. Rechteck
   „Mitte“: Zugpunkt = Mitte, getippte Maße gelten als ganze Breite/Tiefe.
   „3 Punkte“: erst Kante ziehen (Linie als Vorschau), dann Breite mit der
