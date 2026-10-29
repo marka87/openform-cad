@@ -98,9 +98,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [x] T4.2 DONE — Öffnen/Speichern über System-Dialog, `.ofc` verknüpft.
 
-- [ ] T4.3 TODO — Installer neu bauen (`npm run desktop:build`; der
-      vorhandene Build ist älter als Epic 5 und 6, ihm fehlen die neuen
-      Funktionen), dann installieren und durchklicken: Öffnen, Speichern,
+- [ ] T4.3 TODO — Installer ist neu gebaut (2026-10-29, Stand 6f1d140, mit
+      eigenem OpenCascade-Build, T1.13 und T1.15). Offen: installieren und
+      durchklicken: Öffnen, Speichern,
       `.ofc`-Verknüpfung, STEP-/STL-Export, Zeichnung. Die Installation
       selbst macht der Nutzer.
       Hinweis: Der Status stand auf DOING, ohne dass jemand daran
