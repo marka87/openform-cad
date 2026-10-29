@@ -64,7 +64,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     if (!body) return post({ type: 'export', format: 'svg', blob: null });
     const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};
     const svg = sheetSVG(body, data.info, d.ok, L);
-    post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.r ?? 0) * L.k!]), bad: d.bad });
+    post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.rv ?? 0) * L.k!]), bad: d.bad });
   } else {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
     if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!, resolveDims(data.dims ?? [], bodies, names).ok)], { type: 'image/svg+xml' }) });

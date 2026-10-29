@@ -68,7 +68,7 @@ export interface PointRef { f: Origin[]; fp: Vec }
 // dia/rad: Kreiskante e; ang: Winkel zwischen den geraden Kanten e und e2.
 // off = Lage der Maßlinie in mm auf dem Blatt (lin: Abstand vom Punkt a, dia/rad/ang: Abstand der Zahl), tol = Toleranz-Text
 export interface Dim {
-  id: number; v: 0 | 1 | 2; t: 'lin' | 'dia' | 'rad' | 'ang';
+  id: number; v: 0 | 1 | 2 | 3; t: 'lin' | 'dia' | 'rad' | 'ang'; // v: vorne, oben, seitlich, Iso
   a?: PointRef; b?: PointRef; dir?: 'h' | 'v' | 'al'; e?: EdgeRef; e2?: EdgeRef;
   off: number; tol?: string;
 }

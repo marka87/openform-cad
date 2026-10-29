@@ -15,10 +15,10 @@ type Mode = 'sel' | 'lin' | 'dia' | 'rad' | 'ang';
 const LABEL: Record<Mode, string> = { sel: 'Auswählen', lin: 'Länge', dia: '⌀ Durchmesser', rad: 'R Radius', ang: '∠ Winkel' };
 const HELP: Record<Mode, string> = {
   sel: 'Maß anklicken = auswählen, ziehen = verschieben, Entf = löschen; Toleranz oben eintragen',
-  lin: 'Länge: zwei Eckpunkte in einer Ansicht anklicken, dann die Maßlinie ablegen (Shift = schräg entlang der Punkte)',
+  lin: 'Länge: zwei Eckpunkte in einer Ansicht anklicken, dann die Maßlinie ablegen (Shift = schräg entlang der Punkte; in Iso immer schräg, wahre Länge)',
   dia: 'Durchmesser: Kreis anklicken, dann die Zahl ablegen',
   rad: 'Radius: Kreis anklicken, dann die Zahl ablegen',
-  ang: 'Winkel: zwei Kanten anklicken, die sich treffen',
+  ang: 'Winkel: zwei Kanten anklicken, die sich treffen (nicht in der Iso-Ansicht)',
 };
 
 let deps: Deps, ed: HTMLDivElement | null = null, last: SheetMsg | null = null;
@@ -104,12 +104,13 @@ function nearest(m: number[]) {
   const c = last!.cands, v = picks[0]?.v, ok = (x: { v: number }) => v === undefined || x.v === v;
   const best = <T>(l: T[], d: (x: T) => number) => l.map(x => [x, d(x)] as const).filter(x => x[1] < 4).sort((a, b) => a[1] - b[1])[0]?.[0];
   if (mode === 'lin') return best(c.pts.filter(ok), x => dist(m, x.p));
-  if (mode === 'dia' || mode === 'rad') return best(c.circles.filter(ok), x => Math.abs(dist(m, x.c) - x.r));
+  if (mode === 'dia' || mode === 'rad') return best(c.circles.filter(ok), x => x.pts // schräg gesehen: Abstand zur Ellipse
+    ? Math.min(...x.pts.map((p, i) => segDist(m, p, x.pts![(i + 1) % x.pts!.length]))) : Math.abs(dist(m, x.c) - x.r));
   if (mode === 'ang') return best(c.lines.filter(ok), x => segDist(m, x.a, x.b));
 }
 function highlight(x: any) {
   const g = q('.area').querySelector('.hl');
-  if (g) g.innerHTML = !x ? '' : x.p ? `<circle cx="${x.p[0]}" cy="${x.p[1]}" r="1.2"/>` : x.c ? `<circle cx="${x.c[0]}" cy="${x.c[1]}" r="${x.r}"/>` : `<path d="M${x.a.join(' ')}L${x.b.join(' ')}"/>`;
+  if (g) g.innerHTML = !x ? '' : x.p ? `<circle cx="${x.p[0]}" cy="${x.p[1]}" r="1.2"/>` : x.pts ? `<path d="M${x.pts.map((p: number[]) => p.join(' ')).join('L')}z"/>` : x.c ? `<circle cx="${x.c[0]}" cy="${x.c[1]}" r="${x.r}"/>` : `<path d="M${x.a.join(' ')}L${x.b.join(' ')}"/>`;
 }
 
 function add(d: Omit<Dim, 'id'>) {
@@ -150,7 +151,7 @@ function down(e: PointerEvent) {
   }
   // Alles gewählt: dieser Klick legt die Lage fest
   if ((mode === 'lin' && picks.length === 2) || ((mode === 'dia' || mode === 'rad') && picks.length === 1)) {
-    const P = mode === 'lin' ? picks.map(p => p.p) : [picks[0].c], o = offFor({ t: mode }, P, picks[0].r ?? 0, m, e.shiftKey);
+    const P = mode === 'lin' ? picks.map(p => p.p) : [picks[0].c], o = offFor({ t: mode }, P, picks[0].r ?? 0, m, e.shiftKey || picks[0].v === 3); // Iso: nur schräg
     return add(mode === 'lin' ? { v: picks[0].v, t: 'lin', a: picks[0].ref, b: picks[1].ref, ...o } : { v: picks[0].v, t: mode, e: picks[0].ref, ...o });
   }
   const x = nearest(m);
@@ -170,7 +171,7 @@ function move(e: PointerEvent) {
     drag.moved = true;
     return redraw();
   }
-  if ((mode === 'lin' && picks.length === 2) || ((mode === 'dia' || mode === 'rad') && picks.length === 1)) return preview(m, e.shiftKey);
+  if ((mode === 'lin' && picks.length === 2) || ((mode === 'dia' || mode === 'rad') && picks.length === 1)) return preview(m, e.shiftKey || picks[0].v === 3);
   highlight(mode === 'sel' ? null : nearest(m));
 }
 // Vorschau der Maßlinie, solange nur noch die Lage fehlt (T3.6): gleiche Lage wie beim Ablegen (offFor), gestrichelt

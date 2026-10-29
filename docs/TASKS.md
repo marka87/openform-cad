@@ -31,7 +31,7 @@ Ordnung, diese Liste ist die zeitliche.
 12. T5.15, T5.16 — Winkel tippen, Esc stufenweise
 13. Epic 10 (Werkzeuge wie Shapr3D, Wunsch des Nutzers 2026-10-29):
     T10.2, T10.6, T10.7, T10.1, T10.3 (erledigt T6.4 mit), T10.5, T10.4
-14. T1.14, T2.5, T3.6, T5.5, T3.5 — restliche Nacharbeiten
+14. T1.14, T2.5, T3.6, T5.5, T3.5 — restliche Nacharbeiten (erledigt 2026-10-29)
 15. Epic 7 (Pflege), Epic 8 (KI-Assistent), Epic 9 (Weg B)
 
 ## Epic 0: Hygiene und Anforderungen
@@ -118,8 +118,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       DXF bleibt reine Geometrie ohne Maße.
 
 - [x] T3.6 DONE — Vorschau der Maßlinie beim Ablegen (Länge, ⌀, R), gestrichelt.
-- [ ] T3.5 TODO — Maße in der Iso-Ansicht und an schräg gesehenen
-      Kreisen.
+- [x] T3.5 DONE — Maße in der Iso-Ansicht (Länge immer schräg mit wahrer
+      Länge, ⌀/R; Winkel dort gesperrt) und an schräg gesehenen Kreisen
+      (als Ellipse anklickbar, Wert = echter Durchmesser).
 
 ## Epic 4: Tauri-Desktop
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
@@ -325,6 +326,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T3.5: PROJ[3] = Iso-Projektion, aus den Achsen der
+  ProjectionCamera abgeleitet und im Test gegen drawProjection geprüft
+  (Hülle der Ecken = Hülle der Zeichnung). Dim.v um 3 erweitert. Iso:
+  Längen zeigen die wahre 3D-Länge (Iso verkürzt um √(2/3)), der Editor
+  legt sie immer schräg an; Winkel in Iso werden abgelehnt (projizierter
+  Winkel wäre falsch). Kreise: Ansatzpunkt der Hinweislinie ist der Punkt
+  oben rechts am projizierten Rand (pts[1], rv = Abstand in der Ansicht),
+  bei frontalen Kreisen derselbe Punkt wie bisher (−45°). Genau von der
+  Seite gesehene Kreise (|n·Blick| < 0,1) sind nicht anklickbar bzw. als
+  Fehler gemeldet. Editor: Ellipsen als Punktfolge angeklickt und
+  hervorgehoben. Browser: Iso ⌀20 an einer Bohrung, Kante 50 schräg.
 - 2026-10-29 T5.5 (Entscheidung des Nutzers: mitwandern): Hilfslinie
   bekommt `src?: EdgeRef`. Kern: projectEdge/projectBody (kernel.ts),
   Worker-Nachricht `project` → `projected`; im Kernlauf rechnet eine

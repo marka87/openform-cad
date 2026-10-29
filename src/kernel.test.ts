@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
-import { drawProjection, measureVolume, setOC } from 'replicad';
+import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
@@ -666,6 +666,26 @@ test('Projektion aus dem B-Rep: exakter Kreis, Linien wandern mit dem Körper (T
   const xs = [...wider.fixes.values()].flatMap(fx => (fx.pts as number[][] | undefined) ?? []).map(p => p[0]);
   expect(Math.max(...xs)).toBeCloseTo(30);                                 // rechte Kante ist mitgewandert
   expect(wider.fixes.has(10 + lines.indexOf(ring))).toBe(false);           // Bohrung blieb, ihr Ring auch
+});
+
+test('Maße in der Iso-Ansicht und an schräg gesehenen Kreisen (T3.5)', () => {
+  const r = buildBody([box(), hole(-4)]), nm = r.names.get(1)!, s = r.bodies.get(1)!;
+  // Iso-Projektion passt zu drawProjection: Hülle der acht Ecken = Hülle der Zeichnung
+  const corners = [0, 20].flatMap(x => [0, 10].flatMap(y => [0, -10].map(z => PROJ[3]([x, y, z])))), ex = forExport(r.body!);
+  const [[x0, y0], [x1, y1]] = drawProjection(ex, new ProjectionCamera([0, 0, 0], [1, -1, 1])).visible.boundingBox.bounds;
+  expect([Math.min(...corners.map(q => q[0])), Math.min(...corners.map(q => q[1])), Math.max(...corners.map(q => q[0])), Math.max(...corners.map(q => q[1]))].map(x => +x.toFixed(3) + 0))
+    .toEqual([x0, y0, x1, y1].map(x => +x.toFixed(3) + 0));
+  const rim = s.edges.find(e => e.geomType === 'CIRCLE' && Math.abs(e.startPoint.y - 10) < 1e-6)!, ref = edgeRef(nm, rim, s)!;
+  const dims: Dim[] = [
+    { id: 1, v: 3, t: 'lin', a: pointRef(nm, [0, 10, 0])!, b: pointRef(nm, [20, 10, 0])!, dir: 'al', off: 5 }, // Iso: wahre Länge
+    { id: 2, v: 3, t: 'dia', e: ref, off: 5 },                         // Bohrung in Iso = Ellipse
+    { id: 3, v: 0, t: 'rad', e: ref, off: 5 },                         // von vorn genau von der Seite gesehen
+  ];
+  const res = resolveDims(dims, r.bodies, r.names);
+  expect(res.ok.map(d => +d.val.toFixed(3))).toEqual([20, 6]);
+  expect(res.ok[1].rv!).toBeLessThan(3);                               // Ansatz an der Ellipse, nicht am vollen Radius
+  expect(res.bad).toEqual([[3, 'Kreis in dieser Ansicht von der Seite gesehen']]);
+  expect(sheetSVG(r.body!, { sheet: 'A4', title: 'T', material: '', date: '' }, res.ok)).toContain('⌀6');
 });
 
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {

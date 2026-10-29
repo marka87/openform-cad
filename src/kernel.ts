@@ -251,9 +251,20 @@ export function drawingSVG(body: Shape3D) {
 export type SheetInfo = { sheet: 'A4' | 'A3'; title: string; material: string; date: string; unit?: 'mm' | 'in' }; // Maße in mm (Standard) oder Zoll
 
 // Modellpunkt (Y-oben) → 2D-Koordinaten der Ansicht, wie drawProjection sie liefert (vorne, oben, seitlich; im Test geprüft)
-export const PROJ = [(p: ArrayLike<number>) => [p[0], p[1]], (p: ArrayLike<number>) => [p[0], -p[2]], (p: ArrayLike<number>) => [p[2], p[1]]];
-// Aufgelöstes Maß in Ansichtskoordinaten (mm, 1:1): pts = Punkte bzw. Kreismitte / Scheitel und Endpunkte der Kanten
-export type DimGeo = Dim & { pts: number[][]; r?: number; val: number };
+// Iso: Kamera (1, −1, 1) im Z-oben-Export = Blick aus (1, 1, 1) im Modell, Achsen der ProjectionCamera
+export const PROJ = [(p: ArrayLike<number>) => [p[0], p[1]], (p: ArrayLike<number>) => [p[0], -p[2]], (p: ArrayLike<number>) => [p[2], p[1]],
+  (p: ArrayLike<number>) => [(p[0] - p[2]) / Math.SQRT2, (2 * p[1] - p[0] - p[2]) / Math.sqrt(6)]];
+const AXES = [[0, 0, 1], [0, 1, 0], [1, 0, 0], [1, 1, 1].map(x => x / Math.sqrt(3))]; // Blickrichtung je Ansicht
+// Kreis als Punktfolge im Raum (für schräg gesehene Kreise = Ellipsen in der Ansicht)
+function ring(c: { c: Vec; n: Vec; r: number }, n = 48) {
+  const h = Math.abs(c.n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0], cr = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const e1 = cr(c.n, h), l = Math.hypot(...e1), u = e1.map(x => x / l), w = cr(c.n, u);
+  return Array.from({ length: n }, (_, i) => { const t = 2 * Math.PI * i / n; return c.c.map((x, k) => x + c.r * (Math.cos(t) * u[k] + Math.sin(t) * w[k])); });
+}
+const facing = (c: { n: Vec }, v: number) => Math.abs(c.n[0] * AXES[v][0] + c.n[1] * AXES[v][1] + c.n[2] * AXES[v][2]);
+// Aufgelöstes Maß in Ansichtskoordinaten (mm, 1:1): pts = Punkte bzw. Kreismitte (+ Ansatzpunkt der Hinweislinie) / Scheitel und
+// Endpunkte der Kanten; rv = Abstand Mitte–Ansatzpunkt in der Ansicht (bei schräg gesehenen Kreisen kleiner als r)
+export type DimGeo = Dim & { pts: number[][]; r?: number; rv?: number; val: number };
 
 // Maße auf die aktuellen Körper auflösen; ok = darstellbar, sonst Grund (verloren/mehrdeutig/keine Kreiskante …)
 export function resolveDims(dims: Dim[], bodies: Map<number, Shape3D>, names: Map<number, Named>): { ok: DimGeo[]; bad: [number, string][] } {
@@ -265,12 +276,14 @@ export function resolveDims(dims: Dim[], bodies: Map<number, Shape3D>, names: Ma
       if (d.t === 'lin') {
         const a = d.a && resolvePoint(d.a, nm), b = d.b && resolvePoint(d.b, nm);
         if (!a?.ok || !b?.ok) continue;
-        const A = P(a.p), B = P(b.p), val = d.dir === 'h' ? Math.abs(A[0] - B[0]) : d.dir === 'v' ? Math.abs(A[1] - B[1]) : Math.hypot(A[0] - B[0], A[1] - B[1]);
+        const A = P(a.p), B = P(b.p), val = d.v === 3 ? Math.hypot(...a.p.map((x, i) => x - b.p[i])) // Iso verkürzt: wahre Länge
+          : d.dir === 'h' ? Math.abs(A[0] - B[0]) : d.dir === 'v' ? Math.abs(A[1] - B[1]) : Math.hypot(A[0] - B[0], A[1] - B[1]);
         ok.push({ ...d, pts: [A, B], val }); why = ''; break;
       }
       const e = d.e && resolveEdge(d.e, s, nm);
       if (!e?.ok) continue;
       if (d.t === 'ang') {
+        if (d.v === 3) { why = 'Winkel in der Iso-Ansicht wären verzerrt'; break; }
         const e2 = d.e2 && resolveEdge(d.e2, s, nm);
         if (!e2?.ok) continue;
         const [a0, a1, b0, b1] = [e.shape.startPoint, e.shape.endPoint, e2.shape.startPoint, e2.shape.endPoint].map(v => P(v.toTuple()));
@@ -282,7 +295,9 @@ export function resolveDims(dims: Dim[], bodies: Map<number, Shape3D>, names: Ma
       }
       const c = circleOf(e.shape);
       if (!c) { why = 'keine Kreiskante'; break; }
-      ok.push({ ...d, pts: [P(c.c)], r: c.r, val: d.t === 'dia' ? 2 * c.r : c.r }); why = ''; break;
+      if (facing(c, d.v) < 0.1) { why = 'Kreis in dieser Ansicht von der Seite gesehen'; break; }
+      const C = P(c.c), on = ring(c).map(P).reduce((m, p) => p[0] + p[1] > m[0] + m[1] ? p : m); // oben rechts am (Ellipsen-)Rand
+      ok.push({ ...d, pts: [C, on], r: c.r, rv: Math.hypot(on[0] - C[0], on[1] - C[1]), val: d.t === 'dia' ? 2 * c.r : c.r }); why = ''; break;
     }
     if (why) bad.push([d.id, why]);
   }
@@ -330,7 +345,7 @@ export function sheetSVG(body: Shape3D, info: SheetInfo, dims: DimGeo[] = [], la
   if (layout) { layout.S = S; layout.k = k; }
   for (const d of dims) {
     const t = `${d.t === 'dia' ? '⌀' : d.t === 'rad' ? 'R' : ''}${d.t === 'ang' ? num(d.val) : len(d.val)}${d.t === 'ang' ? '°' : ''}${d.tol ? ' ' + d.tol : ''}`;
-    out += `<g stroke-width="0.25" data-dim="${d.id}">${dimSVG(d, d.pts.map(p => S(d.v, p)), (d.r ?? 0) * k, esc(t), arrow)}</g>`;
+    out += `<g stroke-width="0.25" data-dim="${d.id}">${dimSVG(d, d.pts.map(p => S(d.v, p)), (d.rv ?? 0) * k, esc(t), arrow)}</g>`;
   }
   // Rahmen und Schriftfeld (unten rechts)
   const tx = W - 10 - 140, ty = H - 10 - 28, scale = k >= 1 ? `${k}:1` : `1:${Math.round(1 / k)}`;
@@ -346,7 +361,7 @@ export function sheetSVG(body: Shape3D, info: SheetInfo, dims: DimGeo[] = [], la
 }
 
 // Was sich im Maß-Editor anklicken lässt, in Blattkoordinaten je Ansicht v: Eckpunkte, Kreiskanten, gerade Kanten
-export type Cands = { pts: { v: number; p: number[]; ref: PointRef }[]; circles: { v: number; c: number[]; r: number; ref: EdgeRef }[]; lines: { v: number; a: number[]; b: number[]; ref: EdgeRef }[] };
+export type Cands = { pts: { v: number; p: number[]; ref: PointRef }[]; circles: { v: number; c: number[]; r: number; ref: EdgeRef; pts?: number[][] }[]; lines: { v: number; a: number[]; b: number[]; ref: EdgeRef }[] };
 export function sheetCands(bodies: Map<number, Shape3D>, names: Map<number, Named>, S: (i: number, p: number[]) => number[], k: number): Cands {
   const out: Cands = { pts: [], circles: [], lines: [] };
   for (const [b, s] of bodies) {
@@ -356,12 +371,15 @@ export function sheetCands(bodies: Map<number, Shape3D>, names: Map<number, Name
         if (seen.some(p => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 1e-6)) continue;
         seen.push(q);
         const ref = pointRef(nm, q);
-        if (ref) [0, 1, 2].forEach(v => out.pts.push({ v, p: S(v, PROJ[v](q)), ref }));
+        if (ref) [0, 1, 2, 3].forEach(v => out.pts.push({ v, p: S(v, PROJ[v](q)), ref }));
       }
       const ref = edgeRef(nm, e, s);
       if (!ref) continue;
       const c = circleOf(e);
-      if (c) [0, 1, 2].forEach(v => { if (Math.abs(c.n[[2, 1, 0][v]]) > 0.999) out.circles.push({ v, c: S(v, PROJ[v](c.c)), r: c.r * k, ref }); }); // nur von vorn gesehene Kreise
+      if (c) [0, 1, 2, 3].forEach(v => { // schräg gesehen: Ellipse als Punktfolge zum Anklicken; von der Seite gesehen: nicht anklickbar
+        const f = facing(c, v);
+        if (f > 0.1) out.circles.push({ v, c: S(v, PROJ[v](c.c)), r: c.r * k, ref, ...f < 0.999 && { pts: ring(c).map(p => S(v, PROJ[v](p))) } });
+      });
       else if (e.geomType === 'LINE') [0, 1, 2].forEach(v => {
         const a = S(v, PROJ[v](e.startPoint.toTuple())), bb = S(v, PROJ[v](e.endPoint.toTuple()));
         if (Math.hypot(a[0] - bb[0], a[1] - bb[1]) > 1e-3) out.lines.push({ v, a, b: bb, ref });
@@ -392,8 +410,8 @@ function dimSVG(d: Dim, P: number[][], R: number, t: string, arrow: (x: number, 
     const at = (a: number, rr = r) => [V[0] + rr * Math.cos(a), V[1] + rr * Math.sin(a)], m = a0 + da / 2;
     return `<path d="M${at(a0).join(' ')}A${r} ${r} 0 0 ${da > 0 ? 1 : 0} ${at(a1).join(' ')}"/>` + text(at(m, r + 3));
   }
-  // Durchmesser/Radius: Hinweislinie vom Kreis schräg nach oben rechts zur Zahl
-  const [C] = P, a = -Math.PI / 4, on = [C[0] + R * Math.cos(a), C[1] + R * Math.sin(a)], far = Math.max(R + 4, R + d.off);
+  // Durchmesser/Radius: Hinweislinie vom Ansatzpunkt am Kreis (bzw. an der Ellipse) nach oben rechts zur Zahl
+  const [C, on] = P, a = Math.atan2(on[1] - C[1], on[0] - C[0]), far = Math.max(R + 4, R + d.off);
   const T = [C[0] + far * Math.cos(a), C[1] + far * Math.sin(a)];
   return line(d.t === 'rad' ? C : on, T, [T[0] + 3 + t.length * 1.8, T[1]]) + arrow(on[0], on[1], a + (d.t === 'rad' ? Math.PI : 0)) + text([T[0] + 1.5 + t.length * 0.9, T[1] - 1]);
 }
