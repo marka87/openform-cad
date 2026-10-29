@@ -29,8 +29,10 @@ Ordnung, diese Liste ist die zeitliche.
 10. T5.6 — echte Bögen im Löser
 11. T5.13, T5.14 — Fänge, gerade zuerst, tangential nach T5.6
 12. T5.15, T5.16 — Winkel tippen, Esc stufenweise
-13. T1.14, T2.5, T3.6, T5.5, T3.5, T6.4 — restliche Nacharbeiten
-14. Epic 7 (Pflege), Epic 8 (KI-Assistent), Epic 9 (Weg B)
+13. Epic 10 (Werkzeuge wie Shapr3D, Wunsch des Nutzers 2026-10-29):
+    T10.2, T10.6, T10.7, T10.1, T10.3 (erledigt T6.4 mit), T10.5, T10.4
+14. T1.14, T2.5, T3.6, T5.5, T3.5 — restliche Nacharbeiten
+15. Epic 7 (Pflege), Epic 8 (KI-Assistent), Epic 9 (Weg B)
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -266,6 +268,37 @@ Baulinie, dafür genügt Weg A.
       Flächen. Offene Linien teilen Bereiche zusätzlich.
 - [ ] T9.2 TODO — Migration: offene Linien aus Weg A bewusst und pro
       Datei sichtbar nach Weg B überführen, nie still beim Laden.
+
+## Epic 10: Werkzeuge wie Shapr3D (Wunsch des Nutzers, 2026-10-29)
+Vom Nutzer mit Screenshots aus Shapr3D gewünscht und freigegeben
+(Reihenfolge und Umsetzung nach eigenem Ermessen, „sie sollen am Ende
+funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
+
+- [ ] T10.1 TODO — Auswählen mit Rahmen: im Auswählen-Werkzeug Linksziehen
+      ins Leere zieht einen Rahmen auf, alles darin wird ausgewählt.
+      Drehen der Ansicht wandert auf die rechte Maustaste, Verschieben
+      auf die mittlere (Rechtsklick ohne Ziehen bleibt Kontextmenü).
+      Ausgewählte Skizzen zeigen ihre Maße direkt am Element (Breite,
+      Höhe, Radius), Klick auf ein Maß = neuen Wert tippen.
+- [ ] T10.2 TODO — Werkzeuge mit Aufklappmenü: Rechteck (Mitte,
+      Diagonal, 3 Punkte), Vieleck (3, 5, 6, 8 Ecken).
+- [ ] T10.3 TODO — Verschieben/Drehen, Spiegeln, Muster (linear und Kreis)
+      als eigene Werkzeuge in der Leiste, für Skizzen und ganze Körper
+      (bisher nur im Seitenfeld einer Skizze). Erledigt T6.4 mit.
+- [ ] T10.4 TODO — Text als Skizze (replicad drawText, opentype ist schon
+      installiert) mit einer mitgelieferten freien Schrift (OFL),
+      extrudieren oder gravieren. Nur wenn machbar ohne neue Lizenzfolgen.
+- [ ] T10.5 TODO — Transformieren-Menü: Verschieben/Drehen, Skalieren,
+      Verschieben um Werte, Drehen um eine angeklickte Achse (Kante),
+      Ausrichten (Fläche auf Fläche), Spiegeln, Muster.
+- [ ] T10.6 TODO — Einrasten-Menü (Magnet): einzeln schaltbar Raster,
+      Hilfslinien (Ausrichten/Fluchten), Hilfspunkte der Skizze, Punkte
+      am Körper, entfernte Kanten; anzeigen: Hilfspunkte, Hinweise;
+      Rastergröße im selben Menü.
+- [ ] T10.7 TODO — Messen in drei Arten: Objekt anklicken = seine Maße
+      (Kantenlänge, Radius/Durchmesser, Fläche), Punkt-zu-Punkt-Abstand,
+      Winkel über drei Punkte. Zusammen mit T5.17 (Fehlerbild aus den
+      Feldnotizen, sobald da).
 
 ## Log
 (neueste oben)
