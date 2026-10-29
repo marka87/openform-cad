@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
 import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -865,4 +865,22 @@ test('Rechteck aus drei Punkten: Kante plus Breite, immer gegen den Uhrzeigersin
   const tilted = rect3Pts([0, 0], [3, 4], 2);                                   // schräge Kante (Länge 5)
   expect(Math.hypot(tilted[2][0] - tilted[1][0], tilted[2][1] - tilted[1][1])).toBeCloseTo(2);
   expect(area(tilted)).toBeCloseTo(10);
+});
+
+test('Ganze Körper als Muster und gespiegelt: Kopie samt Bohrung, Spiegelung über negative Skalierung (T10.3/T6.4)', () => {
+  const b = box(), h = hole(-4), fs: Feature[] = [b, h];                      // Quader x 0..20 mit Bohrung bei x = 10
+  const row = [1, 2].flatMap(i => bodyCopy([...fs], 1, 10 + 10 * i, { c: [0, 0, 0], q: [0, 0, 0, 1], t: [30 * i, 0, 0] }));
+  let r = buildBody([...fs, ...row]);
+  expect(r.failed).toEqual([]);
+  const vol = (s: any) => Math.round(measureVolume(s));
+  expect([...r.bodies.values()].map(vol)).toEqual([1, 1, 1].map(() => vol(buildBody(fs).body)));
+  expect(r.bodies.get(20)!.boundingBox.bounds[0][0]).toBeCloseTo(30);         // erste Kopie 30 mm weiter
+  // Spiegeln an der Ebene x = 30: x' = 60 − x → Kopie liegt bei x 40..60
+  const mir = bodyCopy([...fs], 1, 50, { c: [30, 0, 0], q: [1, 0, 0, 0], t: [0, 0, 0], s: -1 });
+  r = buildBody([...fs, ...mir]);
+  expect(r.failed).toEqual([]);
+  const m = r.bodies.get(50)!;
+  expect(vol(m)).toBe(vol(buildBody(fs).body));                                // gültiger Körper, gleiches Volumen
+  expect(m.boundingBox.bounds.map(p => p.map(x => +x.toFixed(4) + 0))).toEqual([[40, 0, -10], [60, 10, 0]]);
+  expect(mir.filter(f => f.type === 'circle')[0]).not.toHaveProperty('face');   // Bezüge entfallen
 });

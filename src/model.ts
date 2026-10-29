@@ -356,6 +356,30 @@ export function dirSnap<T>(a: number[], q: number[], refs: { d: number[]; tag: T
   return best;
 }
 
+// Ganzen Körper b kopieren (Muster/Spiegeln von Körpern): seine Schritte in Reihenfolge mit neuen IDs, alle im neuen Körper
+// (= erste neue ID), Verweise auf mitkopierte Skizzen (Zug-Profil, Übergang) umgeschrieben. Flächen-/Kantenbezüge entfallen,
+// der Kern findet sie an derselben Stelle neu. Dahinter eine Bewegung, die die Kopie an ihren Platz bringt (q = Drehung als
+// Quaternion um c, s = −1 mit halber Drehung um die Spiegelnormale = Spiegelung).
+// shortcut: Verrechnungen (Vereinigen/Abziehen) und Teilen des Körpers werden nicht mitkopiert
+export function bodyCopy(features: Feature[], b: number, nextId: number, move: { c: Vec; q: number[]; t: Vec; s?: number }): Feature[] {
+  const ids = new Map<number, number>(), out: Feature[] = [];
+  let id = nextId;
+  const nb = nextId;
+  for (const f of features) {
+    if (f.hidden || f.type === 'combine' || f.type === 'split' || f.type === 'plane' || f.type === 'import') continue;
+    if ((f.type === 'move' ? f.body : bodyOf(f)) !== b) continue;
+    const g: any = structuredClone(f);
+    ids.set(f.id, id); g.id = id++; g.body = nb;
+    delete g.face; delete g.edge; delete g.faces;
+    if (g.type === 'sweep') g.profile = ids.get(g.profile) ?? g.profile;
+    if (g.type === 'loft') { g.a = ids.get(g.a) ?? g.a; g.b = ids.get(g.b) ?? g.b; }
+    out.push(g);
+  }
+  if (!out.length) return [];
+  out.push({ id: id++, type: 'move', body: nb, ...move } as Move);
+  return out;
+}
+
 // Rasterabstand „Auto“ nach Zoom: der kleinste Schritt, der auf dem Bildschirm mindestens 8 Pixel breit ist (px = mm je Pixel)
 export const autoStep = (px: number) => [0.1, 0.5, 1, 5, 10, 50].find(s => s / px >= 8) ?? 100;
 

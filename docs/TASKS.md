@@ -216,8 +216,7 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       KORREKTUR 2026-10-29: „auch ganze Körper" stand hier fälschlich.
       Das ist offen und liegt in T6.4.
 
-- [ ] T6.4 TODO — Muster/Spiegeln für ganze Körper (Kopie + Bewegung je
-      Exemplar), heute nur Kopieren mit Strg+D.
+- [x] T6.4 DONE — Muster/Spiegeln für ganze Körper, mit T10.3 erledigt.
 
 ## Epic 7: Pflege
 - [ ] T7.1 TODO — 3MF-Export (in CLAUDE.md als Format vorgesehen).
@@ -282,9 +281,11 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 - [x] T10.2 DONE — Aufklappmenü (▸) an Rechteck (Diagonal, Mitte,
       3 Punkte) und Vieleck (3, 5, 6, 8 Ecken), gewählte Art steht neben
       dem Namen.
-- [ ] T10.3 TODO — Verschieben/Drehen, Spiegeln, Muster (linear und Kreis)
-      als eigene Werkzeuge in der Leiste, für Skizzen und ganze Körper
-      (bisher nur im Seitenfeld einer Skizze). Erledigt T6.4 mit.
+- [x] T10.3 DONE — Leiste: „Verschieben / Drehen“, „Muster“, „Spiegeln“
+      wirken auf die Auswahl. Körper: Griffe bzw. neues Feld „Muster /
+      Spiegeln (ganzer Körper)“ – Reihe, Kreis, Spiegeln an X/Y/Z oder
+      angeklickter Kante/Fläche. Skizze/Schritt: öffnet deren Muster/
+      Spiegeln wie bisher. Erledigt damit auch T6.4.
 - [ ] T10.4 TODO — Text als Skizze (replicad drawText, opentype ist schon
       installiert) mit einer mitgelieferten freien Schrift (OFL),
       extrudieren oder gravieren. Nur wenn machbar ohne neue Lizenzfolgen.
@@ -304,6 +305,20 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.3/T6.4: bodyCopy() in model.ts kopiert alle Schritte eines
+  Körpers (Skizzen, Rundung/Fase, Schale, Versatz, Fläche löschen, Zug,
+  Übergang, Bewegungen) mit neuen IDs in einen neuen Körper, Verweise auf
+  mitkopierte Skizzen umgeschrieben, Flächen-/Kantenbezüge entfernt (der
+  Kern findet sie an derselben Stelle neu), dahinter ein Move an den
+  Zielort. Spiegeln = Move mit s = −1 und halber Drehung um die
+  Spiegelnormale; OCCT liefert dabei einen gültigen Körper mit gleichem
+  Volumen (Test: Reihe 3×, Spiegelung an x = 30 → x 40..60). Abkürzung:
+  Vereinigen/Abziehen/Teilen des Körpers wird nicht mitkopiert. Im Baum
+  heißt die Spiegel-Bewegung „spiegeln“. Leistenknöpfe ohne eigenes
+  Werkzeug, sie öffnen Griffe bzw. das Feld zur Auswahl. Im Browser:
+  Reihe 3 × 30 mm entlang X und Spiegeln an X mit Bohrung in jeder Kopie.
+  56 Tests grün. Hinweis: die Werkzeugleiste ist damit bei 768 px
+  Fensterhöhe zu lang und scrollt.
 - 2026-10-29 T10.1: OrbitControls.mouseButtons LEFT = keins, RIGHT = drehen,
   MIDDLE = verschieben. Im Auswählen-Werkzeug startet Linksziehen ins
   Leere drag 'box' (#boxSel), beim Loslassen werden alle Skizzen/Features
