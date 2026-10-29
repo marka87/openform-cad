@@ -3,19 +3,21 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { buildBody, drawingSVG, forExport, loadStep, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo } from './kernel';
-import type { Dim, Feature } from './model';
-import type { Named } from './topo';
+import { buildBody, drawingSVG, forExport, loadStep, projectBody, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo } from './kernel';
+import type { Dim, Feature, Frame } from './model';
+import type { EdgeRef, Named } from './topo';
 
 export type ToWorker =
   | { type: 'build'; features: Feature[] }
   | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[] }
-  | { type: 'sheet'; info: SheetInfo; dims: Dim[] }; // Blatt für den Maß-Editor
+  | { type: 'sheet'; info: SheetInfo; dims: Dim[] } // Blatt für den Maß-Editor
+  | { type: 'project'; body: number; pl: Frame }; // Kanten eines Körpers in eine Ebene projizieren (P)
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string }
+  | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
   | { type: 'sheet'; svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][] }; // geo: id, Punkte, Kreisradius auf dem Blatt
 
@@ -55,6 +57,9 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     let area = 0;
     for (const s of bodies.values()) area += measureArea(s);
     post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], confirm: [...r.confirm], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
+  } else if (data.type === 'project') {
+    const s = bodies.get(data.body);
+    post({ type: 'projected', lines: s ? projectBody(s, names.get(data.body) ?? [], data.pl) : [] });
   } else if (data.type === 'sheet') {
     if (!body) return post({ type: 'export', format: 'svg', blob: null });
     const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};

@@ -150,8 +150,10 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       ein Radius- oder Tangenten-Maß daran hängt: Seitenfeld „Bogen n R“
       und Knöpfe „tangential an Seite k“ (◠k). Bögen ohne solches Maß
       verhalten sich wie bisher (Sehne mit festem Winkel).
-- [ ] T5.5 TODO — Projektion aus dem B-Rep im Kern (exakte Kreise/Bögen)
-      und an den Körper gebunden.
+- [x] T5.5 DONE — Projektion (P) aus dem B-Rep im Kern: Strecken und von
+      vorn gesehene Kreise/Bögen exakt, sonst abgetastet; jede Linie hat
+      einen Kantenbezug (src) und wandert mit dem Körper. Von Hand
+      getrimmt, verlängert oder gezogen = Bezug weg, Linie bleibt fest.
 
 ### Skizzieren wie in Shapr3D (Wunsch des Nutzers, 2026-10-29)
 Entstanden vor der Feldnotizen-Regel, also Vermutungen. Nach T0.3
@@ -323,6 +325,19 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.5 (Entscheidung des Nutzers: mitwandern): Hilfslinie
+  bekommt `src?: EdgeRef`. Kern: projectEdge/projectBody (kernel.ts),
+  Worker-Nachricht `project` → `projected`; im Kernlauf rechnet eine
+  Hilfslinie mit src ihre pts aus der aufgelösten Kante neu und trägt sie
+  über fixes nach (kein neuer Mechanismus). Kante weg/mehrdeutig/senkrecht
+  = sichtbarer Fehler am Schritt. Kanten ohne eindeutigen Bezug werden
+  fest angelegt (Hinweis nennt die Zahl). Trimmen, Verlängern, Punkt
+  ziehen löschen src. Nebenbei: Meldungen (showNotice) überlebten den
+  zweiten Kernlauf nach nachgetragenen Bezügen nicht – jetzt bleiben sie
+  bis dahin stehen (betraf auch die Rahmenauswahl). Test: Quader mit
+  Bohrung auf die Oberseite projiziert (4 Strecken + Ring aus 2
+  Halbbögen), Quader 20 → 30 breit, Kante wandert, Ring nicht. Browser:
+  80 → 100 mm, alle 5 Linien ohne Fehler, Meldung bleibt stehen.
 - 2026-10-29 T3.6: sheetEditor.ts preview(): sobald nur noch die Lage
   fehlt, zeichnet die Mausbewegung Hilfs- und Maßlinie gestrichelt in die
   vorhandene Hervorhebungsebene, Lage aus demselben offFor wie beim

@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, setOC } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep, PROJ, resolveDims, sheetSVG } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
@@ -650,6 +650,22 @@ test('Zug entlang angeklickter Körperkanten, mit Bezug (T2.5)', () => {
   const two = buildBody([box(), prof, { ...sw, edges: [...fixed!, { at: [20, 10, -5], dir: [0, 0, -1] }] }]);
   expect(two.failed).toEqual([]);
   expect(measureVolume(two.body!)).toBeGreaterThan(2000 + 0.75 * Math.PI * 25);
+});
+
+test('Projektion aus dem B-Rep: exakter Kreis, Linien wandern mit dem Körper (T5.5)', () => {
+  const top = { o: [0, 10, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] } as any; // Ebene der Oberseite
+  const r = buildBody([box(), hole(-4)]), lines = projectBody(r.bodies.get(1)!, r.names.get(1)!, top);
+  const ring = lines.find(l => l.closed)!;
+  expect(ring.pts.length).toBe(2);                                         // Bohrungsrand als zwei Halbbögen
+  expect(ring.pts.map(p => Math.abs(p[2]))).toEqual([1, 1].map(x => expect.closeTo(x, 6)));
+  expect(lines.filter(l => !l.closed).length).toBe(4);                     // Rechteck; Seitenkanten stehen senkrecht, Boden deckungsgleich
+  expect(lines.every(l => l.src)).toBe(true);
+  const aux = lines.map((l, i): Extrude => ({ id: 10 + i, ...top, type: 'poly', p: {}, pts: l.pts, d: 0, aux: true, ...!l.closed && { open: true }, body: 1, src: l.src! }));
+  const wider = buildBody([{ ...box(), p: { ...box().p, w: 30 } }, hole(-4), ...aux]);
+  expect(wider.failed).toEqual([]);
+  const xs = [...wider.fixes.values()].flatMap(fx => (fx.pts as number[][] | undefined) ?? []).map(p => p[0]);
+  expect(Math.max(...xs)).toBeCloseTo(30);                                 // rechte Kante ist mitgewandert
+  expect(wider.fixes.has(10 + lines.indexOf(ring))).toBe(false);           // Bohrung blieb, ihr Ring auch
 });
 
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {

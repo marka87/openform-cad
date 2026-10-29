@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
+import { assembleWire, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { bodyOf, bulge3, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -50,6 +50,39 @@ export const pathSketch = (f: Sweep) => polyDrawing(f.pts, false, !f.closed).ske
 // origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt;
 // errors: Grund je fehlgeschlagenem Feature; fixes: nachgetragene Bezüge und nachgeführte Lagen je Feature-ID (übernimmt main.ts ins Modell); unsure: unsicher aufgelöst,
 // confirm: neuer Bezug je unsicherem Feature, den „Bezug übernehmen“ ins Modell schreibt
+// Körperkante in eine Skizzenebene projizieren (T5.5): Strecke exakt, Kreis/Bogen von vorn als Bogen (bulge),
+// sonst abgetastet; was auf eine Strecke fällt (Kreis von der Seite), auf deren Enden gekürzt. null = steht senkrecht auf der Ebene
+export function projectEdge(e: Edge, pl: Frame): { pts: number[][]; closed: boolean } | null {
+  const loc = (t: number) => { const p = e.pointAt(t).toTuple(), d = [0, 1, 2].map(i => p[i] - pl.o[i]);
+    return [pl.u, pl.v].map(a => Math.round((d[0] * a[0] + d[1] * a[1] + d[2] * a[2]) * 1e6) / 1e6); };
+  const len = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const c = circleOf(e), ring = len(loc(0), loc(1)) < 1e-6;
+  if (c && Math.abs(c.n[0] * pl.n[0] + c.n[1] * pl.n[1] + c.n[2] * pl.n[2]) > 1 - 1e-9) {
+    const [a, b] = [loc(0), loc(ring ? 0.5 : 1)];
+    return ring ? { pts: [[...a, bulge3(a, b, loc(0.25))], [...b, bulge3(b, a, loc(0.75))]], closed: true }
+      : { pts: [[...a, bulge3(a, b, loc(0.5))], b], closed: false };
+  }
+  const pts = e.geomType === 'LINE' ? [loc(0), loc(1)] : Array.from({ length: 33 }, (_, i) => loc(i / 32));
+  const [a, z] = pts.flatMap(p => pts.map(q => [p, q])).reduce((m, x) => len(x[0], x[1]) > len(m[0], m[1]) ? x : m);
+  const L = len(a, z);
+  if (L < 1e-6) return null;
+  const line = pts.every(p => Math.abs((p[0] - a[0]) * (z[1] - a[1]) - (p[1] - a[1]) * (z[0] - a[0])) / L < 1e-6);
+  return { pts: line ? [a, z] : pts.filter((p, i) => !i || len(p, pts[i - 1]) > 1e-6), closed: false };
+}
+// Alle Kanten eines Körpers projizieren, deckungsgleiche nur einmal; src = Bezug, damit die Linie mitwandert (null = nicht benennbar)
+export function projectBody(s: Shape3D, named: Named, pl: Frame) {
+  const out: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] = [], seen = new Set<string>();
+  for (const e of s.edges) {
+    const p = projectEdge(e, pl);
+    if (!p) continue;
+    const key = (q: number[][]) => q.map(x => x.slice(0, 2).map(v => v.toFixed(3)).join()).join('|');
+    if (seen.has(key(p.pts)) || seen.has(key([...p.pts].reverse()))) continue;
+    seen.add(key(p.pts));
+    out.push({ ...p, src: edgeRef(named, e, s) });
+  }
+  return out;
+}
+
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
@@ -156,6 +189,15 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!isExtrude(f)) continue;
         const g = anchor(f.id, anchorSketch(f, body, names.get(k) ?? [])).f; // Skizze auf ihre (vielleicht gewanderte) Fläche setzen
         if (g !== f) moved.set(f.id, g);
+        if (g.aux && g.src && body) { // projizierte Hilfslinie: aus der aufgelösten Kante neu rechnen, Lage nachtragen (T5.5)
+          const r = resolveEdge(g.src, body, names.get(k) ?? []);
+          if (!r.ok) throw new Error(r.why === 'lost' ? 'Projizierte Kante gibt es nicht mehr' : 'Projizierte Kante nicht eindeutig');
+          const p = projectEdge(r.shape, g);
+          if (!p) throw new Error('Kante steht jetzt senkrecht auf der Skizzenebene');
+          const changed = JSON.stringify(p.pts) !== JSON.stringify(g.pts) || !p.closed !== !!g.open;
+          anchor(f.id, { sure: r.sure, ...changed && { patch: { pts: p.pts, open: !p.closed } } });
+          continue;
+        }
         if (isFlat(g) || (isCut(g) && !body)) continue;
         s = solidOf(g);
         nS = nameSolid(g, s);

@@ -14,6 +14,7 @@ export interface Extrude extends Frame {
   smooth?: boolean;          // poly: glatte Kurve (Spline) durch die Punkte statt Strecken
   aux?: boolean;             // Hilfslinie: bildet keine Fläche, nur zum Einrasten (wird nie extrudiert)
   open?: boolean;            // Hilfslinie oder Linie: offener Linienzug (kein Schlusssegment)
+  src?: EdgeRef;             // Hilfslinie aus projizierter Körperkante (P): pts rechnet der Kern bei jedem Lauf neu, sie wandert mit
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)

@@ -1,3 +1,4 @@
+import type { EdgeRef } from './topo';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -255,7 +256,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     if (selId !== null && confirms.has(selId) !== !!panel.querySelector('.confirm')) renderPanel(); // Knopf ein-/ausblenden
     renderTree();
     showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || (poly?.path !== undefined ? pathHint() : HINTS[tool]));
-    notice = '';
+    if (!data.fixes.length || pending) notice = ''; // folgt noch ein Lauf mit nachgetragenen Bezügen, Meldung bis dahin stehen lassen
     busy = false;
     // Vom Kern nachgetragene Bezüge und mitgewanderte Lagen übernehmen (kein Rückgängig-Schritt, ergibt sich aus dem Modell).
     // Liegt schon eine neuere Änderung an, verwerfen: der nächste Lauf rechnet sie neu.
@@ -265,6 +266,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       rebuild(); save();
     } else if (pending) requestBuild();
   } else if (data.type === 'sheet') showSheet(data);
+  else if (data.type === 'projected') projected(data.lines);
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
@@ -323,45 +325,35 @@ function trimAt(e: PointerEvent) {
     const end = Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) ? 0 : 1;
     const out = extendOpen(pts, end, segs);
     if (!out) return showHint('In Verlängerung liegt keine Linie');
-    pushHistory(); f.pts = out; return refresh();
+    pushHistory(); f.pts = out; delete f.src; return refresh(); // von Hand geändert: wandert nicht mehr mit
   }
   if (pts[near.i][2]) return showHint('Bögen lassen sich nicht trimmen – Bogen über seinen Punkt ändern');
   const cuts = segs.map(([c, d]) => cutParam(pts[near.i], pts[near.i + 1], c, d)).filter((s): s is number => s !== null);
   const parts = trimOpen(pts, near.i, near.t, cuts);
   pushHistory();
   if (!parts.length) { features.splice(features.indexOf(f), 1); clearSel(); return refresh(); }
-  f.pts = parts[0];
+  f.pts = parts[0]; delete f.src;
   if (parts[1]) add({ ...structuredClone(f), id: nextId++, pts: parts[1] });
   refresh();
 }
-// Kanten des Körpers unter dem Flächenraster als Hilfslinien in dessen Ebene legen (je Kante eine Linie, deckungsgleiche nur einmal)
-// shortcut: Momentaufnahme aus dem Anzeige-Netz (Kreise auf ~0,01 mm genau); ändert sich der Körper, bleiben die Linien → aus dem B-Rep im Kern projizieren und an den Körper binden
+// Kanten des Körpers unter dem Flächenraster als Hilfslinien in dessen Ebene legen (je Kante eine Linie, deckungsgleiche nur einmal).
+// Der Kern projiziert aus dem B-Rep (Kreise exakt) und liefert je Kante einen Bezug, über den die Linie mit dem Körper mitwandert (T5.5)
+let projectFor: { pl: Frame; body: number } | null = null;
 function projectEdges() {
-  const mesh = workHit?.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
-  if (!workHit || !mesh) return showHint('Erst mit Doppelklick oder Leertaste ein Raster auf eine Fläche legen, dann P');
-  const pl = planeFor(workHit), pos = ((mesh as THREE.Mesh).children[0] as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
-  const groups: Int32Array = mesh.userData.edges, seen = new Set<string>(), out: Extrude[] = [];
-  for (let g = 0; g < groups.length; g += 2) {
-    const [s, n] = [groups[g], groups[g + 1]], pts: number[][] = [];
-    for (let k = s; k < s + n; k++) {
-      if (k > s && (k - s) % 2 === 0) continue; // Segmente liegen paarweise (a,b)(b,c)…: Anfang + jedes Segmentende
-      const q = toLocal(pl, new THREE.Vector3().fromBufferAttribute(pos, k)).map(x => Math.round(x * 1e4) / 1e4);
-      if (!pts.length || Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) > 1e-3) pts.push(q);
-    }
-    if (pts.length < 2) continue; // Kante steht senkrecht auf der Ebene
-    // von der Seite gesehene Kreise u. Ä. fallen auf eine Strecke: auf deren zwei Enden kürzen
-    const [a, z] = pts.flatMap(p => pts.map(q => [p, q] as const)).sort((x, y) => Math.hypot(y[0][0] - y[1][0], y[0][1] - y[1][1]) - Math.hypot(x[0][0] - x[1][0], x[0][1] - x[1][1]))[0];
-    const L = Math.hypot(z[0] - a[0], z[1] - a[1]);
-    if (L < 1e-3) continue;
-    if (pts.every(p => Math.abs((p[0] - a[0]) * (z[1] - a[1]) - (p[1] - a[1]) * (z[0] - a[0])) / L < 1e-3)) pts.splice(0, pts.length, a, z);
-    const key = [pts[0], pts.at(-1)!, pts.length].flat().map(x => x.toFixed(2)).join(), rev = [pts.at(-1)!, pts[0], pts.length].flat().map(x => x.toFixed(2)).join();
-    if (seen.has(key) || seen.has(rev)) continue;
-    seen.add(key);
-    out.push({ id: nextId + out.length, ...structuredClone(pl), type: 'poly', p: {}, pts, d: 0, onFace: true, aux: true, open: true, body: workHit.body, name: 'Projektion' } as Extrude);
-  }
-  if (!out.length) return showHint('Keine Kanten zu projizieren');
+  if (!workHit || workHit.body === undefined) return showHint('Erst mit Doppelklick oder Leertaste ein Raster auf eine Fläche legen, dann P');
+  projectFor = { pl: planeFor(workHit), body: workHit.body };
+  send({ type: 'project', ...projectFor });
+}
+function projected(lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[]) {
+  const at = projectFor;
+  projectFor = null;
+  if (!at) return;
+  if (!lines.length) return showHint('Keine Kanten zu projizieren');
+  const out = lines.map((l, i) => ({ id: nextId + i, ...structuredClone(at.pl), type: 'poly', p: {}, pts: l.pts, d: 0, onFace: true, aux: true,
+    ...!l.closed && { open: true }, ...l.src && { src: l.src }, body: at.body, name: 'Projektion' }) as Extrude);
   pushHistory(); nextId += out.length; add(...out); refresh();
-  showHint(`${out.length} Kanten als Hilfslinien projiziert`);
+  const fixed = lines.filter(l => !l.src).length;
+  showNotice(`${out.length} Kanten als Hilfslinien projiziert${fixed ? ` · ${fixed} ohne eindeutigen Bezug, bleiben fest` : ''}`);
 }
 // Hilfslinie gestrichelt, offene Skizzenlinie durchgezogen; userData.aux = ID zum Anklicken
 function auxLine(f: Extrude) {
@@ -1185,6 +1177,7 @@ function onMove(e: PointerEvent) {
       return showHud(e, `Abstand: ${len(drag.f.off)}`);
     }
     if (drag.kind === 'point') {
+      delete drag.f.src; // gezogene Projektion wandert nicht mehr mit
       const p = planeHit(drag.f);
       if (!p) return;
       const q = toLocal(drag.f, p).map(x => snap(x, e));
