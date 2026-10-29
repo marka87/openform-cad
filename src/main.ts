@@ -222,6 +222,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   if (data.type === 'ready') { ready = true; setTool(tool); requestBuild(); }
   else if (data.type === 'error') $('hint').textContent = 'CAD-Kern konnte nicht geladen werden: ' + data.message;
   else if (data.type === 'built') {
+    measurePtsCache = null;
     disposeGroup(bodyGroup);
     for (const m of data.meshes) bodyGroup.add(bodyMesh(m));
     bodyGroup.updateMatrixWorld(true);
@@ -619,31 +620,48 @@ function setWorkPlane(h: Hit | null) {
 function workPoints(h: Hit, pl: Frame): { p: Vec; mid: boolean }[] {
   const m = h.body !== undefined ? bodyMeshOf(h.body) as THREE.Mesh | undefined : undefined;
   if (!m) return [];
-  const out: [THREE.Vector3, boolean][] = [], g = m.geometry, idx = g.index!, pos = g.attributes.position as THREE.BufferAttribute;
-  if (h.tri) {
-    const c = new THREE.Vector3(), t = [0, 1, 2].map(() => new THREE.Vector3());
-    let A = 0;
-    for (let k = h.tri[0]; k < h.tri[0] + h.tri[1]; k += 3) {
-      t.forEach((q, j) => q.fromBufferAttribute(pos, idx.getX(k + j)));
-      const a = t[1].clone().sub(t[0]).cross(t[2].clone().sub(t[0])).length() / 2;
-      c.addScaledVector(t[0].clone().add(t[1]).add(t[2]).divideScalar(3), a); A += a;
-    }
-    if (A > 0) out.push([c.divideScalar(A), true]);
+  const out: [THREE.Vector3, boolean][] = [], fa = h.tri && faceArea(m, h.tri);
+  if (fa && fa.A > 0) out.push([fa.c, true]);
+  out.push(...edgePoints(m, e => e.pts.every(q => onPlane(pl, q.toArray()))));
+  return out.filter(([q], i) => out.findIndex(([x]) => x.distanceTo(q) < 1e-4) === i).map(([q, mid]) => ({ p: q.toArray() as Vec, mid }));
+}
+// Fläche und Schwerpunkt einer B-Rep-Fläche aus ihren Dreiecken im Anzeige-Netz (tri = [Anfang, Anzahl] im Index)
+function faceArea(m: THREE.Mesh, tri: number[]) {
+  const idx = m.geometry.index!, pos = m.geometry.attributes.position as THREE.BufferAttribute, c = new THREE.Vector3(), t = [0, 1, 2].map(() => new THREE.Vector3());
+  let A = 0;
+  for (let k = tri[0]; k < tri[0] + tri[1]; k += 3) {
+    t.forEach((q, j) => q.fromBufferAttribute(pos, idx.getX(k + j)));
+    const a = t[1].clone().sub(t[0]).cross(t[2].clone().sub(t[0])).length() / 2;
+    c.addScaledVector(t[0].clone().add(t[1]).add(t[2]).divideScalar(3), a); A += a;
   }
-  const lp = (m.children[0] as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute, groups: Int32Array = m.userData.edges ?? new Int32Array();
-  for (let k = 0; k < groups.length; k += 2) {
-    const pts: THREE.Vector3[] = [];
-    for (let i = groups[k]; i < groups[k] + groups[k + 1]; i++) if (i === groups[k] || (i - groups[k]) % 2) pts.push(new THREE.Vector3().fromBufferAttribute(lp, i)); // Anfang + Segmentenden
-    if (pts.length < 2 || !pts.every(q => onPlane(pl, q.toArray()))) continue;
-    const a = pts[0], z = pts.at(-1)!, closed = a.distanceTo(z) < 1e-6, ab = z.clone().sub(a);
-    const straight = !closed && pts.every(q => q.clone().sub(a).cross(ab).length() / ab.length() < 1e-3);
-    if (!closed) out.push([a, false], [z, false]);
-    if (straight) { out.push([a.clone().add(z).multiplyScalar(0.5), true]); continue; }
+  return { A, c: A > 0 ? c.divideScalar(A) : c };
+}
+// Eine B-Rep-Kante aus dem Anzeige-Netz (Gruppe ab Index k der Kantenlinien): Punkte, gerade/geschlossen, Länge,
+// Mitte (gerade) bzw. Kreismittelpunkt und Radius (gekrümmt: Umkreis aus drei Kantenpunkten)
+function edgeInfo(m: THREE.Object3D, k: number) {
+  const lp = (m.children[0] as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute, groups: Int32Array = m.userData.edges, pts: THREE.Vector3[] = [];
+  for (let i = groups[k]; i < groups[k] + groups[k + 1]; i++) if (i === groups[k] || (i - groups[k]) % 2) pts.push(new THREE.Vector3().fromBufferAttribute(lp, i)); // Anfang + Segmentenden
+  const a = pts[0], z = pts.at(-1)!, closed = pts.length > 2 && a.distanceTo(z) < 1e-6, ab = z.clone().sub(a);
+  const straight = !closed && pts.every(q => q.clone().sub(a).cross(ab).length() / (ab.length() || 1) < 1e-3);
+  const length = pts.slice(1).reduce((s, q, i) => s + q.distanceTo(pts[i]), 0);
+  let centre: THREE.Vector3 | null = null;
+  if (!straight && pts.length >= 3) {
     const [p, q, r] = closed ? [a, pts[Math.floor(pts.length / 3)], pts[Math.floor(2 * pts.length / 3)]] : [a, pts[Math.floor(pts.length / 2)], z];
     const u = q.clone().sub(p), v = r.clone().sub(p), w = u.clone().cross(v), w2 = w.lengthSq();
-    if (w2 > 1e-12) out.push([p.clone().add(w.clone().cross(u).multiplyScalar(v.lengthSq()).add(v.clone().cross(w).multiplyScalar(u.lengthSq())).divideScalar(2 * w2)), true]);
+    if (w2 > 1e-12) centre = p.clone().add(w.clone().cross(u).multiplyScalar(v.lengthSq()).add(v.clone().cross(w).multiplyScalar(u.lengthSq())).divideScalar(2 * w2));
   }
-  return out.filter(([q], i) => out.findIndex(([x]) => x.distanceTo(q) < 1e-4) === i).map(([q, mid]) => ({ p: q.toArray() as Vec, mid }));
+  return { pts, closed, straight, length, mid: straight ? a.clone().add(z).multiplyScalar(0.5) : null, centre, r: centre ? centre.distanceTo(a) : 0 };
+}
+// Rastpunkte aus den Kanten eines Körpers: Enden, Mitten gerader Kanten, Kreis-/Bogenmitten (Paar: Punkt, ist Mitte)
+function edgePoints(m: THREE.Object3D, keep: (e: ReturnType<typeof edgeInfo>) => boolean = () => true): [THREE.Vector3, boolean][] {
+  const groups: Int32Array = m.userData.edges ?? new Int32Array(), out: [THREE.Vector3, boolean][] = [];
+  for (let k = 0; k < groups.length; k += 2) {
+    const e = edgeInfo(m, k);
+    if (e.pts.length < 2 || !keep(e)) continue;
+    if (!e.closed) out.push([e.pts[0], false], [e.pts.at(-1)!, false]);
+    if (e.mid) out.push([e.mid, true]); else if (e.centre) out.push([e.centre, true]);
+  }
+  return out;
 }
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
@@ -657,6 +675,9 @@ function planeFor(h: Hit | null): Frame {
 // Skizze des aufgezogenen Werkzeugs zwischen a und b
 let sides = 6, typed = ''; // Ecken des n-Ecks; eingetippte Maße
 let rectMode: 'diag' | 'center' | '3pt' = 'diag'; // Art des Rechtecks (Aufklappmenü)
+let measureMode: 'obj' | 'p2p' | 'ang' = 'p2p', measurePtsCache: { p: THREE.Vector3; mid: boolean }[] | null = null;
+let measAt: THREE.Vector3 | null = null; // Lage des Messwerts im Modell (Beschriftung folgt der Kamera)
+const measLabel = $('measLabel');
 let rect3: { pl: Frame; a: number[]; b: number[]; onFace: boolean; body?: number } | null = null; // 3-Punkt-Rechteck: Kante steht, Breite folgt der Maus
 function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extrude | null {
   if (tool === 'rect' && rectMode === 'center') return sketchFeature('rect', pl, [2 * a[0] - b[0], 2 * a[1] - b[1]], b, nextId, onFace);
@@ -957,13 +978,12 @@ function onDown(e: PointerEvent) {
     const a = sketchPoint(pl, e);
     if (!a) return;
     drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane', body: t?.body };
-  } else if (tool === 'measure') { // Punkt auf Fläche/Kante, eingerastet an Ecken; zwei Punkte = Abstand
-    const P = edge ? V(edge.at) : h?.point;
-    if (!P) return;
-    const pts = [...features.filter(isExtrude).filter(f => !f.hidden).flatMap(f => keyPoints(f)), ...snapSegs(null).flat()];
-    const s = snapTo(P.toArray() as Vec, pts, [], 8 * pxSize());
-    if (measure.length === 2) { measure = []; measureN = []; }
-    measure.push(s ? V(s.p) : P.clone());
+  } else if (tool === 'measure') {
+    if (measureMode === 'obj') return measureObject();
+    const s = measurePoint();
+    if (!s) return;
+    if (measure.length === (measureMode === 'ang' ? 3 : 2)) { measure = []; measureN = []; }
+    measure.push(s.p);
     measureN.push(!edge && h ? h.n.clone() : null);
     showMeasure();
     return;
@@ -1037,6 +1057,10 @@ function onMove(e: PointerEvent) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
     setHover(!!h && (tool !== 'shell' || !!h.face));
     el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
+    if (tool === 'measure' && measureMode !== 'obj') { // Einrastpunkt fürs Messen schon vor dem Klick zeigen
+      const s = measurePoint();
+      if (s) { markSnap(s.p, s.kind === 'Mitte' || s.kind === 'Endpunkt' ? 0xff9a3c : 0x4da3ff, 4); snapMark.visible = true; showSnapTip(s.p, s.kind); }
+    }
     return;
   }
   setHover(false);
@@ -1155,19 +1179,20 @@ let lastTool: Tool = 'rect'; // Leertaste wählt es wieder
 const rect3W = (q: number[]) => { const { a, b } = rect3!, L = Math.hypot(b[0] - a[0], b[1] - a[1]); return ((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / L; };
 const rect3Feature = (q: number[]) => polyFeature(rect3!.pl, rect3Pts(rect3!.a, rect3!.b, rect3W(q)), nextId, rect3!.onFace);
 // Aufklappmenüs der Werkzeugleiste: Art des Rechtecks, Ecken des Vielecks
-const MENUS: Record<string, [string, string][]> = { rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
+const MENUS: Record<string, [string, string][]> = { measure: [['obj', 'Objekt'], ['p2p', 'Punkt zu Punkt'], ['ang', 'Winkel (3 Punkte)']], rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
 const flyout = $('flyout');
 function modeLabels() {
   document.querySelector('#toolbar [data-tool="rect"] .mode')!.textContent = MENUS.rect.find(m => m[0] === rectMode)![1];
   document.querySelector('#toolbar [data-tool="ngon"] .mode')!.textContent = `${sides} Ecken`;
+  document.querySelector('#toolbar [data-tool="measure"] .mode')!.textContent = MENUS.measure.find(m => m[0] === measureMode)![1];
 }
 document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.onclick = e => {
   e.stopPropagation();
-  const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : String(sides);
+  const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : m === 'measure' ? measureMode : String(sides);
   flyout.replaceChildren(...MENUS[m].map(([v, label]) => {
     const b = document.createElement('button');
     b.textContent = label; b.classList.toggle('on', v === cur);
-    b.onclick = () => { if (m === 'rect') rectMode = v as typeof rectMode; else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
+    b.onclick = () => { if (m === 'rect') rectMode = v as typeof rectMode; else if (m === 'measure') { measureMode = v as typeof measureMode; measure = []; disposeGroup(preview); setMeasureLabel(null); } else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
     return b;
   }));
   Object.assign(flyout.style, { display: 'block', left: `${r.right + 6}px`, top: `${r.top}px` });
@@ -1177,13 +1202,13 @@ modeLabels();
 function setTool(t: Tool) {
   rect3 = null;
   const keep = poly && !poly.smooth && ['line', 'arc'].includes(t) && ['line', 'arc'].includes(tool); // zwischen Linie und Bogen wechseln
-  if (t !== tool && !keep) { cancelPoly(); measure = []; measureN = []; }
+  if (t !== tool && !keep) { cancelPoly(); measure = []; measureN = []; setMeasureLabel(null); }
   if (poly) poly.arcEnd = undefined;
   if (t !== 'select') lastTool = t;
   typed = '';
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  showHint(HINTS[t]);
+  showHint(t === 'measure' ? MEASURE_HINT[measureMode] : HINTS[t]);
 }
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.onclick = () => setTool(b.dataset.tool as Tool));
 
@@ -1824,13 +1849,64 @@ function renderBodyPanel(b: number) {
 
 // ---------- Messen ----------
 let measure: THREE.Vector3[] = [], measureN: (THREE.Vector3 | null)[] = []; // Punkte und, auf Flächen, deren Normalen
+const MEASURE_HINT = { obj: 'Kante anklicken = Länge (Kreis: ⌀ und R) · Fläche anklicken = Flächeninhalt', p2p: 'Zwei Punkte anklicken = Abstand (Ecken, Mitten, Kreismitten rasten ein); zwei Flächen = auch deren Winkel', ang: 'Drei Punkte anklicken: Schenkel, Scheitel, Schenkel = Winkel' };
+function setMeasureLabel(at: THREE.Vector3 | null, text = '') { measAt = at; measLabel.textContent = text; measLabel.style.display = at ? 'block' : 'none'; }
+function placeMeasureLabel() {
+  if (!measAt) return;
+  const s = measAt.clone().project(camera), r = el.getBoundingClientRect();
+  Object.assign(measLabel.style, { left: `${r.left + (s.x + 1) / 2 * r.width}px`, top: `${r.top + (1 - s.y) / 2 * r.height}px` });
+}
+const areaText = (a: number) => display.unit === 'in' ? `${(a / 645.16).toFixed(3)} in²` : `${a.toFixed(a < 100 ? 2 : 1)} mm²`;
+// Einrastpunkte fürs Messen: Skizzenpunkte und Körperkanten (Enden, Mitten, Kreismitten); zwischengespeichert bis zum nächsten Bau
+function measurePoints() {
+  return measurePtsCache ??= [
+    ...features.filter(isExtrude).filter(f => !f.hidden).flatMap(f => { const mids = keyPoints(f, 'mid'); return keyPoints(f).map(p => ({ p: V(p), mid: mids.some(m => m.every((x, i) => Math.abs(x - p[i]) < 1e-9)) })); }),
+    ...bodyGroup.children.filter(m => m.visible).flatMap(m => edgePoints(m)).map(([p, mid]) => ({ p, mid })),
+  ];
+}
+// Punkt unter dem Zeiger, eingerastet an den Messpunkten (8 px), sonst auf Kante oder Fläche
+function measurePoint(): { p: THREE.Vector3; kind: string } | null {
+  const { face: h, edge } = pick(), P = edge ? V(edge.at) : h?.point;
+  if (!P) return null;
+  let best: { p: THREE.Vector3; mid: boolean } | null = null, d = 8 * pxSize();
+  for (const c of measurePoints()) { const x = c.p.distanceTo(P); if (x < d) { d = x; best = c; } }
+  return best ? { p: best.p.clone(), kind: best.mid ? 'Mitte' : 'Endpunkt' } : { p: P.clone(), kind: edge ? 'auf Kante' : 'auf Fläche' };
+}
+// Objekt messen: Kante = Länge, Kreis/Bogen = ⌀/R, Fläche = Flächeninhalt
+// shortcut: Länge gekrümmter Kanten und Flächeninhalt aus dem Anzeige-Netz (etwa 0,1 % zu klein bei Rundungen) → exakt über den Kern (measureArea/measureLength)
+function measureObject() {
+  disposeGroup(preview); measure = [];
+  const { fh, eh } = lastPick;
+  if (eh) {
+    const m = eh.object.parent!, groups: Int32Array = m.userData.edges, r = groups && range(groups, eh.index!);
+    if (!r) return;
+    const k = groups.findIndex((x, i) => i % 2 === 0 && x === r[0]), e = edgeInfo(m, k);
+    const text = e.straight ? `Länge ${len(e.length, 2)}` : e.closed && e.centre ? `⌀ ${len(2 * e.r, 2)} · R ${len(e.r, 2)}` : e.centre ? `R ${len(e.r, 2)} · Bogenlänge ${len(e.length, 2)}` : `Länge ${len(e.length, 2)}`;
+    setMeasureLabel(e.mid ?? e.pts[Math.floor(e.pts.length / 2)], text);
+    return showHint(text + (e.closed && e.centre ? ` · Umfang ${len(2 * Math.PI * e.r, 2)}` : '')); // Umfang aus dem Radius, die Netzlänge ist etwas kürzer
+  }
+  const h = pick().face;
+  if (fh && h?.tri) {
+    const fa = faceArea(fh.object as THREE.Mesh, h.tri);
+    setMeasureLabel(fa.c, `Fläche ${areaText(fa.A)}`);
+    return showHint(`Fläche ${areaText(fa.A)}`);
+  }
+  setMeasureLabel(null);
+}
 function showMeasure() {
   disposeGroup(preview);
   const mat = new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false });
   for (const p of measure) { const m = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), mat.clone()); m.position.copy(p); m.renderOrder = 2; preview.add(m); }
-  if (measure.length < 2) return showHint('Zweiten Punkt anklicken');
+  const need = measureMode === 'ang' ? 3 : 2;
+  if (measure.length > 1) preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(measure), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false })));
+  if (measure.length < need) { setMeasureLabel(null); return showHint(measureMode === 'ang' ? ['Scheitel anklicken', 'zweiten Schenkel anklicken'][measure.length - 1] : 'Zweiten Punkt anklicken'); }
+  if (measureMode === 'ang') {
+    const [a, b, c] = measure, u = a.clone().sub(b), v = c.clone().sub(b), deg = u.angleTo(v) * 180 / Math.PI;
+    setMeasureLabel(b, `${deg.toFixed(2)}°`);
+    return showHint(`Winkel ${deg.toFixed(2)}° · Ergänzung ${(180 - deg).toFixed(2)}°`);
+  }
   const [a, b] = measure, d = b.clone().sub(a);
-  preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0xff9a3c, depthTest: false })));
+  setMeasureLabel(a.clone().add(b).multiplyScalar(0.5), len(d.length(), 2));
   // Achsen wie in der Exportdatei: X = x, Y = −z, Z = y
   const [n1, n2] = measureN, ang = n1 && n2 ? ` · Winkel der Flächen ${(Math.acos(Math.max(-1, Math.min(1, n1.dot(n2)))) * 180 / Math.PI).toFixed(1)}°` : '';
   showHint(`Abstand ${len(d.length(), 2)} · ΔX ${fmt(d.x, 2)} · ΔY ${fmt(-d.z, 2)} · ΔZ ${fmt(d.y, 2)}${ang}`);
@@ -2018,6 +2094,7 @@ renderer.setAnimationLoop(() => {
   renderCube();
   updateScale();
   updateDims();
+  placeMeasureLabel();
 });
 
 try { const s = localStorage.getItem('openform'); if (s) load(s); } catch {}

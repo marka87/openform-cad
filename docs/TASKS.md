@@ -296,13 +296,28 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       Raster, Hilfslinien, Punkte der Skizzen, Punkte am Körper,
       Körperkanten einzeln schaltbar; Rastpunkte und Hinweise ein/aus;
       Rastergröße im selben Menü. Wird mit der Darstellung gemerkt.
-- [ ] T10.7 TODO — Messen in drei Arten: Objekt anklicken = seine Maße
-      (Kantenlänge, Radius/Durchmesser, Fläche), Punkt-zu-Punkt-Abstand,
-      Winkel über drei Punkte. Zusammen mit T5.17 (Fehlerbild aus den
-      Feldnotizen, sobald da).
+- [x] T10.7 DONE — Messen in drei Arten (▸ am Werkzeug): Objekt (Kante =
+      Länge, Kreis = ⌀/R/Umfang, Bogen = R und Bogenlänge, Fläche =
+      Flächeninhalt), Punkt zu Punkt, Winkel über drei Punkte. Ergebnis als
+      Beschriftung im Modell, Einrastpunkt (Endpunkt, Mitte, Kreismitte)
+      schon vor dem Klick sichtbar. T5.17 (Fehlerbild des Nutzers) bleibt
+      offen, bis die Feldnotizen da sind.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.7: Kanten- und Flächenauswertung aus workPoints
+  herausgezogen (edgeInfo, edgePoints, faceArea in main.ts), Messen nutzt
+  sie: Rastpunkte = Skizzenpunkte (Mitten als „Mitte“ markiert) plus
+  Körperkanten (Enden, Mitten, Kreismitten) statt bisher aller Netz-
+  punkte; zwischengespeichert bis zum nächsten Bau. Gefunden: vorher
+  rasteten Messpunkte auch an jedem Stützpunkt gerundeter Kanten ein.
+  Abkürzung: Bogenlänge und Flächeninhalt aus dem Anzeige-Netz (Kreis
+  ±0,1 %; Kreisumfang deshalb aus dem Radius), exakt erst über den Kern.
+  Gelernt beim Prüfen: synthetische Zeigerereignisse verstellen die
+  Kamera (OrbitControls), Messklicks im Browser deshalb mit echter Maus.
+  Im Browser: Kante 60,00 mm, Bohrungsrand ⌀ 12,00 / R 6,00, Deckel
+  2287,1 mm² (exakt 2286,9), Ecke–Kantenmitte 30,00 mm, drei Ecken
+  90,00°. Kein Kern-Test (Anzeige-Netz). 55 Tests grün.
 - 2026-10-29 T10.6: display.snap (lokal gemerkt) schaltet: snap() aufs
   Raster (auch Zieh-Maße), alignTo und Richtungsfang (Hilfslinien),
   Ursprung/Skizzenpunkte (snapPoints), Flächenraster-Punkte (workPts),
