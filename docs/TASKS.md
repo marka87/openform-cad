@@ -161,11 +161,12 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
       soll aus T0.2 kommen. Erst reproduzieren und beschreiben, dann
       umsetzen. Messen gehört zu den am häufigsten benutzten Werkzeugen
       des Nutzers, deshalb vorgezogen.
-- [ ] T5.9 TODO — Ansicht auf die Fläche: Leertaste bei liegendem Raster
-      fliegt die Kamera sanft senkrecht auf die Fläche, die Fläche füllt
-      das Bild, „oben" ist oben in der Skizze. Nochmal Leertaste =
-      zurück zur vorigen Ansicht. Ohne Raster bleibt die Leertaste
-      „letztes Werkzeug".
+- [x] T5.9 DONE — Ansicht auf die Fläche: Leertaste bei liegendem Raster
+      fliegt die Kamera senkrecht auf die Fläche (Bauteil füllt das Bild),
+      nochmal Leertaste = zurück. Über einer anderen Fläche setzt die
+      Leertaste weiter das Raster dorthin; ohne Raster „letztes Werkzeug“.
+      Abweichung: bei liegenden Flächen ist „oben“ −z wie in der
+      Draufsicht, nicht die y-Achse der Skizze (siehe Log).
 - [ ] T5.10 TODO — Sichtbarer Punkt am Zeiger: zeigt immer, wo der
       nächste Klick landet. Rastet auf Raster-, Eck-, Mittel-,
       Schnittpunkte und Linien. Farbe plus kurzes Wort („Mitte",
@@ -269,6 +270,15 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.9: lookAtWork() in main.ts: Leertaste mit liegendem Raster
+  (Zeiger über derselben Ebene oder im Leeren) fliegt in 300 ms senkrecht
+  auf die Rastermitte, Abstand so, dass der Umriss des Bauteils in dieser
+  Ebene ins Bild passt; die Ansicht davor wird gemerkt, nochmal Leertaste
+  fliegt zurück. Neues Raster oder Raster weg vergisst sie. Abkürzung:
+  Kamera-oben bleibt die Welt-Hochachse, weil OrbitControls kein anderes
+  up verträgt; senkrechte Flächen stehen damit richtig, liegende zeigen
+  −z nach oben wie die Draufsicht. Im Browser geprüft: Vorderseite →
+  Ansicht VORNE, zurück, Deckel → OBEN. Kein Kern-Test (nur Kamera).
 - 2026-10-29 T5.8: Rechtsklick (ohne Ziehen) bei laufendem Zug = Enter:
   Linie schließt zur Fläche, Hilfslinie und Zug-Pfad enden offen. Nebenbei
   gefunden: Enter auf einem Zug, der keine Fläche ergibt (z. B. 2 Punkte),

@@ -58,6 +58,7 @@ const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y
 // Raster auf einer Fläche (Doppelklick): dort weiterskizzieren, auch über den Rand der Fläche hinaus
 const faceGrid = new THREE.Group(); faceGrid.visible = false; scene.add(faceGrid);
 let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizzen ins Leere landen dort statt auf dem Boden
+let workView: { c: THREE.Vector3; r: number } | null = null, lookBack: { p: THREE.Vector3; t: THREE.Vector3 } | null = null; // Raster-Mitte/-Größe; Ansicht vor „auf die Fläche schauen“
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
@@ -575,7 +576,8 @@ const sketchOn = (h: Hit | null) => h ?? workHit;
 function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
   faceGrid.visible = !!workHit && grid.visible;
-  if (!workHit) return;
+  lookBack = null;
+  if (!workHit) { workView = null; return; }
   // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
   // die Linien bleiben auf dem Einrastraster der Skizzenebene
   const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
@@ -590,8 +592,9 @@ function setWorkPlane(h: Hit | null) {
   faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
     .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
+  workView = { c: V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y), r: size / 2 };
   showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
-    + 'Raster auf der Fläche: hier weiterskizzieren · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
+    + 'Raster auf der Fläche: hier weiterskizzieren · Leertaste = senkrecht draufschauen · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
 }
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
@@ -1512,6 +1515,7 @@ addEventListener('keydown', e => {
   if (k === ' ') { // über einer Fläche: Raster dorthin (Strahl steht noch von der letzten Mausbewegung), sonst letztes Werkzeug
     e.preventDefault();
     const h = !poly && !drag ? pick().face : null;
+    if (workHit && (!h || samePlane(h, workHit))) return lookAtWork(); // Raster liegt: draufschauen bzw. zurück
     return h ? setWorkPlane(h) : setTool(lastTool);
   }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -1646,6 +1650,18 @@ function setView(name: string) {
   const dist = camera.position.distanceTo(controls.target);
   flyTo(controls.target.clone().addScaledVector(V(VIEWS[name]).normalize(), dist), controls.target.clone());
 }
+// Senkrecht auf das Flächenraster schauen, so dass es das Bild füllt; nochmal = zurück zur Ansicht davor.
+// shortcut: Kamera-oben bleibt die Welt-Hochachse (OrbitControls verträgt kein anderes up); bei liegenden Flächen
+// ist „oben“ daher −z wie in der Draufsicht, nicht die y-Achse der Skizze
+function lookAtWork() {
+  if (!workHit || !workView) return;
+  if (lookBack) { flyTo(lookBack.p, lookBack.t); lookBack = null; return showHint('Zurück zur vorigen Ansicht · Leertaste = wieder draufschauen'); }
+  lookBack = { p: camera.position.clone(), t: controls.target.clone() };
+  const n = workHit.n.clone(), dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 1e-4).normalize() : n;
+  flyTo(workView.c.clone().addScaledVector(dir, workView.r / Math.sin(camera.fov * Math.PI / 360) * 1.05), workView.c.clone());
+  showHint('Senkrecht auf die Fläche · Leertaste = zurück zur vorigen Ansicht');
+}
+const samePlane = (a: Hit, b: Hit) => a.n.dot(b.n) > 0.9999 && Math.abs(a.n.dot(a.point.clone().sub(b.point))) < 1e-3;
 // Kamera so setzen, dass Körper und Skizzen ganz zu sehen sind
 function fitView() {
   const box = new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group));
