@@ -48,13 +48,15 @@ export const pathSketch = (f: Sweep) => polyDrawing(f.pts, false, !f.closed).ske
 // Fehlgeschlagene Features werden übersprungen. imports: bereits eingelesene STEP-Körper je Feature-ID (siehe loadStep)
 // Ergebnis: bodies je Körpernummer; body = der einzige Körper bzw. alle als Verbund (für Export und Tests);
 // origins je Körper: Herkunft jeder Fläche (Reihenfolge wie shape.faces), null = unbekannt;
-// errors: Grund je fehlgeschlagenem Feature; fixes: nachgetragene Bezüge und nachgeführte Lagen je Feature-ID (übernimmt main.ts ins Modell); unsure: unsicher aufgelöst
+// errors: Grund je fehlgeschlagenem Feature; fixes: nachgetragene Bezüge und nachgeführte Lagen je Feature-ID (übernimmt main.ts ins Modell); unsure: unsicher aufgelöst,
+// confirm: neuer Bezug je unsicherem Feature, den „Bezug übernehmen“ ins Modell schreibt
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
-  const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
-  const anchor = <T extends { patch?: Record<string, unknown>; sure: boolean }>(id: number, a: T) => {
+  const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
+  const anchor = <T extends { patch?: Record<string, unknown>; sure: boolean; confirm?: Record<string, unknown> }>(id: number, a: T) => {
     if (a.patch) fixes.set(id, { ...fixes.get(id), ...a.patch });
     if (!a.sure) unsure.push(id);
+    if (a.confirm) confirm.set(id, a.confirm);
     return a;
   };
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
@@ -157,7 +159,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
   const origins = new Map<number, (Origin | null)[]>([...bodies].map(([k, s]) => [k, originsOf(s, names.get(k))]));
-  return { body, bodies, failed, errors, origins, names, fixes, unsure };
+  return { body, bodies, failed, errors, origins, names, fixes, unsure, confirm };
 }
 
 // Blickrichtungen: replicad benennt top/bottom und left/right aus Sicht der Ebene, also umgekehrt (im Test geprüft):

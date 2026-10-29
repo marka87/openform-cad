@@ -65,9 +65,8 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 - [x] T1.13 DONE — Skizze auf gekippter Fläche dreht sich um die
       Schnittgerade von alter und neuer Ebene mit, statt abzubrechen.
-- [ ] T1.15 TODO — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
-      „Bezug übernehmen“ schreibt die gefundene Fläche als neuen Bezug.
-      Ohne das ist die gelbe Markierung aus T1.7 eine Sackgasse.
+- [x] T1.15 DONE — Gelb markierten Bezug bestätigen: Knopf im Seitenfeld
+      „Bezug übernehmen“ schreibt die gefundene Fläche/Kante als neuen Bezug.
 - [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen.
       Kosmetik — gerechnet wird korrekt über den Bezug.
 - [ ] T1.11 BLOCKED(Vieleck-Punkte lassen sich noch nicht einfügen oder
@@ -168,6 +167,16 @@ dem Feature-Modell auf, jede Unsauberkeit darunter muss er umschiffen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T1.15: Die Anker liefern bei unsicherem Treffer `confirm` =
+  Bezug auf das Gefundene (Skizze: face, Rundung/Fase: edge, Schale und
+  Fläche löschen: faces, Versetzen: face); buildBody gibt sie als Map
+  `confirm` weiter, der Worker reicht sie durch. Seitenfeld eines gelben
+  Schritts zeigt „Bezug übernehmen“ (mit Rückgängig-Schritt), danach baut
+  der Schritt sicher. Entscheidung: nur auf Knopfdruck, nie automatisch
+  (T1.7: nicht still umschreiben). Tests: Grundkörper neu gezeichnet →
+  Bohrung und Fase bestätigen → nichts mehr gelb; gekippte Seite (T1.13)
+  → bestätigen → grün. Im Browser geprüft: Bohrung auf gekippter Stirnseite
+  gelb, Knopf, danach grün, Bezug trägt die neue Normale.
 - 2026-10-29 T1.13: anchorSketch dreht die Skizze, wenn ihre Fläche kippt:
   Drehachse = Schnittgerade von alter Skizzenebene und neuer Fläche
   (Scharnier), Winkel = n → N; Ebene, Bereiche und Drehachse werden als

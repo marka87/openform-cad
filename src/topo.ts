@@ -304,7 +304,8 @@ export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: N
 // ── Anker: Features, die an einer Fläche/Kante hängen, beim Rebuild darauf auflösen ──
 // Ohne Bezug (neu angelegt oder alte Datei) wird er über die gespeicherte Lage gefunden und als patch zurückgegeben;
 // mit Bezug wird aufgelöst und die gespeicherte Lage nachgeführt. Verloren/mehrdeutig = Fehler, nie still raten.
-type Anchor<T> = T & { patch?: Record<string, unknown>; sure: boolean };
+// confirm = Bezug auf das, was unsicher gefunden wurde; „Bezug übernehmen“ (T1.15) schreibt ihn ins Feature
+type Anchor<T> = T & { patch?: Record<string, unknown>; sure: boolean; confirm?: Record<string, unknown> };
 const sub3 = (a: ArrayLike<number>, b: ArrayLike<number>) => [0, 1, 2].map(i => a[i] - b[i]);
 const fail = (r: { why: 'lost' | 'ambiguous' }, what: string) => new Error(`${what} ${r.why === 'lost' ? 'nicht mehr vorhanden' : 'nicht eindeutig'}`);
 
@@ -325,18 +326,19 @@ export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Ancho
   }
   const r = resolveFace(f.face, s, named);
   if (!r.ok) throw fail(r, 'Fläche der Skizze');
+  const ref = !r.sure && faceRef(named, r.shape), confirm = ref ? { confirm: { face: ref } } : {};
   const C = r.shape.center.toTuple(), N0 = r.shape.normalAt(r.shape.center).toTuple(), N = N0.map(x => x / Math.hypot(...N0)) as Vec;
   const k = dot(N, f.n), A = [f.n[1] * N[2] - f.n[2] * N[1], f.n[2] * N[0] - f.n[0] * N[2], f.n[0] * N[1] - f.n[1] * N[0]], sn = Math.hypot(...A);
   if (k < -0.999) throw new Error('Fläche der Skizze hat sich umgedreht');
   if (k < 0.999999) { // gekippt: Drehung um die Schnittgerade, die n in N überführt
     const h1 = dot(f.o, f.n), h2 = dot(C, N), c1 = (h1 - h2 * k) / (1 - k * k), c2 = (h2 - h1 * k) / (1 - k * k);
     const g = movedCopy(f, f.id, [0, 0, 0], A.map(x => x / sn) as Vec, Math.atan2(sn, k), f.n.map((x, i) => c1 * x + c2 * N[i]) as Vec);
-    return { f: g, sure: r.sure, patch: { o: g.o, n: g.n, u: g.u, v: g.v, ...g.and && { and: g.and }, ...g.not && { not: g.not }, ...g.axisLine && { axisLine: g.axisLine } } };
+    return { f: g, sure: r.sure, ...confirm, patch: { o: g.o, n: g.n, u: g.u, v: g.v, ...g.and && { and: g.and }, ...g.not && { not: g.not }, ...g.axisLine && { axisLine: g.axisLine } } };
   }
   const d = dot(sub3(C, f.o), f.n);
-  if (Math.abs(d) < 1e-6) return { f, sure: r.sure };
+  if (Math.abs(d) < 1e-6) return { f, sure: r.sure, ...confirm };
   const g = movedCopy(f, f.id, f.n.map(x => x * d) as Vec);
-  return { f: g, sure: r.sure, patch: { o: g.o, ...g.and && { and: g.and }, ...g.not && { not: g.not } } };
+  return { f: g, sure: r.sure, ...confirm, patch: { o: g.o, ...g.and && { and: g.and }, ...g.not && { not: g.not } } };
 }
 
 // Rundung/Fase: Kante über den Bezug, sonst über den Punkt at; at/dir werden an die Kante nachgeführt
@@ -351,7 +353,8 @@ export function anchorEdges(f: EdgeOp, s: Shape3D, named: Named): Anchor<{ edges
   if (!r.ok) throw fail(r, 'Kante');
   const e = r.shape, m = e.pointAt(0.5).toTuple(), t = e.tangentAt(0.5).toTuple(), q = sub3(f.at, m), along = dot(q, t);
   const onIt = Math.hypot(...q.map((x, i) => x - along * t[i])) < 1e-4 && Math.abs(along) <= measureLength(e) / 2 + 1e-4; // at liegt noch auf der Kante
-  return { edges: [e], sure: r.sure, ...!onIt && { patch: { at: m, dir: t } } };
+  const ref = !r.sure && edgeRef(named, e, s);
+  return { edges: [e], sure: r.sure, ...ref && { confirm: { edge: ref } }, ...!onIt && { patch: { at: m, dir: t } } };
 }
 
 // Schale: offene Flächen über die Bezüge, sonst über die Punkte at/more
@@ -365,7 +368,8 @@ export function anchorFaces(f: Pick<Shell, 'at' | 'more' | 'faces'>, s: Shape3D,
   }
   const rs = f.faces.map(ref => resolveFace(ref, s, named)), bad = rs.find(r => !r.ok);
   if (bad && !bad.ok) throw fail(bad, 'Offene Fläche der Schale');
-  return { faces: rs.map(r => r.ok ? r.shape : null!), sure: rs.every(r => r.ok && r.sure) };
+  const faces = rs.map(r => r.ok ? r.shape : null!), sure = rs.every(r => r.ok && r.sure), refs = sure ? [] : faces.map(x => faceRef(named, x));
+  return { faces, sure, ...refs.length && refs.every(Boolean) && { confirm: { faces: refs } } };
 }
 
 // ── Punkte und Kreise für Maße ──
@@ -420,6 +424,7 @@ export function offsetFace(f: Offset, A: Shape3D, nA: Named): Anchor<{ out: [Sha
   }
   if (!face) throw new Error('Fläche nicht gefunden');
   if (!flat(face)) throw new Error('Nur ebene Flächen lassen sich versetzen');
+  const ref = !sure && faceRef(nA, face);
   // B-Spline-Flächen liefern die Normale nicht normiert
   const N0 = face.normalAt(face.center).toTuple(), N = N0.map(x => x / Math.hypot(...N0)) as Vec, c0 = face.center.toTuple(), o0 = nA.find(n => n.face.wrapped.IsSame(face!.wrapped))?.o;
   const prism = basicFaceExtrusion(face, new Vector(N.map(x => x * f.d) as Vec)) as unknown as Shape3D;
@@ -427,5 +432,5 @@ export function offsetFace(f: Offset, A: Shape3D, nA: Named): Anchor<{ out: [Sha
     const h = dot(sub3(x.center.toTuple(), c0), N);
     return { face: x, o: Math.abs(h - f.d) < 1e-6 && o0 ? o0 : Math.abs(h) < 1e-6 ? { f: f.id, tag: 'start' } : { f: f.id, tag: 'seg', i } };
   });
-  return { out: boolean(f.d > 0 ? 'fuse' : 'cut', A, nA, prism, named), sure, ...patch && { patch } };
+  return { out: boolean(f.d > 0 ? 'fuse' : 'cut', A, nA, prism, named), sure, ...patch && { patch }, ...ref && { confirm: { face: ref } } };
 }

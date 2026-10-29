@@ -524,6 +524,13 @@ test('Gelöschtes oder umsortiertes Bezugs-Feature: unsicher oder sichtbar fehlg
   const r = buildBody([again, h, rim]);
   expect(r.failed).toEqual([]);
   expect(r.unsure).toContain(2);
+  // T1.15: „Bezug übernehmen“ schreibt die gefundenen Flächen/Kanten als neue Bezüge → danach sicher
+  const fs2: Feature[] = [again, h, rim];
+  for (const [id, c] of r.confirm) Object.assign(fs2.find(f => f.id === id)!, c);
+  expect([...r.confirm.keys()].sort()).toEqual([...r.unsure].sort());
+  const r2 = take(fs2);
+  expect(r2.failed).toEqual([]);
+  expect(buildBody(fs2).unsure).toEqual([]);
   // Fase vor die Bohrung geschoben: ihre Kante gibt es dort noch nicht → Fehler mit Grund, nicht irgendeine andere Kante
   const moved = buildBody([box(), rim, h]);
   expect(moved.failed).toEqual([3]);
@@ -757,6 +764,7 @@ test('Skizze auf einer gekippten Fläche dreht sich mit, Bezug bleibt bis zur Be
   let r = buildBody(fs);
   expect(r.failed).toEqual([]);
   expect(r.unsure).toContain(2);
+  expect(r.confirm.get(2)).toHaveProperty('face');
   fix(r);
   expect(10 * (h.o[0] - 20) + 4 * h.o[2]).toBeCloseTo(0, 6);                  // Mitte liegt in der neuen Seitenebene …
   expect(Math.hypot(h.o[0] - 20, h.o[2])).toBeCloseTo(5, 6);                  // … gleich weit vom Scharnier
@@ -765,4 +773,6 @@ test('Skizze auf einer gekippten Fläche dreht sich mit, Bezug bleibt bis zur Be
   expect(r.failed).toEqual([]);
   expect(r.fixes.size).toBe(0);                                                // steht jetzt, nichts mehr nachzuführen
   expect(measureVolume(r.body!)).toBeCloseTo(2200 - Math.PI * 2.25 * 2, 3);
+  Object.assign(h, r.confirm.get(2));                                         // T1.15: bestätigen → grün
+  expect(buildBody(fs).unsure).toEqual([]);
 });

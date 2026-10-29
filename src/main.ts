@@ -228,6 +228,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area / 100).toFixed(1)} cm²` : '';
     problems = new Map(data.unsure.map(id => [id, { bad: false, why: 'Bezug nur unsicher wiedergefunden – bitte prüfen' }]));
     for (const [id, why] of data.errors) problems.set(id, { bad: true, why });
+    confirms = new Map(data.confirm);
+    if (selId !== null && confirms.has(selId) !== !!panel.querySelector('.confirm')) renderPanel(); // Knopf ein-/ausblenden
     renderTree();
     showHint(data.errors.length ? data.errors.map(([id, why]) => `Schritt #${id}: ${why}`).join(' · ') : notice || (poly?.path !== undefined ? PATH_HINT : HINTS[tool]));
     notice = '';
@@ -400,6 +402,7 @@ const tree = $('tree');
 let bodyInfo = ''; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
 // Schritte mit Problemen, vom Kern gemeldet: bad = nicht berechnet, sonst Bezug nur unsicher gefunden
 let problems = new Map<number, { bad: boolean; why: string }>();
+let confirms = new Map<number, Record<string, unknown>>(); // gelbe Schritte: Bezug auf das Gefundene, „Bezug übernehmen“ schreibt ihn ins Feature
 let bodyIds: number[] = [], selBody: number | null = null; // vorhandene Körper (vom Kern) und der ausgewählte
 let bodyVol: Record<number, number> = {}; // Volumen je Körper in mm³
 const bodyName = (b: number) => meta[b]?.name || `Körper #${b}`;
@@ -1018,6 +1021,13 @@ document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.o
 
 const panel = $('panel');
 function renderPanel() {
+  renderFeaturePanel();
+  const f = getSel(), c = f && !edgeSel.length && confirms.get(f.id);
+  if (!f || !c) return;
+  panel.insertAdjacentHTML('beforeend', `<p style="color:var(--muted);margin:6px 0 4px">Bezug nur unsicher wiedergefunden (gelb). Passt die Lage, hier bestätigen.</p><button class="confirm">Bezug übernehmen</button>`);
+  panel.querySelector<HTMLButtonElement>('.confirm')!.onclick = () => { pushHistory(); Object.assign(f, c); confirms.delete(f.id); refresh(); };
+}
+function renderFeaturePanel() {
   const f = getSel();
   if (edgeSel.length) { panel.style.display = 'block'; return renderEdgeSetPanel(); }
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }

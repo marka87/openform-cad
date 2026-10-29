@@ -12,7 +12,7 @@ export type ToWorker =
   | { type: 'sheet'; info: SheetInfo; dims: Dim[] }; // Blatt für den Maß-Editor
 export type FromWorker =
   | { type: 'ready' }
-  | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
+  | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
@@ -49,7 +49,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     const volume = meshes.reduce((v, m) => v + m.volume, 0);
     let area = 0;
     for (const s of bodies.values()) area += measureArea(s);
-    post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
+    post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], confirm: [...r.confirm], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
   } else if (data.type === 'sheet') {
     if (!body) return post({ type: 'export', format: 'svg', blob: null });
     const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};
