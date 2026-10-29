@@ -357,8 +357,8 @@ export function anchorEdges(f: EdgeOp, s: Shape3D, named: Named): Anchor<{ edges
   return { edges: [e], sure: r.sure, ...ref && { confirm: { edge: ref } }, ...!onIt && { patch: { at: m, dir: t } } };
 }
 
-// Schale: offene Flächen über die Bezüge, sonst über die Punkte at/more
-// shortcut: at/more werden nicht nachgeführt (nur der Bezug zählt); erst nötig, wenn die Oberfläche sie anzeigt
+// Schale: offene Flächen über die Bezüge, sonst über die Punkte at/more.
+// Liegt ein Punkt nicht mehr auf seiner aufgelösten Fläche (Maß geändert), wandert er auf deren Mitte bzw. eine Kantenmitte.
 export function anchorFaces(f: Pick<Shell, 'at' | 'more' | 'faces'>, s: Shape3D, named: Named): Anchor<{ faces: Face[] }> {
   const pts = [f.at, ...f.more ?? []];
   if (!f.faces) {
@@ -369,7 +369,11 @@ export function anchorFaces(f: Pick<Shell, 'at' | 'more' | 'faces'>, s: Shape3D,
   const rs = f.faces.map(ref => resolveFace(ref, s, named)), bad = rs.find(r => !r.ok);
   if (bad && !bad.ok) throw fail(bad, 'Offene Fläche der Schale');
   const faces = rs.map(r => r.ok ? r.shape : null!), sure = rs.every(r => r.ok && r.sure), refs = sure ? [] : faces.map(x => faceRef(named, x));
-  return { faces, sure, ...refs.length && refs.every(Boolean) && { confirm: { faces: refs } } };
+  const on = (p: Vec, x: Face) => new FaceFinder().withinDistance(1e-4, p).find(x).length > 0;
+  const moved = pts.map((p, i) => !faces[i] || on(p, faces[i]) ? p
+    : [faces[i].center.toTuple(), faces[i].edges[0].pointAt(0.5).toTuple()].find(q => on(q as Vec, faces[i])) as Vec);
+  const patch = moved.some((p, i) => p !== pts[i]) && { patch: { at: moved[0], ...f.more && { more: moved.slice(1) } } };
+  return { faces, sure, ...refs.length && refs.every(Boolean) && { confirm: { faces: refs } }, ...patch };
 }
 
 // ── Punkte und Kreise für Maße ──

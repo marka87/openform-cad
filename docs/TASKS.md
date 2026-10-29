@@ -92,8 +92,8 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       markierte Schritte. Nur auf Knopfdruck, nie automatisch,
       rückgängig möglich.
 
-- [ ] T1.14 TODO — Schale: at/more an die aufgelöste Fläche nachführen.
-      Kosmetik — gerechnet wird korrekt über den Bezug.
+- [x] T1.14 DONE — Schale: at/more wandern auf die aufgelöste Fläche
+      (Mitte, sonst Kantenmitte), wenn sie nicht mehr darauf liegen.
 - [ ] T1.11 BLOCKED(Vieleck-Punkte lassen sich noch nicht einfügen oder
       löschen) — Sobald das geht: jede Vieleckseite bekommt eine eigene
       ID statt eines Index, Con.i und Refs umstellen, Migration.
@@ -321,6 +321,12 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T1.14: anchorFaces (topo.ts) liefert patch at/more, wenn ein
+  Punkt nicht mehr auf seiner über den Bezug gefundenen Fläche liegt.
+  Ersatzpunkt: Flächenmitte, falls sie auf der Fläche liegt (bei Ringen
+  nicht), sonst Mitte der ersten Kante — liegt immer darauf, also kein
+  endloses Nachführen. Test: Quader 10 → 15 hoch, Punkt landet auf y = 15,
+  zweiter Lauf führt nichts mehr nach. shortcut-Kommentar entfernt.
 - 2026-10-29 T10.9–T10.11 (Rückmeldung des Nutzers, ein Commit, alles
   Auswahl/Anzeige in main.ts): toggleSel() für Strg/Shift+Klick im Modell
   und in der Schrittliste (der erste Schritt lässt sich jetzt auch

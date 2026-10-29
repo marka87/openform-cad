@@ -624,6 +624,18 @@ test('Schale über einer Sacklochbohrung: ungültiger Körper wird gemeldet stat
   expect(measureVolume(r.body!)).toBeLessThan(2000);              // ohne die Schale: Quader mit Bohrung bleibt stehen
 });
 
+test('Schale: Punkt wandert mit der aufgelösten Fläche, wenn sich die Höhe ändert (T1.14)', () => {
+  const b = box(), sh = { id: 9, type: 'shell' as const, at: [5, 10, -5] as Vec, t: 1 };
+  const first = buildBody([b, sh]);
+  const withRef = { ...sh, ...first.fixes.get(9) } as typeof sh;          // Bezug auf den Deckel nachgetragen
+  expect(withRef.at).toEqual([5, 10, -5]);
+  const taller = buildBody([{ ...b, d: 15 }, withRef]);
+  expect(taller.failed).toEqual([]);
+  const at = taller.fixes.get(9)!.at as Vec;
+  expect(at[1]).toBeCloseTo(15);                                           // liegt wieder auf dem Deckel
+  expect(buildBody([{ ...b, d: 15 }, { ...withRef, at }]).fixes.get(9)?.at).toBeUndefined(); // kein Nachführen mehr
+});
+
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {
   const aux: Extrude = { id: 7, ...GROUND, type: 'poly', p: {}, pts: [[0, 0], [10, 0], [10, 10]], d: 0, aux: true, open: true };
   expect(keyPoints(aux).length).toBe(2 * (3 + 2));                     // 3 Ecken + 2 Mitten (kein Schlusssegment), je unten/oben
