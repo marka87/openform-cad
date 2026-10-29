@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
@@ -686,6 +686,20 @@ test('Maße in der Iso-Ansicht und an schräg gesehenen Kreisen (T3.5)', () => {
   expect(res.ok[1].rv!).toBeLessThan(3);                               // Ansatz an der Ellipse, nicht am vollen Radius
   expect(res.bad).toEqual([[3, 'Kreis in dieser Ansicht von der Seite gesehen']]);
   expect(sheetSVG(r.body!, { sheet: 'A4', title: 'T', material: '', date: '' }, res.ok)).toContain('⌀6');
+});
+
+test('3MF-Export: ZIP mit geschlossenem, einheitlich ausgerichtetem Netz je Körper (T7.1)', () => {
+  const r = buildBody([box(), hole(-4)]), bytes = to3MF([...r.bodies.values()]);
+  expect(String.fromCharCode(bytes[0], bytes[1])).toBe('PK');
+  const text = new TextDecoder().decode(bytes), xml = text.slice(text.indexOf('<model'), text.indexOf('</model>'));
+  expect(text).toContain('[Content_Types].xml');
+  expect(xml).toContain('unit="millimeter"');
+  const tris = [...xml.matchAll(/v1="(\d+)" v2="(\d+)" v3="(\d+)"/g)].map(m => [+m[1], +m[2], +m[3]]);
+  const dir = new Set<string>();
+  for (const [a, b, c] of tris) for (const [p, q] of [[a, b], [b, c], [c, a]]) { expect(dir.has(`${p},${q}`)).toBe(false); dir.add(`${p},${q}`); }
+  expect([...dir].every(k => dir.has(k.split(',').reverse().join(',')))).toBe(true); // jede Kante hat ihr Gegenstück: dicht
+  const zs = [...xml.matchAll(/z="([-\d.e]+)"/g)].map(m => +m[1]);
+  expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(10, 6);       // Z oben: Quader 10 hoch
 });
 
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {

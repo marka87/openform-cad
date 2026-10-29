@@ -3,19 +3,19 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { buildBody, drawingSVG, forExport, loadStep, projectBody, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo } from './kernel';
+import { buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
 export type ToWorker =
   | { type: 'build'; features: Feature[] }
-  | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[] }
+  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[] }
   | { type: 'sheet'; info: SheetInfo; dims: Dim[] } // Blatt für den Maß-Editor
   | { type: 'project'; body: number; pl: Frame }; // Kanten eines Körpers in eine Ebene projizieren (P)
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
-  | { type: 'export'; format: 'step' | 'stl' | 'svg' | 'dxf'; blob: Blob | null }
+  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string }
   | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
@@ -69,6 +69,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     if (!body) return post({ type: 'export', format: data.format, blob: null });
     if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!, resolveDims(data.dims ?? [], bodies, names).ok)], { type: 'image/svg+xml' }) });
     if (data.format === 'dxf') return post({ type: 'export', format: 'dxf', blob: new Blob([drawingSVG(body)]) }); // Umwandlung im Hauptthread (braucht das DOM)
+    if (data.format === '3mf') return post({ type: 'export', format: '3mf', blob: new Blob([to3MF([...bodies.values()])], { type: 'model/3mf' }) });
     const s = forExport(body);
     const blob = data.format === 'step' ? s.blobSTEP() : s.blobSTL({ binary: true, tolerance: 0.01, angularTolerance: 0.1 });
     s.delete();

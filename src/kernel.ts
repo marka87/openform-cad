@@ -416,6 +416,58 @@ function dimSVG(d: Dim, P: number[][], R: number, t: string, arrow: (x: number, 
   return line(d.t === 'rad' ? C : on, T, [T[0] + 3 + t.length * 1.8, T[1]]) + arrow(on[0], on[1], a + (d.t === 'rad' ? Math.PI : 0)) + text([T[0] + 1.5 + t.length * 0.9, T[1] - 1]);
 }
 
+// 3MF (T7.1): ZIP ohne Kompression mit einem Objekt je Körper (Z-oben, mm). Gleiche Eckpunkte werden zusammengelegt,
+// sonst hat das Netz offene Kanten (OCCT vernetzt je Fläche) und Slicer melden Fehler
+export function to3MF(shapes: Shape3D[]): Uint8Array<ArrayBuffer> {
+  const objs = shapes.map((sh, i) => {
+    const s = forExport(sh), m = s.mesh({ tolerance: 0.01, angularTolerance: 0.1 }), idx = new Map<string, number>(), vs: string[] = [], tris: string[] = [];
+    s.delete();
+    const at = (k: number) => {
+      const p = [0, 1, 2].map(j => +m.vertices[3 * k + j].toFixed(6)), key = p.join();
+      if (!idx.has(key)) { idx.set(key, vs.length); vs.push(`<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`); }
+      return idx.get(key)!;
+    };
+    for (let t = 0; t < m.triangles.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map(j => at(m.triangles[t + j]));
+      if (a !== b && b !== c && a !== c) tris.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`);
+    }
+    return `<object id="${i + 1}" type="model" name="Körper ${i + 1}"><mesh><vertices>${vs.join('')}</vertices><triangles>${tris.join('')}</triangles></mesh></object>`;
+  });
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>';
+  return zipStore({
+    '[Content_Types].xml': `${xml}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
+    '_rels/.rels': `${xml}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`,
+    '3D/3dmodel.model': `${xml}<model unit="millimeter" xml:lang="de-DE" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>${objs.join('')}</resources><build>${objs.map((_, i) => `<item objectid="${i + 1}"/>`).join('')}</build></model>`,
+  });
+}
+// ZIP-Archiv, Einträge unkomprimiert (Methode 0); genügt für 3MF
+export function zipStore(files: Record<string, string>): Uint8Array<ArrayBuffer> {
+  const enc = new TextEncoder(), crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b: Uint8Array) => { let c = ~0; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; };
+  const parts: Uint8Array[] = [], central: Uint8Array[] = [];
+  let off = 0;
+  for (const [name, text] of Object.entries(files)) {
+    const n = enc.encode(name), d = enc.encode(text), c = crc(d);
+    const head = (sig: number, extra: number) => { const h = new DataView(new ArrayBuffer(extra)); h.setUint32(0, sig, true); return h; };
+    const L = head(0x04034b50, 30 + n.length);
+    [[4, 20], [6, 0x800], [8, 0]].forEach(([o, v]) => L.setUint16(o, v, true)); // Version, UTF-8-Namen, ohne Kompression
+    L.setUint32(14, c, true); L.setUint32(18, d.length, true); L.setUint32(22, d.length, true); L.setUint16(26, n.length, true);
+    new Uint8Array(L.buffer).set(n, 30);
+    const C = head(0x02014b50, 46 + n.length);
+    [[4, 20], [6, 20], [8, 0x800], [10, 0]].forEach(([o, v]) => C.setUint16(o, v, true));
+    C.setUint32(16, c, true); C.setUint32(20, d.length, true); C.setUint32(24, d.length, true); C.setUint16(28, n.length, true); C.setUint32(42, off, true);
+    new Uint8Array(C.buffer).set(n, 46);
+    parts.push(new Uint8Array(L.buffer), d); central.push(new Uint8Array(C.buffer));
+    off += 30 + n.length + d.length;
+  }
+  const size = central.reduce((s, c) => s + c.length, 0), E = new DataView(new ArrayBuffer(22));
+  E.setUint32(0, 0x06054b50, true); E.setUint16(8, central.length, true); E.setUint16(10, central.length, true); E.setUint32(12, size, true); E.setUint32(16, off, true);
+  const all = [...parts, ...central, new Uint8Array(E.buffer)], out = new Uint8Array(all.reduce((s, a) => s + a.length, 0));
+  let p = 0;
+  for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
+
 // Szene ist Y-oben, CAD-Dateien Z-oben
 export function forExport(body: Shape3D): Shape3D {
   return body.clone().rotate(90, [0, 0, 0], [1, 0, 0]);

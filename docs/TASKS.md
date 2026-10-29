@@ -225,7 +225,7 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 - [x] T6.4 DONE — Muster/Spiegeln für ganze Körper, mit T10.3 erledigt.
 
 ## Epic 7: Pflege
-- [ ] T7.1 TODO — 3MF-Export (in CLAUDE.md als Format vorgesehen).
+- [x] T7.1 DONE — 3MF-Export: „Zeichnung / mehr“ → „Körper als 3MF“, ein Objekt je Körper, mm, Z oben.
 - [ ] T7.2 TODO — Wiederkehrende Pflicht bei jedem replicad-Update:
       prüfen, ob sich replicad-opencascadejs geändert hat; wenn ja, den
       Workflow mit neuer REPLICAD_REF/IMAGE laufen lassen, sonst bricht
@@ -326,6 +326,16 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T7.1: to3MF + zipStore (kernel.ts), keine neue Abhängigkeit:
+  ZIP ohne Kompression (Slicer lesen das), CRC32 selbst. OCCT vernetzt je
+  Fläche mit doppelten Eckpunkten → zusammengelegt (auf 1e-6 mm gerundet),
+  entartete Dreiecke verworfen. Test: jede Kante genau einmal je Richtung
+  (dicht und einheitlich ausgerichtet), Höhe in Z. ZIP einmalig mit
+  Pythons zipfile geprüft (CRC ok, 3 Einträge). Browser: modell.3mf,
+  260 Eckpunkte / 520 Dreiecke für Quader mit Durchgangsbohrung
+  (Euler-Charakteristik 0 wie erwartet). Nicht geprüft: Öffnen in einem
+  echten Slicer (PrusaSlicer, Bambu Studio, Cura) — liegt beim Nutzer.
+  Körpernamen und Farben aus dem Modell werden noch nicht mitgegeben.
 - 2026-10-29 T3.5: PROJ[3] = Iso-Projektion, aus den Achsen der
   ProjectionCamera abgeleitet und im Test gegen drawProjection geprüft
   (Hülle der Ecken = Hülle der Zeichnung). Dim.v um 3 erweitert. Iso:
