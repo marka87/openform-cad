@@ -15,7 +15,7 @@ import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
 
-type Tool = 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
@@ -27,6 +27,7 @@ const HINTS: Record<Tool, string> = {
   arc:    'Anfang, Ende, dann Punkt auf dem Bogen klicken · weiter mit Bogen oder L (Linie) · Klick auf den ersten Punkt = schließen · Esc = abbrechen',
   slot:   'Rechteck aufziehen = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
   plane:  'Fläche anklicken = Hilfsebene 10 mm davor · Ebene ziehen = Abstand ändern · darauf skizzieren wie auf einer Fläche',
+  text:   'Text: Punkt auf Boden oder Fläche klicken (Anfang der Grundlinie) · auf einer Fläche wird graviert, sonst erhaben · Text, Größe und Höhe im Seitenfeld',
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt = Fläche · Doppelklick, Klick auf den letzten Punkt, Enter, Esc oder Rechtsklick = offene Linie fertig',
@@ -428,6 +429,7 @@ function nameOf(f: Feature) {
   if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? f.s < 0 ? 'spiegeln' : 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
+  if (f.type === 'text') return `Text „${f.text.length > 12 ? f.text.slice(0, 12) + '…' : f.text}“`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
   if (f.aux) return 'Hilfslinie';
   if (f.type === 'line') return 'Linie';
@@ -1000,6 +1002,17 @@ function onDown(e: PointerEvent) {
     measureN.push(!edge && h ? h.n.clone() : null);
     showMeasure();
     return;
+  } else if (tool === 'text') { // Text: Grundlinie beginnt am (eingerasteten) Klickpunkt; auf einer Fläche graviert, sonst eigener Körper erhaben
+    const t = sketchOn(h), pl = planeFor(t), q = sketchPoint(pl, e);
+    if (!q) return;
+    const id = nextId++, o = V(pl.o).addScaledVector(V(pl.u), q[0]).addScaledVector(V(pl.v), q[1]).toArray() as Vec;
+    // lesbar ausrichten: liegende Fläche → Schrift entlang Welt-X (von oben lesbar), stehende → waagrecht, oben bleibt oben
+    const n = V(pl.n), u = Math.abs(n.y) > 0.99 ? new THREE.Vector3(Math.sign(n.y), 0, 0) : new THREE.Vector3(0, 1, 0).cross(n).normalize(), v = n.clone().cross(u);
+    const f: Feature = { id, type: 'text', ...pl, o, u: u.toArray() as Vec, v: v.toArray() as Vec, text: 'Text', size: 10, d: t?.body !== undefined ? -1 : 2, body: t?.body ?? id };
+    pushHistory(); add(f); selId = id; setTool('select'); refresh();
+    showNotice('Text angelegt · im Seitenfeld ändern (Text, Schrifthöhe, Höhe; negativ = graviert)');
+    setTimeout(() => panel.querySelector<HTMLInputElement>('.tx')?.select(), 0);
+    return;
   } else if (tool === 'plane') {
     if (!h) return;
     const pl = planeFor(h), f: RefPlane = { id: nextId++, type: 'plane', c: h.point.toArray() as Vec, n: pl.n, u: pl.u, v: pl.v, off: 10 };
@@ -1329,6 +1342,17 @@ function renderFeaturePanel() {
   }
   if (f.type === 'remove') {
     panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n). Shift+Rechtsklick → weitere Fläche dazu.</p><button class="del">Löschen</button>`;
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
+  if (f.type === 'text') {
+    panel.innerHTML = `<h3>Text #${f.id}</h3><label>Text <input class="tx"></label>
+      <label>Schrifthöhe <input type="number" step="0.5" class="ts" value="${uval(f.size)}"></label>
+      <label>Höhe (− = graviert) <input type="number" step="0.5" class="td" value="${uval(f.d)}"></label><button class="del">Löschen</button>`;
+    const tx = panel.querySelector<HTMLInputElement>('.tx')!;
+    tx.value = f.text; // nicht als HTML einsetzen
+    tx.onchange = () => { pushHistory(); f.text = tx.value; refresh(); };
+    panel.querySelector<HTMLInputElement>('.ts')!.onchange = e => { const v = mmOf(e.target as HTMLInputElement); if (v > 0) { pushHistory(); f.size = v; refresh(); } };
+    panel.querySelector<HTMLInputElement>('.td')!.onchange = e => { const v = mmOf(e.target as HTMLInputElement); if (isFinite(v) && v) { pushHistory(); f.d = v; refresh(); } };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (!isExtrude(f)) return renderEdgePanel(f);

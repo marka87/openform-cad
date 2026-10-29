@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { draw, drawCircle, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type Vec } from './model';
+import { draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { bodyOf, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -139,6 +139,9 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (f.sub && !body) continue;
         const prof = sketchOf(P) as Sketch & { wire: Wire }, path = pathSketch(f); // beide festhalten: replicads GC löscht sonst die Drähte
         try { [s, nS] = sweep(f, P, prof.wire, path.wire); } finally { prof.delete(); path.delete(); }
+      } else if (f.type === 'text') {
+        if (f.d < 0 && !body) continue; // Gravur ohne Körper: nichts zu gravieren
+        [s, nS] = textSolid(f);
       } else {
         if (!isExtrude(f)) continue;
         const g = anchor(f.id, anchorSketch(f, body, names.get(k) ?? [])).f; // Skizze auf ihre (vielleicht gewanderte) Fläche setzen
@@ -148,7 +151,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         nS = nameSolid(g, s);
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
-      done(...boolean((isExtrude(f) && isCut(f)) || (f.type === 'sweep' && f.sub) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
+      done(...boolean((isExtrude(f) && isCut(f)) || (f.type === 'sweep' && f.sub) || (f.type === 'text' && f.d < 0) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
       s.delete(); // WASM-Speicher freigeben
     } catch (e) {
       console.warn('Feature', f.id, 'fehlgeschlagen', e);
@@ -160,6 +163,16 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
   const origins = new Map<number, (Origin | null)[]>([...bodies].map(([k, s]) => [k, originsOf(s, names.get(k))]));
   return { body, bodies, failed, errors, origins, names, fixes, unsure, confirm };
+}
+
+// Text als Körper: Umrisse der mit loadFont geladenen Schrift (Standard-Schrift des Workers) in der Ebene des Features, um d extrudiert.
+// Jede Fläche heißt nach dem Feature (tag text, Index), Buchstaben haben keine eigene Herkunft
+function textSolid(f: TextFeature): [Shape3D, Named] {
+  if (!f.text.trim()) throw new Error('Kein Text eingegeben');
+  if (Math.abs(f.d) < 1e-6) throw new Error('Texthöhe 0');
+  const sk = drawText(f.text, { fontSize: f.size }).sketchOnPlane(new Plane(f.o, f.u, f.n)) as unknown as { extrude: (d: number) => Shape3D };
+  const s = sk.extrude(f.d);
+  return [s, s.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'text' as const, i } }))];
 }
 
 // Blickrichtungen: replicad benennt top/bottom und left/right aus Sicht der Ebene, also umgekehrt (im Test geprüft):

@@ -10,7 +10,7 @@ import { bounds, movedCopy, revAxis, sideOf, type EdgeOp, type Extrude, type Off
 //   (Rechteck x0/x1/y0/y1, Kreis/Ellipse r, Vieleck seg/arc mit Seite i).
 // 'fillet'/'chamfer' = von einer Rundung/Fase neu erzeugte Fläche, 'shell' = Innenwand einer Schale,
 // 'split' = Schnittfläche beim Teilen, 'import' = Fläche i eines STEP-Imports (Reihenfolge aus der Datei).
-export type Tag = Part | 'fillet' | 'chamfer' | 'shell' | 'split' | 'import';
+export type Tag = Part | 'fillet' | 'chamfer' | 'shell' | 'split' | 'import' | 'text';
 
 export interface Origin {
   f: number;        // Feature-ID, die die Fläche erzeugt hat

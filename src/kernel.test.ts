@@ -884,3 +884,22 @@ test('Ganze Körper als Muster und gespiegelt: Kopie samt Bohrung, Spiegelung ü
   expect(m.boundingBox.bounds.map(p => p.map(x => +x.toFixed(4) + 0))).toEqual([[40, 0, -10], [60, 10, 0]]);
   expect(mir.filter(f => f.type === 'circle')[0]).not.toHaveProperty('face');   // Bezüge entfallen
 });
+
+test('Text aus der mitgelieferten Schrift: erhaben auf dem Boden, graviert in den Deckel (T10.4)', async () => {
+  const { loadFont } = await import('replicad');
+  const { readFileSync } = await import('node:fs' as string); // Node-Typen sind im Projekt nicht installiert
+  const ttf = readFileSync('vendor/fonts/DejaVuSans.ttf');
+  await loadFont(ttf.buffer.slice(ttf.byteOffset, ttf.byteOffset + ttf.byteLength));
+  const T = (id: number, pl: any, text: string, d: number, body?: number): Feature => ({ id, type: 'text', ...pl, text, size: 6, d, ...body && { body } });
+  let r = buildBody([T(1, GROUND, 'OF', 2)]);                                   // eigener Körper, erhaben
+  expect(r.failed).toEqual([]);
+  const v = measureVolume(r.body!);
+  expect(v).toBeGreaterThan(5);
+  expect(v).toBeLessThan(6 * 12 * 2);                                          // weniger als das umschließende Kästchen
+  const TOPO = { o: [3, 10, -7], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };   // Deckel des Quaders, Schrift in x-Richtung
+  r = buildBody([box(), T(2, TOPO, 'A', -1, 1)]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeLessThan(2000 - 1);                       // Gravur nimmt Material weg
+  expect(measureVolume(r.body!)).toBeGreaterThan(2000 - 6 * 6);
+  expect(buildBody([box(), T(3, TOPO, '  ', -1, 1)]).errors.get(3)).toBe('Kein Text eingegeben');
+});

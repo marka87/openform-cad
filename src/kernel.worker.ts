@@ -1,7 +1,8 @@
 // Kern im Web Worker, damit Ziehen und Drehen flüssig bleiben, während OpenCascade rechnet.
 import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
-import { measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
+import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
+import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
 import { buildBody, drawingSVG, forExport, loadStep, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo } from './kernel';
 import type { Dim, Feature } from './model';
 import type { Named } from './topo';
@@ -25,8 +26,12 @@ const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
 let body: Shape3D | null = null, bodies = new Map<number, Shape3D>(), names = new Map<number, Named>();
 const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit sie nicht bei jedem Ziehen neu geparst werden
 
-const ready = opencascade({ locateFile: () => wasmUrl }).then(oc => { setOC(oc); post({ type: 'ready' }); },
-  e => post({ type: 'error', message: String(e) }));
+// Schrift für Text-Features gleich mitladen; fehlt sie, schlagen nur Texte sichtbar fehl
+const ready = opencascade({ locateFile: () => wasmUrl }).then(async oc => {
+  setOC(oc);
+  await loadFont(fontUrl).catch(e => console.warn('Schrift nicht geladen', e));
+  post({ type: 'ready' });
+}, e => post({ type: 'error', message: String(e) }));
 
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;

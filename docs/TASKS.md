@@ -286,11 +286,10 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
       Spiegeln (ganzer Körper)“ – Reihe, Kreis, Spiegeln an X/Y/Z oder
       angeklickter Kante/Fläche. Skizze/Schritt: öffnet deren Muster/
       Spiegeln wie bisher. Erledigt damit auch T6.4.
-- [ ] T10.4 BLOCKED(Schriftdatei fehlt: im Projekt liegt keine, eine
-      herunterzuladen braucht die Freigabe des Nutzers, siehe Offene
-      Fragen) — Text als Skizze (replicad drawText/loadFont, opentype ist
-      installiert), extrudieren oder gravieren. Technisch machbar: eigenes
-      Feature `text` im Kern, Schrift wird dem Worker übergeben.
+- [x] T10.4 DONE — Text (Werkzeug „Text“): Klick auf Boden oder Fläche,
+      auf einer Fläche graviert (−1 mm), sonst erhaben (2 mm); Text,
+      Schrifthöhe und Höhe im Seitenfeld. Schrift DejaVu Sans 2.37
+      (vendor/fonts, Lizenz liegt bei).
 - [x] T10.5 DONE — Transformieren-Menü (▸ an „Verschieben / Drehen“):
       Griffe, Werte (verschieben/drehen/skalieren), Drehen um Achse
       (Kante anklicken, Winkel aus dem Feld), Ausrichten (Fläche des
@@ -308,6 +307,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T10.4: Feature `text` (model.ts TextFeature): Kern baut mit
+  replicad drawText aus der beim Start des Workers geladenen Schrift
+  (loadFont, vendor/fonts/DejaVuSans.ttf, offizielles Release 2.37,
+  418 KB-Zip, nur die Normalschrift übernommen) eine Skizze in der Ebene
+  des Features und extrudiert sie; d < 0 schneidet (Gravur), d > 0
+  vereinigt bzw. ist eigener Körper. Flächen heißen tag 'text'. Die
+  Ebene richtet main.ts lesbar aus (liegend entlang Welt-X, stehend
+  waagrecht). Abkürzung: Text wandert nicht mit seiner Fläche (Ebene beim
+  Anlegen kopiert). Test: „OF“ erhaben, „A“ graviert, leerer Text =
+  sichtbarer Fehler. Im Browser: „OpenForm“ graviert, lesbar, 32,00 →
+  31,89 cm³. Leiste wieder ohne Scrollen (18 Einträge). 57 Tests grün.
 - 2026-10-29 T10.5: transformAct() bündelt die Leistenknöpfe und das
   Aufklappmenü, xfClick() erledigt die Klicks für „Drehen um Achse“
   (Move um die Kantenrichtung durch den Kantenpunkt) und „Ausrichten“
@@ -748,13 +758,6 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- 2026-10-29 Text (T10.4): Woher kommt die Schrift? (a) Eine freie Schrift
-  (z. B. DejaVu Sans, Lizenz frei mit Hinweis, ca. 0,7 MB, oder Liberation
-  Sans, OFL, ca. 0,4 MB) einmal herunterladen und mitliefern – braucht
-  die Freigabe für den Download. (b) Der Nutzer wählt eine Schriftdatei
-  von seinem Rechner (z. B. aus C:\Windows\Fonts); sie wird mit dem Modell
-  gespeichert (Datei wird größer, Lizenz der Schrift liegt beim Nutzer).
-  Vorschlag: (a) mit DejaVu Sans.
 - 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
   nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
   reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
@@ -765,6 +768,7 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
   zurückstellen, bis jemand außer dem Nutzer die App haben will.
 
 Erledigt:
+- Schrift für Text: DejaVu Sans mitgeliefert (Freigabe des Nutzers 2026-10-29).
 - replicad 1.2.0: geklärt in T0.1, package.json steht auf 1.2.0.
 - KI-Anbieter: entschieden, siehe Epic 8.
 - Weg A oder B beim Skizzieren: entschieden für A zuerst, siehe T5.12

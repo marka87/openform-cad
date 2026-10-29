@@ -50,6 +50,10 @@ export interface Sweep extends Frame { id: number; type: 'sweep'; profile: numbe
 export interface Offset { id: number; type: 'offset'; at: Vec; n: Vec; d: number; face?: FaceRef; body?: number; hidden?: boolean }
 // Flächen löschen (Defeaturing): die Nachbarflächen wachsen zu, z. B. Bohrung, Rundung, Fase oder Absatz weg. at/more und faces wie bei Shell
 export interface Remove { id: number; type: 'remove'; at: Vec; more?: Vec[]; faces?: FaceRef[]; body?: number; hidden?: boolean }
+// Text (Schrift DejaVu Sans, vendor/fonts): Grundlinie beginnt im Ursprung o der Ebene, Schrifthöhe size (mm), um d entlang n
+// extrudiert; d < 0 = in den Körper graviert, d > 0 = erhaben
+// shortcut: die Ebene ist beim Anlegen kopiert, ein Text auf einer Fläche wandert nicht mit ihr → Bezug wie bei Skizzen (anchorSketch)
+export interface TextFeature extends Frame { id: number; type: 'text'; text: string; size: number; d: number; body?: number; hidden?: boolean }
 // Zwei Körper verrechnen: b geht in a auf. fuse = vereinigen, cut = b von a abziehen, common = Schnittmenge
 export interface Combine { id: number; type: 'combine'; op: 'fuse' | 'cut' | 'common'; a: number; b: number; hidden?: boolean }
 // Körper bewegen: x' = s·R(q)·(x − c) + c + t, q = Drehung als Quaternion [x, y, z, w], s = Maßstab (fehlt = 1)
@@ -71,8 +75,8 @@ export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat
 export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, Aluminium: 2.7, Messing: 8.5, PLA: 1.24, ABS: 1.05, Holz: 0.6 };
 // Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove) & { name?: string }; // name = eigener Name im Baum
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature) => f.body ?? 1;
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';
 // Bildet keine Fläche: Hilfslinie oder offene Skizzenlinie (nie extrudiert, nicht in Bereichen)
 export const noFace = (f: Extrude) => !!f.aux || f.type === 'line';
