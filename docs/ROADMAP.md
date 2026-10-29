@@ -58,6 +58,7 @@ Vorbild ist der Funktionsumfang von Shapr3D (Stand Okt. 2026); was dort Bezahl-,
 - [x] Schale: Wandstärke, eine Fläche offen (Werkzeug H)
 - [x] Schale mit mehreren offenen Flächen (H, Shift+Klick)
 - [x] Fläche versetzen (ebene Flächen, auch an Importen und Lofts)
+- [x] Fläche löschen (Defeaturing, eigener OpenCascade-Build)
 - [ ] Fläche löschen (braucht Defeaturing im OCCT-Build)
 - [x] Körper an einer Hilfsebene teilen
 - [ ] Körper an einer Fläche teilen

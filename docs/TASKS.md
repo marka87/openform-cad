@@ -131,9 +131,8 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Epic 6: Modellieren (Wunsch des Nutzers, 2026-10-28)
 - [x] T6.1 DONE (Versetzen) — Fläche versetzen für ebene Flächen.
-- [ ] T6.1b BLOCKED — Fläche löschen: die mitgelieferte OpenCascade-WASM
-      enthält BRepAlgoAPI_Defeaturing nicht; bräuchte einen eigenen
-      opencascade.js-Build (Entscheidung des Nutzers, siehe Offene Fragen).
+- [x] T6.1b DONE — Fläche löschen (Rechtsklick), über eigenen OpenCascade-Build
+      mit BRepAlgoAPI_Defeaturing (vendor/, GitHub-Workflow).
 - [x] T6.2 DONE — Drehkörper um eine beliebige gerade Kante.
 - [x] T6.3 DONE — Muster/Spiegeln an beliebiger Kante bzw. Fläche, auch für
       Rundungen und ganze Körper.
@@ -143,6 +142,16 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T6.1b: Eigener OpenCascade-Build per GitHub Actions
+  (.github/workflows/opencascade.yml, ~15 min): replicad v1.1.0 + Bindung
+  BRepAlgoAPI_Defeaturing, nur gelinkt im Image von replicad, kein Docker
+  lokal nötig. Liegt in vendor/replicad-opencascadejs, package.json zeigt mit
+  file: darauf (WASM +70 KB). Feature `remove` (at/more/faces wie Schale),
+  Rechtsklick → „Fläche löschen“, Shift+Rechtsklick → weitere Fläche. Gelernt:
+  geht es nicht (z. B. Deckel eines Quaders), liefert OCCT still den alten
+  Körper → Prüfung IsDeleted je Fläche, sonst sichtbarer Fehler. Neu nötig:
+  bei einem replicad-Update den Workflow mit neuer REPLICAD_REF/IMAGE laufen
+  lassen (replicad v1.2.0 ist erschienen).
 - 2026-10-28 T6.3: Muster/Spiegeln mit Bezug „Kante oder Fläche anklicken“
   (Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
   bzw. Spiegelebene); Rundungen/Fasen an den Flächen des Features werden
@@ -350,6 +359,3 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- T6.1b Fläche löschen: eigenen opencascade.js-Build mit
-  BRepAlgoAPI_Defeaturing erstellen (größerer Aufwand, Docker/emsdk) oder
-  vorerst weglassen?

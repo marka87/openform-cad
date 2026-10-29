@@ -211,6 +211,21 @@ export function shell(id: number, A: Shape3D, nA: Named, open: Face[], t: number
   } finally { L.delete(); b.delete(); }
 }
 
+// Flächen löschen: OCCT lässt die Nachbarflächen zuwachsen; braucht den eigenen OpenCascade-Build (vendor/, BRepAlgoAPI_Defeaturing)
+export function removeFaces(A: Shape3D, nA: Named, faces: Face[]): [Shape3D, Named] {
+  const oc = getOC() as any, b = new oc.BRepAlgoAPI_Defeaturing();
+  try {
+    b.SetShape(A.wrapped);
+    faces.forEach(f => b.AddFaceToRemove(f.wrapped));
+    b.SetToFillHistory(true);
+    b.Build(new oc.Message_ProgressRange());
+    // geht es nicht, liefert OCCT oft still den unveränderten Körper (nur Warnung) → Fläche muss gelöscht sein
+    if (!b.IsDone() || b.HasErrors() || faces.some(f => !b.IsDeleted(f.wrapped))) throw new Error('Fläche lässt sich nicht löschen (Nachbarflächen schließen die Lücke nicht)');
+    if (!isValid(b.Shape())) throw new Error('Fläche löschen ergibt keinen gültigen Körper');
+    return carry(b, nA);
+  } finally { b.delete(); }
+}
+
 // Liste aus OCCT in ein Array (Kopie, die Originalliste bleibt dem Builder)
 function list(l: any): any[] {
   const c = new (getOC() as any).NCollection_List_TopoDS_Shape(l), out: any[] = [];
@@ -332,7 +347,7 @@ export function anchorEdges(f: EdgeOp, s: Shape3D, named: Named): Anchor<{ edges
 
 // Schale: offene Flächen über die Bezüge, sonst über die Punkte at/more
 // shortcut: at/more werden nicht nachgeführt (nur der Bezug zählt); erst nötig, wenn die Oberfläche sie anzeigt
-export function anchorFaces(f: Shell, s: Shape3D, named: Named): Anchor<{ faces: Face[] }> {
+export function anchorFaces(f: Pick<Shell, 'at' | 'more' | 'faces'>, s: Shape3D, named: Named): Anchor<{ faces: Face[] }> {
   const pts = [f.at, ...f.more ?? []];
   if (!f.faces) {
     const per = pts.map(p => new FaceFinder().withinDistance(0.1, p).find(s));

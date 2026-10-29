@@ -721,3 +721,18 @@ test('Spiegeln an einer Ebene, die nicht durch den Ursprung geht; Kopie verliert
   expect(rot.face).toBeUndefined();
   expect(buildBody([...fs, rot]).failed).toEqual([]);
 });
+
+test('Fläche löschen: Bohrung und Rundung verschwinden, Nachbarflächen wachsen zu (T6.1b)', () => {
+  const del = (at: Vec, more?: Vec[]): Feature => ({ id: 9, type: 'remove', at, ...more && { more } });
+  let r = buildBody([box(), hole(-4), del([13, 8, -5], [[10, 6, -5]])]);                // Wand und Boden der Bohrung
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000, 3);
+  expect(r.body!.faces.length).toBe(6);
+  expect(r.fixes.get(9)).toHaveProperty('faces');                                       // Bezüge werden nachgetragen
+  const fillet: EdgeOp = { id: 3, type: 'fillet', at: [20, 10, -5], dir: [0, 0, 1], r: 2 };
+  r = buildBody([box(), fillet, del([20 - 2 + Math.SQRT2, 10 - 2 + Math.SQRT2, -5])]);
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000, 3);
+  r = buildBody([box(), del([10, 10, -5])]);                                            // Deckel des Quaders: nichts schließt die Lücke
+  expect(r.failed).toEqual([9]);
+});
