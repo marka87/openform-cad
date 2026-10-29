@@ -150,11 +150,9 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 Entstanden vor der Feldnotizen-Regel, also Vermutungen. Nach T0.3
 gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 
-- [ ] T5.7 TODO — Leerer Bereich über der Werkzeugliste: Das Panel
-      beginnt weit oben, die Werkzeuge sitzen am unteren Ende
-      (Screenshot der Desktop-App, 2026-10-29). Im Browser prüfen, ob es
-      dort auch auftritt. Vermutlich eine Höhen- oder Ausrichtungsregel,
-      die im WebView2 anders greift. Erst reproduzieren, dann fixen.
+- [x] T5.7 DONE — Leerer Bereich über (und unter) der Werkzeugliste:
+      das Panel war oben und unten am Fenster festgemacht und hat die
+      Werkzeuge mittig gesetzt. Jetzt nur so hoch wie die Werkzeuge.
 - [ ] T5.8 TODO — Rechtsklick während des Zeichnens beendet den Zug,
       statt das normale Kontextmenü mit „Löschen" und „Fläche löschen"
       zu öffnen (laut Screenshot heute so).
@@ -271,6 +269,11 @@ Baulinie, dafür genügt Weg A.
 
 ## Log
 (neueste oben)
+- 2026-10-29 T5.7: Ursache gefunden, kein WebView2-Sonderfall: #toolbar
+  hatte top:120px und bottom:150px plus justify-content:center, wuchs
+  also mit der Fensterhöhe, die Knöpfe saßen in der Mitte. Jetzt
+  max-height statt bottom. Im Browser bei 1600×1080 nachgestellt: Panel
+  120–615 px statt bis 930 px; bei 768 px Fensterhöhe passt es ohne Scrollen.
 - 2026-10-29 T1.15: Die Anker liefern bei unsicherem Treffer `confirm` =
   Bezug auf das Gefundene (Skizze: face, Rundung/Fase: edge, Schale und
   Fläche löschen: faces, Versetzen: face); buildBody gibt sie als Map

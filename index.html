@@ -9,7 +9,7 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
   canvas { display:block; }
-  #toolbar { position:fixed; left:12px; top:120px; bottom:150px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; justify-content:safe center;
+  #toolbar { position:fixed; left:12px; top:120px; max-height:calc(100% - 270px); overflow-y:auto; display:flex; flex-direction:column; gap:2px; /* nur so hoch wie die Werkzeuge, bei kleinen Fenstern scrollen */
     background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
