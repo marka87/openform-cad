@@ -2,7 +2,7 @@
 // Eine Fläche heißt nach ihrer Herkunft: welches Feature sie mit welchem Teil erzeugt hat.
 // Die OCCT-Historie (Generated/Modified/IsDeleted) schreibt diese Herkunft beim Rebuild fort;
 // der Fingerabdruck prüft das Ergebnis und entscheidet nur bei Mehrdeutigkeit.
-import { basicFaceExtrusion, cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, Vector, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
+import { basicFaceExtrusion, cast, EdgeFinder, FaceFinder, getOC, measureArea, measureLength, measureVolume, Vector, type Edge, type Face, type Shape3D, type Wire } from 'replicad';
 import { bounds, movedCopy, revAxis, sideOf, type EdgeOp, type Extrude, type Offset, type Part, type PointRef, type Shell, type Sweep, type Vec } from './model';
 
 // Teil eines Features, aus dem eine Fläche hervorgeht.
@@ -198,18 +198,25 @@ export function sweep(f: Sweep, P: Extrude, profile: Wire, spine: Wire): [Shape3
 // Schale wie replicad (gleiche OCCT-Aufrufe), mit Historie: Außenflächen bleiben, jede Innenwand ist aus ihrer
 // Außenfläche erzeugt (tag shell, of = deren Name), geöffnete Flächen werden zum Rand und behalten ihren Namen
 export function shell(id: number, A: Shape3D, nA: Named, open: Face[], t: number): [Shape3D, Named] {
-  const oc = getOC() as any;
-  const L = new oc.NCollection_List_TopoDS_Shape(), b = new oc.BRepOffsetAPI_MakeThickSolid();
-  try {
-    open.forEach(f => L.Append(f.wrapped));
-    b.MakeThickSolidByJoin(A.wrapped, L, -t, 1e-3, oc.BRepOffset_Mode.BRepOffset_Skin, false, false, oc.GeomAbs_JoinType.GeomAbs_Arc, false, new oc.Message_ProgressRange());
-    if (!b.IsDone()) throw new Error('Schale fehlgeschlagen');
-    if (!isValid(b.Shape())) throw new Error('Schale ergibt keinen gültigen Körper (Wand zu dick für eine Bohrung oder Rundung?)');
-    const gen = nA.flatMap(({ face, o }) => list(b.Generated(face.wrapped)).map(g => [g, { f: id, tag: 'shell', of: o }] as [any, Origin]));
-    const out = carry(b, nA, gen);
-    gen.forEach(([g]) => g.delete());
-    return out;
-  } finally { L.delete(); b.delete(); }
+  const oc = getOC() as any, v0 = measureVolume(A);
+  let why = '';
+  // Arc ergibt an manchen gekrümmten Übergängen Ungültiges, dort trägt Intersection; sonst bleibt Arc, wie immer
+  for (const join of [oc.GeomAbs_JoinType.GeomAbs_Arc, oc.GeomAbs_JoinType.GeomAbs_Intersection]) {
+    const L = new oc.NCollection_List_TopoDS_Shape(), b = new oc.BRepOffsetAPI_MakeThickSolid();
+    try {
+      open.forEach(f => L.Append(f.wrapped));
+      b.MakeThickSolidByJoin(A.wrapped, L, -t, 1e-3, oc.BRepOffset_Mode.BRepOffset_Skin, false, false, join, false, new oc.Message_ProgressRange());
+      if (!b.IsDone()) { why ||= 'Schale fehlgeschlagen'; continue; }
+      if (!isValid(b.Shape())) { why ||= 'Schale ergibt keinen gültigen Körper (Wand zu dick für eine Bohrung oder Rundung?)'; continue; }
+      const gen = nA.flatMap(({ face, o }) => list(b.Generated(face.wrapped)).map(g => [g, { f: id, tag: 'shell', of: o }] as [any, Origin]));
+      const out = carry(b, nA, gen);
+      gen.forEach(([g]) => g.delete());
+      if (Math.abs(measureVolume(out[0]) - v0) > 1e-6 * v0) return out;
+      out[0].delete();
+      throw new Error('Schale bleibt ohne Wirkung: Diese gekrümmten Flächen kann der Kern nicht aushöhlen'); // Intersection braucht hier 10 s und scheitert auch, bei jedem Lauf
+    } finally { L.delete(); b.delete(); }
+  }
+  throw new Error(why);
 }
 
 // Flächen löschen: OCCT lässt die Nachbarflächen zuwachsen; braucht den eigenen OpenCascade-Build (vendor/, BRepAlgoAPI_Defeaturing)

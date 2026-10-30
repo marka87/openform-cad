@@ -1,0 +1,279 @@
+// Belastungsprobe: typische Teile über viele Schritte, mit nachgerechneten Volumen, Zurückspulen, Maßänderung und Export.
+// Selbst ausgedacht, um Fehler zu finden; das sind NICHT die echten Teile aus T0.3.
+import { beforeAll, expect, test } from 'vitest';
+import opencascade from 'replicad-opencascadejs';
+import { getOC, measureVolume, setOC } from 'replicad';
+import { buildBody, forExport, loadStep, sheetSVG, to3MF } from './kernel';
+import { GROUND, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+
+beforeAll(async () => { setOC(await (opencascade as any)()); });
+const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
+
+// Wie main.ts: nachgetragene Bezüge übernehmen und neu rechnen, bis nichts mehr nachkommt
+function settle(fs: Feature[]) {
+  let r = buildBody(fs);
+  for (let i = 0; i < 4 && r.fixes.size; i++) {
+    fs = fs.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f);
+    r = buildBody(fs);
+  }
+  return { r, fs };
+}
+const rect = (pl: Frame, a: number[], b: number[], id: number, d: number, onFace = true) => ({ ...sketchFeature('rect', pl, a, b, id, onFace)!, d }) as Extrude;
+const circle = (pl: Frame, c: number[], r: number, id: number, d: number, onFace = true) => ({ ...sketchFeature('circle', pl, c, [c[0] + r, c[1]], id, onFace)!, d }) as Extrude;
+const edge = (type: 'fillet' | 'chamfer', id: number, at: Vec, dir: Vec, r: number): EdgeOp => ({ id, type, at, dir, r });
+
+// Dichtes, einheitlich ausgerichtetes Netz: jede gerichtete Kante genau einmal, mit Gegenstück (3MF-ZIP ist unkomprimiert, das Modell steht im Klartext)
+function closed(bytes: Uint8Array) {
+  let tris = 0, dup = 0, open = 0;
+  for (const obj of new TextDecoder().decode(bytes).split('<object ').slice(1)) {  // Eckennummern zählen je Objekt neu
+    const dir = new Set<string>();
+    for (const [, a, b, c] of obj.matchAll(/v1="(\d+)" v2="(\d+)" v3="(\d+)"/g)) {
+      tris++;
+      for (const [p, q] of [[a, b], [b, c], [c, a]]) { if (dir.has(`${p},${q}`)) dup++; dir.add(`${p},${q}`); }
+    }
+    open += [...dir].filter(k => !dir.has(k.split(',').reverse().join(','))).length;
+  }
+  return { tris, dup, open };
+}
+
+const top = (y: number): Frame => ({ o: [0, y, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] });
+
+function halter(): Feature[] {
+  const web: Frame = { o: [0, 6, -34], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
+  const rib: Frame = { o: [55, 6, -34], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] };
+  const p: Pattern = { id: 4, type: 'pattern', src: [3], a: { ax: [1, 0, 0], n: 3, d: 20 } };
+  return [
+    rect(GROUND, [0, 0], [60, 40], 1, 6, false),
+    rect(top(6), [0, 34], [60, 40], 2, 34),
+    circle(top(6), [10, 12], 2.6, 3, -6),
+    p,
+    edge('fillet', 5, [30, 6, -34], [1, 0, 0], 4),
+    edge('chamfer', 6, [30, 6, 0], [1, 0, 0], 1),
+    edge('fillet', 7, [0, 3, 0], [0, 1, 0], 5),
+    circle(web, [30, 20], 4, 8, -6),
+    { id: 9, d: 2, onFace: false, ...structuredClone(rib), type: 'poly', p: {}, pts: [[0, 0], [-20, 0], [0, 20]] } as Extrude,
+  ];
+}
+
+test('Halter: alle Schritte gelingen, Export dicht', async () => {
+  const { r, fs } = settle(halter());
+  expect(r.errors.size).toBe(0);
+  expect(valid(r.body!)).toBe(true);
+  const back = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(r.body!), 1);
+  const m = closed((to3MF([...r.bodies.values()])));
+  expect([m.dup, m.open]).toEqual([0, 0]);
+});
+
+test('Halter: Zurückspulen auf jeden Stand', () => {
+  const { fs } = settle(halter());
+  const bad: unknown[] = [];
+  for (let k = 1; k <= fs.length; k++) {
+    const r = buildBody(fs.slice(0, k));
+    if (r.errors.size || !valid(r.body)) bad.push([k, [...r.errors], valid(r.body)]);
+  }
+  expect(bad).toEqual([]);
+});
+
+test('Halter: Maße ändern, alles zieht mit', () => {
+  const { fs } = settle(halter());
+  const plate = (d: number) => fs.map(f => f.id === 1 ? { ...f, d } : f) as Feature[];
+  const webH = (d: number) => fs.map(f => f.id === 2 ? { ...f, d } : f) as Feature[];
+  const wide = fs.map(f => f.id === 1 ? { ...f, p: { ...(f as Extrude).p, w: 80 } } : f.id === 2 ? { ...f, p: { ...(f as Extrude).p, w: 80 } } : f) as Feature[];
+  for (const [name, c] of [['Platte 10', plate(10)], ['Steg 50', webH(50)], ['Breite 80', wide]] as const) {
+    const s = settle(c);
+    expect([name, [...s.r.errors]]).toEqual([name, []]);
+    expect(valid(s.r.body!)).toBe(true);
+  }
+});
+
+function adapter(): Feature[] {
+  const face = top(6);
+  const rot: Pattern = { id: 4, type: 'pattern', src: [3], a: { ax: [0, 1, 0], n: 6, d: 0 }, rot: { ax: [0, 1, 0], c: [0, 6, 0] } };
+  return [
+    circle(GROUND, [0, 0], 30, 1, 6, false),
+    circle(face, [0, 0], 14, 2, 25),
+    circle(face, [22, 0], 2.25, 3, -6),
+    rot,
+    circle(top(31), [0, 0], 10, 5, -31),
+    edge('fillet', 6, [14, 6, 0], [0, 0, 1], 2),
+    edge('chamfer', 7, [14, 31, 0], [0, 0, 1], 1),
+  ];
+}
+
+test('Adapter (Flansch mit Lochkreis): Schritte, Zurückspulen, Maße', async () => {
+  const { r, fs } = settle(adapter());
+  expect(r.errors.size).toBe(0);
+  expect(valid(r.body!)).toBe(true);
+  const back = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(r.body!), 1);
+  const m = closed((to3MF([...r.bodies.values()])));
+  expect([m.dup, m.open]).toEqual([0, 0]);
+  for (let k = 1; k <= fs.length; k++) expect([k, [...buildBody(fs.slice(0, k)).errors]]).toEqual([k, []]);
+  const thick = settle(fs.map(f => f.id === 1 ? { ...f, d: 10 } : f) as Feature[]);
+  expect([...thick.r.errors]).toEqual([]);
+  const six = settle(fs.map(f => f.id === 2 ? { ...f, p: { ...(f as Extrude).p, r: 16 } } : f) as Feature[]);
+  expect([...six.r.errors]).toEqual([]);
+});
+
+test('Schlauchadapter: Schale auf einem Übergang höhlt aus oder wird rot, nie still massiv', () => {
+  const up = top(40), l: Loft = { id: 3, type: 'loft', a: 1, b: 2, body: 3 };
+  const sh: Shell = { id: 4, type: 'shell', at: [0, 40, 0], more: [[0, 0, 0]], t: 2, body: 3 };
+  const kk = settle([circle(GROUND, [0, 0], 20, 1, 0, false), circle(up, [0, 0], 12, 2, 0, false), l, sh]);
+  expect([...kk.r.errors]).toEqual([]);
+  expect(valid(kk.r.body!)).toBe(true);
+  // Kegelstumpf R20 → R12, Höhe 40: innen um 2 mm senkrecht zur Wand kleiner, Radius also um 2·√(1 + 0,2²)
+  const c = 2 * Math.hypot(1, 0.2), cone = (a: number, b: number) => Math.PI * 40 / 3 * (a * a + a * b + b * b);
+  expect(measureVolume(kk.r.body!)).toBeCloseTo(cone(20, 12) - cone(20 - c, 12 - c), -1);
+  const m = closed(to3MF([...kk.r.bodies.values()]));
+  expect([m.dup, m.open]).toEqual([0, 0]);
+  const rk = settle([rect(GROUND, [-20, -20], [20, 20], 1, 0, false), circle(up, [0, 0], 12, 2, 0, false), l, sh]);
+  expect(rk.r.errors.get(4)).toMatch(/ohne Wirkung/);                  // Rechteck → Kreis schafft der Kern nicht: rot statt massiv
+});
+
+test('Rohrbogen: Zug mit runder Ecke, danach Bohrung und Flansch', async () => {
+  const side: Frame = { o: [0, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] };
+  const prof = circle(side, [0, 0], 5, 1, 0, false);
+  const sw: Sweep = { id: 2, type: 'sweep', profile: 1, ...GROUND, pts: [[0, 0], [40, 0, 0.4142], [50, 10], [50, 40]], body: 2 };
+  const { r, fs } = settle([prof, sw]);
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  const back = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(r.body!), 0);
+});
+
+
+function gehaeuse(): Feature[] {
+  const front: Frame = { o: [0, 0, 0], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
+  const p: Pattern = { id: 9, type: 'pattern', src: [7, 8], a: { ax: [1, 0, 0], n: 2, d: 64 }, b: { ax: [0, 0, -1], n: 2, d: 34 } };
+  return [
+    rect(GROUND, [0, 0], [80, 50], 1, 30, false),
+    edge('fillet', 2, [0, 15, 0], [0, 1, 0], 5), edge('fillet', 3, [80, 15, 0], [0, 1, 0], 5),
+    edge('fillet', 4, [0, 15, -50], [0, 1, 0], 5), edge('fillet', 5, [80, 15, -50], [0, 1, 0], 5),
+    { id: 6, type: 'shell', at: [40, 30, -25], t: 2 } as Shell,
+    circle(top(2), [8, 8], 4, 7, 18),
+    circle(top(20), [8, 8], 1.25, 8, -10),
+    p,
+    circle(front, [40, 15], 6, 10, -2),
+  ];
+}
+const GEH_V = 119356 - 97672 + 4 * Math.PI * 16 * 18 - 4 * Math.PI * 1.5625 * 10 - Math.PI * 36 * 2; // Schale + 4 Dome − 4 Sacklöcher − Wandloch
+
+test('Gehäuse mit Schraubdomen: Volumen, Zurückspulen, Maße', () => {
+  const { r, fs } = settle(gehaeuse());
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  expect(Math.abs(measureVolume(r.body!) - GEH_V)).toBeLessThan(5);
+  for (let k = 1; k <= fs.length; k++) { const b = buildBody(fs.slice(0, k)); expect([k, [...b.errors], valid(b.body!)]).toEqual([k, [], true]); }
+  for (const [name, c] of [
+    ['Höhe 40', fs.map(f => f.id === 1 ? { ...f, d: 40 } : f)],
+    ['Wand 3', fs.map(f => f.id === 6 ? { ...f, t: 3 } : f)],
+    ['Breite 100', fs.map(f => f.id === 1 ? { ...f, p: { ...(f as Extrude).p, w: 100 } } : f)],
+    ['Rundung 8', fs.map(f => f.id === 2 ? { ...f, r: 8 } : f)],
+    ['Muster 3×2', fs.map(f => f.id === 9 ? { ...f, a: { ...(f as Pattern).a, n: 3, d: 30 } } : f)],
+  ] as const) {
+    const s = settle(c as Feature[]);
+    expect([name, [...s.r.errors], valid(s.r.body!)]).toEqual([name, [], true]);
+  }
+});
+
+test('Gehäuse: Schritte löschen und ausblenden stürzt nie ab, Fehlendes wird rot', () => {
+  const { fs } = settle(gehaeuse());
+  for (const id of [2, 6, 7, 8, 9, 10, 1]) {
+    const del = buildBody(fs.filter(f => f.id !== id)), hid = buildBody(fs.map(f => f.id === id ? { ...f, hidden: true } : f) as Feature[]);
+    if (del.body) expect(valid(del.body)).toBe(true);
+    if (hid.body) expect(valid(hid.body)).toBe(true);
+  }
+});
+
+test('Gehäuse mit Deckel als zweiter Körper: Speichern/Laden, STEP, 3MF, Zeichnung', async () => {
+  const deckel: Feature[] = [
+    { ...rect(top(30), [0, 0], [80, 50], 20, 2, false), body: 20 },
+    { ...rect(top(30), [2.2, 2.2], [77.8, 47.8], 21, -3, false), body: 20 },
+    { ...edge('fillet', 22, [0, 31, 0], [0, 1, 0], 5), body: 20 },
+  ];
+  const { r, fs } = settle([...gehaeuse(), ...deckel]);
+  expect([...r.errors]).toEqual([]);
+  expect(r.bodies.size).toBe(2);
+  const back = settle(JSON.parse(JSON.stringify(fs)) as Feature[]);          // wie Speichern und Laden
+  expect(measureVolume(back.r.body!)).toBeCloseTo(measureVolume(r.body!), 3);
+  expect(back.r.fixes.size).toBe(0);
+  const st = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(st)).toBeCloseTo(measureVolume(r.body!), 0);
+  const bytes = to3MF([...r.bodies.values()]), m = closed(bytes);
+  expect([m.dup, m.open]).toEqual([0, 0]);
+  expect(new TextDecoder().decode(bytes).match(/<object /g)!.length).toBe(2);
+  expect(sheetSVG(r.body!, { sheet: 'A4', title: 'Gehäuse', material: 'ABS', date: '' })).toContain('<path');
+});
+
+test('Ersatzteil aus STEP: Bohrung, Fläche versetzen, Rundung, wieder STEP, wieder bearbeiten', async () => {
+  const { r: r0 } = settle(halter());
+  const step = await forExport(r0.body!).blobSTEP().text();
+  const shape = await loadStep(step), imports = new Map([[1, shape]]), v0 = measureVolume(shape);
+  const bb = shape.boundingBox.bounds;
+  const yTop = bb[1][1];
+  const fs: Feature[] = [
+    { id: 1, type: 'import', name: 'halter.step', step },
+    { id: 2, d: -4, onFace: true, type: 'circle', o: [30, yTop, -38], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], p: { cx: 0, cy: 0, r: 1.5 } } as Extrude,
+    { id: 3, type: 'offset', at: [5, yTop, -37], n: [0, 1, 0], d: 5 } as Feature,
+  ];
+  let c = fs, r = buildBody(c, imports);
+  for (let i = 0; i < 4 && r.fixes.size; i++) { c = c.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f); r = buildBody(c, imports); }
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  expect(r.body!.boundingBox.bounds[1][1]).toBeCloseTo(yTop + 5, 3);
+  const st2 = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(st2)).toBeCloseTo(measureVolume(r.body!), 0);
+});
+
+test('Teilen, Verschieben, Bohren am verschobenen Körper, Zusammenfügen', () => {
+  const plane: Feature = { id: 2, type: 'plane', c: [30, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], off: 0 };
+  const base = rect(GROUND, [0, 0], [60, 20], 1, 10, false);
+  const split: Feature = { id: 3, type: 'split', body: 1, plane: 2 };
+  const mv: Feature = { id: 4, type: 'move', body: 3, c: [0, 0, 0], q: [0, 0, 0, 1], t: [10, 0, 0] };
+  const hole2: Extrude = { ...circle(top(10), [50, 10], 3, 5, -10), body: 3 };
+  const fil = { ...edge('chamfer', 6, [70, 5, 0], [0, 1, 0], 1), body: 3 };
+  const a = settle([base, plane, split, mv, hole2, fil]);
+  expect([...a.r.errors]).toEqual([]);
+  expect(a.r.bodies.size).toBe(2);
+  const v = 60 * 20 * 10 - Math.PI * 9 * 10 - 0.5 * 10;
+  expect(measureVolume(a.r.body!)).toBeCloseTo(v, 0);
+  const cmb = settle([...a.fs, { id: 7, type: 'move', body: 3, c: [0, 0, 0], q: [0, 0, 0, 1], t: [-10, 0, 0] } as Feature, { id: 8, type: 'combine', op: 'fuse', a: 1, b: 3 } as Feature]);
+  expect([...cmb.r.errors]).toEqual([]);
+  expect(cmb.r.bodies.size).toBe(1);
+  expect(measureVolume(cmb.r.body!)).toBeCloseTo(v, 0);
+});
+
+test('Drehteil: Profil drehen, Bohrung längs, Lochkreis, Nut, Fase', () => {
+  const side: Frame = { o: [0, 0, 0], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
+  const prof: Extrude = { id: 1, d: 0, onFace: false, ...structuredClone(side), type: 'poly', p: {}, pts: [[0, 0], [20, 0], [20, 5], [10, 5], [10, 30], [0, 30]], rev: 360, axis: 'v' };
+  const bore = circle(top(30), [0, 0], 4, 2, -30);
+  const hole = circle(top(5), [15, 0], 2, 3, -5);
+  const lk: Pattern = { id: 4, type: 'pattern', src: [3], a: { ax: [0, 1, 0], n: 4, d: 0 }, rot: { ax: [0, 1, 0], c: [0, 5, 0] } };
+  const groove: Extrude = { id: 5, d: 0, onFace: false, ...structuredClone(side), type: 'rect', p: { x: 8.5, y: 15, w: 2, h: 3 }, rev: 360, axis: 'v', sub: true };
+  const ch = edge('chamfer', 6, [10, 30, 0], [0, 0, 1], 1);
+  const { r, fs } = settle([prof, bore, hole, lk, groove, ch]);
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  // Scheibe R20×5 + Welle R10×25 − Bohrung R4×30 − 4 Löcher R2×5 − Nut (R 8,5–10, 3 hoch) − Fase
+  const nut = Math.PI * (100 - 72.25) * 3, fase = 0.5 * 2 * Math.PI * (10 - 1 / 3);
+  const v = Math.PI * 400 * 5 + Math.PI * 100 * 25 - Math.PI * 16 * 30 - 4 * Math.PI * 4 * 5 - nut - fase;
+  expect(Math.abs(measureVolume(r.body!) - v)).toBeLessThan(2);
+});
+
+test('Langloch-Muster, Spline-Kontur, Bögen im Vieleck: rundum dicht', () => {
+  const slot: Extrude = { id: 2, d: -5, onFace: true, ...structuredClone(top(5)), type: 'poly', p: {}, pts: slotPts([7, 5], [23, 11]) };
+  const pm: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 20 } };
+  const plate = rect(GROUND, [0, 0], [80, 30], 1, 5, false);
+  const a = settle([plate, slot, pm]);
+  expect([...a.r.errors]).toEqual([]);
+  expect(measureVolume(a.r.body!)).toBeCloseTo(80 * 30 * 5 - 3 * 5 * (10 * 6 + Math.PI * 9), 0);
+  const spline: Extrude = { id: 1, d: 8, onFace: false, ...structuredClone(GROUND), type: 'poly', smooth: true, p: {}, pts: [[0, 0], [30, -5], [40, 15], [15, 30], [-5, 15]] };
+  const b = settle([spline]);
+  expect([...b.r.errors]).toEqual([]);
+  expect(valid(b.r.body!)).toBe(true);
+  const m = closed(to3MF([...b.r.bodies.values()]));
+  expect([m.dup, m.open]).toEqual([0, 0]);
+  const cut = settle([spline, { ...circle(top(8), [15, 12], 5, 3, -8) }]);
+  expect([...cut.r.errors]).toEqual([]);
+});

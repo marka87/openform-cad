@@ -262,6 +262,14 @@ Shapr3D.
       macht der Kern (T6.8). KI-Lochkreis ist jetzt Bohrung +
       Kreis-Muster. Test in kernel.test.ts, im Browser geprüft (Spiegeln
       2,02 cm³, Kreis-Muster 3 → 4 zählt mit, nichts rot).
+- [ ] T6.10 TODO (VERMUTUNG, eigene Belastungsprobe 2026-10-30) — Schale auf
+      Übergang Rechteck → Kreis (Schlauchadapter) ist heute rot. Spur:
+      Seitenflächen zu einer Hülle nähen (BRepBuilderAPI_Sewing) und mit
+      MakeThickSolidBySimple aufdicken ergibt einen gültigen Körper
+      (ausprobiert, Volumen plausibel). Offen: Enden stehen senkrecht zur
+      Wand statt plan (mit dem Ausgangskörper schneiden reicht nur für ein
+      Ende), die Flächennamen gehen verloren. Erst bauen, wenn ein echtes
+      Teil es braucht.
 - [ ] T6.9 TODO — Rundung/Fase an einer Muster-Quelle, die nach dem
       Muster angelegt wird: vor das Muster einsortieren (dann gehen die
       Kopien mit) oder nachfragen? Erst entscheiden, wenn ein echtes Teil
@@ -435,6 +443,21 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Belastungsprobe, Fix 0.4.3: Neue src/teile.test.ts baut
+  Halter, Flansch, Schlauchadapter, Rohrbogen, Gehäuse mit Domen und
+  Deckel, Ersatzteil aus STEP, geteilten Körper, Drehteil, Langlöcher,
+  Spline: Volumen von Hand nachgerechnet, jeder Stand zurückgespult,
+  Maße geändert, Schritte gelöscht/ausgeblendet, BRepCheck, STEP hin und
+  zurück, 3MF dicht, Zeichnung. Selbst ausgedacht, zählt NICHT für T0.3,
+  keine Feldnotizen. Ein echter Fehler: Schale auf Loft Rechteck → Kreis
+  lieferte den unveränderten Körper ohne Fehler (IsDone und gültig!).
+  Jetzt: Volumen unverändert → rot; ungültig mit Arc → zweiter Versuch
+  mit Intersection (rettet Kreis → Kreis). Bei „ohne Wirkung“ kein zweiter
+  Versuch, Intersection braucht dort 10 s und scheitert auch, bei jedem
+  Lauf. Rest → T6.10. Aufgefallen, kein Fehler: eine Bohrung „durch die
+  Wand“ ist eine feste Tiefe, wird die Wand dicker, bleibt sie Sackloch
+  (Wand 2 → 3 mm); beim Auswerten von T0.3 darauf achten. Nicht im Browser
+  geprüft: Anzeige läuft über den vorhandenen Weg für rote Schritte.
 - 2026-10-30 T5.17 Messen (0.4.2): Fangradius in Bildschirm-Pixeln statt
   in Weltmaß am Kamera-Drehpunkt; verdeckte Punkte (weiter weg als die
   getroffene Stelle plus ~10 px in deren Tiefe) ausgenommen. Gelernt beim

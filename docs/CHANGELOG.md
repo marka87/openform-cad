@@ -9,6 +9,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.4.3 — 2026-10-30
+
+- **Schale auf einem Übergang (Loft) bleibt nicht mehr still massiv.**
+  Kreis → Kreis wird jetzt richtig hohl (vorher rot). Rechteck → Kreis
+  schafft der Kern noch nicht; der Schritt wird rot mit klarer Meldung,
+  statt ohne Wirkung und ohne Hinweis durchzulaufen.
+
 ## 0.4.2 — 2026-10-30
 
 - **Messen rastet zuverlässig an Ecken ein.** Weiter hinten liegende
