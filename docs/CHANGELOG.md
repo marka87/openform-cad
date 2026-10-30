@@ -22,6 +22,9 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **KI legt nichts doppelt an:** Wiederholte Aufrufe und Bohrungen an
   derselben Stelle werden abgelehnt. „Die Schale“ oder „das Gehäuse“ als
   Ziel meint den Körper.
+- **Muster nimmt Rundungen und Fasen der Quelle mit** (wenn sie vor dem
+  Muster angelegt wurden). Jede Kopie hat eigene Flächennamen, Skizzen
+  auf einer bestimmten Kopie bleiben dort.
 
 ## 0.3.3 — 2026-10-30
 

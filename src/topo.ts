@@ -19,6 +19,7 @@ export interface Origin {
   from?: number;    // Bereichs-Feature (and/not): ID der Original-Skizze, aus deren Rand die Seite stammt
   of?: Origin;      // Innenwand einer Schale: die Außenfläche, von der sie versetzt ist
   j?: number;       // Sweep: Abschnitt des Pfads, entlang dessen die Seite läuft
+  at?: string;      // Muster-Kopie „Quelle:Spalte:Reihe“ (f = Muster-Schritt bzw. mitkopierte Rundung); bleibt gleich, wenn sich die Anzahl ändert
 }
 
 // Prüfwert, gemessen beim Anlegen des Bezugs (Weltkoordinaten, mm)
@@ -62,7 +63,7 @@ export function fingerprint(s: Face | Edge): Fingerprint {
 }
 
 export const sameOrigin = (a?: Origin, b?: Origin): boolean => !a || !b ? a === b
-  : a.f === b.f && a.tag === b.tag && a.i === b.i && a.j === b.j && a.from === b.from && sameOrigin(a.of, b.of);
+  : a.f === b.f && a.tag === b.tag && a.i === b.i && a.j === b.j && a.from === b.from && a.at === b.at && sameOrigin(a.of, b.of);
 
 // Abstand zweier Fingerabdrücke; Infinity = passt nicht (anderer Typ oder andere Richtung)
 function mismatch(a: Fingerprint, b: Fingerprint) {
@@ -287,14 +288,14 @@ function carry(b: any, named: Named, extra: [any, Origin][] = []): [Shape3D, Nam
 
 // Rundung/Fase an den Kanten (wie replicad, aber mit Historie);
 // die neue Fläche heißt nach dem Feature, die Nachbarflächen behalten ihren Namen
-export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number): [Shape3D, Named] {
+export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra: Partial<Origin> = {}): [Shape3D, Named] {
   const oc = getOC() as any;
   const b = type === 'fillet' ? new oc.BRepFilletAPI_MakeFillet(A.wrapped, oc.ChFi3d_FilletShape.ChFi3d_Rational) : new oc.BRepFilletAPI_MakeChamfer(A.wrapped);
   try {
     edges.forEach(e => b.Add(r, e.wrapped));
     b.Build(new oc.Message_ProgressRange());
     if (!b.IsDone()) throw new Error(type === 'fillet' ? 'Rundung fehlgeschlagen' : 'Fase fehlgeschlagen');
-    const gen = edges.flatMap(e => list(b.Generated(e.wrapped))).map(t => [t, { f: id, tag: type }] as [any, Origin]);
+    const gen = edges.flatMap(e => list(b.Generated(e.wrapped))).map(t => [t, { f: id, tag: type, ...extra }] as [any, Origin]);
     const out = carry(b, nA, gen);
     gen.forEach(([t]) => t.delete());
     return out;

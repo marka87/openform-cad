@@ -80,7 +80,7 @@ export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, 
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
 // Muster (Reihe oder Raster): die Skizzen src werden je Richtung n-mal im Abstand d entlang ax kopiert (d < 0 = Gegenrichtung),
 // mit b zusätzlich quer dazu (n × b.n Exemplare). Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der Quelle neu
-// shortcut: Rundungen/Fasen an der Quelle werden nicht mitvervielfältigt; Kreis-Muster und Spiegeln legen noch Einzelkopien an
+// Rundungen/Fasen an der Quelle gehen mit (T6.8). shortcut: Kreis-Muster und Spiegeln legen noch Einzelkopien an → T6.7
 export interface PatternDir { ax: Vec; n: number; d: number }
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; body?: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum

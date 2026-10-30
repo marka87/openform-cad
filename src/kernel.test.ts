@@ -1046,3 +1046,20 @@ test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, fla
   r = buildBody([box(), p]);
   expect(r.errors.get(3)).toBe('Skizze für das Muster fehlt');
 });
+
+test('Muster: Rundung an der Quelle geht mit, jede Kopie hat eigene Flächennamen (T6.8)', () => {
+  const boss = { ...sketchFeature('rect', TOP, [-1, -1], [1, 1], 2, true)!, d: 3 };    // Zapfen 2 × 2 × 3 oben auf der Kiste, Welt x 9–11
+  const fil: EdgeOp = { id: 3, type: 'fillet', at: [9, 11.5, -6], dir: [0, 1, 0], r: 0.5 }; // senkrechte Kante des Zapfens
+  const p: Pattern = { id: 4, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 3 } };
+  const first = buildBody([box(), boss, fil]);
+  const fs = [box(), boss, { ...fil, ...first.fixes.get(3) } as EdgeOp, p];            // Kantenbezug wie vom Kern nachgetragen
+  expect(fs[2].type === 'fillet' && fs[2].edge).toBeTruthy();
+  const r = buildBody(fs);
+  expect(r.errors.size).toBe(0);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 + 3 * (12 - (1 - Math.PI / 4) * 0.25 * 3), 2); // drei gerundete Zapfen
+  const nm = r.names.get(1)!;
+  expect(nm.filter(x => x.o.f === 4 && x.o.tag === 'end').map(x => x.o.at).sort()).toEqual(['2:1:0', '2:2:0']);   // Deckel der Kopien unterscheidbar
+  expect(nm.filter(x => x.o.f === 3 && x.o.tag === 'fillet').map(x => x.o.at ?? '-').sort()).toEqual(['-', '2:1:0', '2:2:0']); // Rundung je Kopie
+  const top2 = faceRef(nm, nm.find(x => x.o.at === '2:2:0' && x.o.tag === 'end')!.face)!;
+  expect(resolveFace(top2, r.body!, nm).ok).toBe(true);                                // Bezug auf genau diese Kopie löst eindeutig auf
+});

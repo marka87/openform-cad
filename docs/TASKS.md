@@ -33,19 +33,15 @@ Log.
 1. T0.3 — Teil 2 und Teil 3 bauen, Feldnotizen führen, auswerten.
    SPERRE: Bis das erledigt ist, keine Pakete mit VERMUTUNG beginnen.
    Danach ordnet sich alles darunter neu.
-2. T4.3 — aktuellen Installer (0.3.1; 0.3.2 noch ungebaut) durchklicken. Läuft
+2. T4.3 — aktuellen Installer (zuletzt gebaut 0.3.1; 0.4.0 noch ungebaut) durchklicken. Läuft
    zusammen mit Punkt 1.
 3. T5.17 — Messen: erst klären, ob T10.7 das Problem erledigt hat
    (siehe dort), sonst Fehlerbild aus Teil 2 oder 3.
-4. T8.8, T8.7 — KI auf Seitenflächen, Werkzeug `lochmuster`. Beide aus
-   Feldnotiz Teil 1.
-5. T6.8 — Flächen der Musterkopien eindeutig benennen. Mehrdeutige
-   Bezüge sind ein Risiko für Epic 1, deshalb vor T6.7.
-6. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
-7. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
+4. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
+5. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
-8. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
-9. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
+6. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+7. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -256,9 +252,19 @@ Shapr3D.
       ziehen = Abstand, mit Vorschau; Zahl danach im Feld.
 - [ ] T6.7 TODO — Kreis-Muster und Spiegeln ebenfalls als Muster-Schritt
       (heute noch Einzelkopien).
-- [ ] T6.8 TODO — Rundungen/Fasen an der Quelle mitvervielfältigen und
-      Flächen der Kopien eindeutig benennen (heute teilen alle Kopien den
-      Namen des Muster-Schritts, Bezüge darauf sind mehrdeutig).
+- [ ] T6.9 TODO — Rundung/Fase an einer Muster-Quelle, die nach dem
+      Muster angelegt wird: vor das Muster einsortieren (dann gehen die
+      Kopien mit) oder nachfragen? Erst entscheiden, wenn ein echtes Teil
+      darüber stolpert (Feldnotiz), sonst VERMUTUNG.
+- [x] T6.8 DONE — Flächen der Muster-Kopien heißen eindeutig: Origin
+      bekommt `at` = „Quelle:Spalte:Reihe“ (bleibt gleich, wenn sich die
+      Anzahl ändert; sameOrigin vergleicht es). Rundungen/Fasen an der
+      Quelle, die vor dem Muster stehen und gelungen sind, werden je Kopie
+      wiederholt (Kantenbezug auf die Kopie umgeschrieben, Rundungsflächen
+      mit eigenem `at`). Test in kernel.test.ts, im Browser geprüft
+      (Kiste mit drei gerundeten Zapfen, 2,04 cm³ wie im Test).
+      Einschränkung: eine Rundung, die erst NACH dem Muster an der Quelle
+      angelegt wird, geht nicht mit (Historie wie in Fusion) → T6.9.
 
 ## Epic 7: Pflege
 - [x] T7.1 DONE — 3MF-Export: „Zeichnung / mehr“ → „Körper als 3MF“, ein Objekt je Körper, mm, Z oben.
@@ -419,6 +425,12 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T6.8: Muster-Kopien mit eigenem Origin-Feld `at`
+  („Quelle:Spalte:Reihe“ statt laufender Nummer, damit Bezüge beim Ändern
+  der Anzahl nicht auf eine andere Kopie springen). Rundungen/Fasen der
+  Quelle laufen je Kopie über denselben Weg wie normale (anchorEdges mit
+  umgeschriebenem Bezug, verschobenem at und Fingerabdruck); edgeOp hat
+  dafür ein optionales Origin-Extra. Neu: T6.9 (Rundung nach dem Muster).
 - 2026-10-30 T8.7 lochmuster. Live mit qwen2.5:7b (Gehäuse 80×50×30,
   Schale 2 mm), je 2 Läufe: Raster rechts 6×4 ⌀3 Abstand 6 → 1 von 2
   richtig (einmal unsinnige Mitte, nach der Fehlermeldung aufgegeben);
