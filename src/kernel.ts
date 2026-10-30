@@ -187,7 +187,25 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           // Rundungen/Fasen an der Quelle (vor dem Muster, gelungen) gehen mit: ihr Kantenbezug auf die Kopie umgeschrieben
           const ops = features.slice(0, here).filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !e.hidden && !!e.edge
             && !failed.includes(e.id) && (e.edge.a.f === id || e.edge.b.f === id));
-          for (const P of patternCopies(f)) {
+          // Ohne mitkopierte Rundungen und ohne Überlappung: alle Kopien in einem Schnitt, sonst wächst die Rechenzeit quadratisch (und 300 Löcher sprengen den Speicher)
+          const all = patternCopies(f);
+          if (b && !ops.length && all.length > 1) {
+            const parts = all.map(P => {
+              const at = `${id}:${P.key}`, c = P.copy(S, f.id), cd = c.thru && isCut(c) ? thruDepth(c, b!) : 0, s = solidOf(cd ? { ...c, d: -cd - 1 } : c);
+              return { at, c, s, box: s.boundingBox.bounds, nS: nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } })) };
+            });
+            const apart = parts.every((p, i) => parts.slice(i + 1).every(q => [0, 1, 2].some(k => p.box[1][k] < q.box[0][k] - 1e-6 || q.box[1][k] < p.box[0][k] - 1e-6)));
+            if (apart) {
+              const cut = isCut(parts[0].c), tool = makeCompound(parts.map(p => p.s)) as Shape3D; // makeCompound gibt seine Teile frei
+              put(...boolean(cut ? 'cut' : 'fuse', b, names.get(kk) ?? [], tool, parts.flatMap(p => p.nS)));
+              tool.delete();
+              total += parts.length;
+              if (cut) missed += parts.filter(p => !(names.get(kk) ?? []).some(n => n.o.f === f.id && n.o.at === p.at)).length;
+              continue;
+            }
+            parts.forEach(p => p.s.delete());
+          }
+          for (const P of all) {
             const at = `${id}:${P.key}`, c = P.copy(S, f.id);
             total++;
             if (isCut(c) && !b) { missed++; continue; }

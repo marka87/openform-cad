@@ -37,7 +37,7 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.6.0 gebaut, nicht installiert)
+      STL, 3MF, Zeichnung (0.6.1 gebaut, nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -57,6 +57,9 @@ bricht „Fläche löschen“. Danach voller Testlauf.
 
 ## Zurückgestellt
 Nur anfassen, wenn ein echtes Teil es verlangt.
+- Tempo beim Ziehen: Jeder Lauf rechnet alle Schritte neu (30 Einzelbohrungen 1,2 s + Netz).
+  Hebel wäre, den Stand vor dem gezogenen Schritt im Worker zu behalten
+- Schale, die eine Fläche neben einer Rundung öffnet, bleibt rot (Kern schafft es nicht)
 - Rundung an einer Muster-Quelle, die erst nach dem Muster angelegt wird (Umweg:
   Rundung vor das Muster legen)
 - Offene Linien teilen Bereiche (heute teilen sie nur Körper)
@@ -108,6 +111,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.6.1** Großes Lochraster stürzt nicht mehr ab und rechnet ein Vielfaches schneller
 - **0.6.0** Bohrung und Tasche „Durch alles“
 - **0.5.1** Boolesche Operationen geprüft; Warnung vor Export ungültiger Körper; gescheiterte
   Rundung beschädigt den Körper nicht mehr; Schale mit unsinnigem Ergebnis wird rot
@@ -121,6 +125,10 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-30 Tempo-Messung (0.6.1), Platte 300×200, nur Kern ohne Oberfläche: 300 Löcher
+  stürzten ab (memory out of bounds), 100 Löcher 6,7 s. Muster schneidet nun alle Kopien in
+  einem Schnitt, wenn sie sich nicht überlappen und keine Rundung mitgeht: 100 Löcher 0,7 s,
+  300 Löcher 3,2 s, dazu Anzeigenetz 0,7 s bzw. 4,4 s. Netz unverändert (0,05 / 0,2).
 - 2026-10-30 Plan Punkt 4 (0.6.0): Extrude.thru; der Kern rechnet die Tiefe aus der Körperhülle
   und trägt sie in d nach, 1 mm Überstand im Schnitt. Tiefe tippen oder ziehen nimmt den Haken
   weg. Im Browser: Höhe 18,5 → 30, Bohrung folgt auf −30.

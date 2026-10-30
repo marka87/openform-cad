@@ -328,6 +328,22 @@ test('Bohrung durch alles bleibt durchgehend, wenn das Teil dicker wird; Muster-
   expect(measureVolume(blind.r.body!)).toBeCloseTo(60 * 40 * 10 - Math.PI * 9 * 6, 1); // ohne Haken bleibt es die feste Tiefe
 });
 
+test('Großes Lochraster: 300 Löcher in einem Schnitt, überlappende Kopien weiter einzeln', () => {
+  const plate = rect(GROUND, [0, 0], [300, 200], 1, 10, false), hole = circle(top(10), [10, 10], 2, 2, -10);
+  const grid = (d: number, n: number, m: number): Pattern => ({ id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n, d }, b: { ax: [0, 0, -1], n: m, d } });
+  const big = buildBody([plate, hole, grid(10, 20, 15)]);
+  expect(big.errors.size).toBe(0);
+  expect(measureVolume(big.body!)).toBeCloseTo(300 * 200 * 10 - 300 * Math.PI * 4 * 10, 0);
+  expect(new Set(big.names.get(1)!.filter(x => x.o.f === 3).map(x => x.o.at)).size).toBe(299);   // jede Kopie behält ihren Namen
+  const miss = buildBody([plate, hole, grid(30, 12, 1)]);                  // x bis 340: zwei Kopien daneben
+  expect(miss.errors.get(3)).toBe('2 von 11 Kopien treffen den Körper nicht');
+  const lap = buildBody([plate, hole, { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 2, d: 3 } }]); // Löcher überlappen sich
+  expect([...lap.errors]).toEqual([]);
+  expect(valid(lap.body!)).toBe(true);
+  const r = 2, a = 2 * r * r * Math.acos(3 / 4) - 1.5 * Math.sqrt(16 - 9);    // Schnittfläche zweier Kreise
+  expect(measureVolume(lap.body!)).toBeCloseTo(600000 - (2 * Math.PI * 4 - a) * 10, 1);
+}, 30000);
+
 test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
   const { r } = settle([rect(GROUND, [-60, 20], [15, 30], 1, 18.5, false), circle(top(18.5), [-20, 20], 4, 2, -9.5)]);
   expect(invalidBodies(r.bodies)).toEqual([]);
