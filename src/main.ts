@@ -2051,7 +2051,7 @@ addEventListener('keydown', e => {
   else if (k === 'p') projectEdges();
   else if (k === 's') setTool('spline');
   else if ((k === 'enter' || k === 'end') && poly) finishPoly(!endOpen()); // Linie, Zug-Pfad und Hilfslinie: Enter/Ende = offen fertig
-  else if (k === 'end' && drag?.kind === 'sketch') { finishSketch(); drag = null; hud.style.display = 'none'; controls.enabled = true; refresh(); } // Form an der Maus fertig
+  else if (k === 'end' && drag?.kind === 'sketch') { if (!finishSketch()) return showHint(TOO_THIN); drag = null; hud.style.display = 'none'; controls.enabled = true; refresh(); } // Form an der Maus fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
   else if (k === 'escape') escapeStep();
 });

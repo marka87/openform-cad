@@ -9,6 +9,15 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.3.3 — 2026-10-30
+
+- **Ende-Taste** bei einer zu schmalen Form: Die Form bleibt an der Maus
+  mit dem Hinweis „zu schmal“, statt still zu verschwinden (Rest von 0.3.2).
+- **KI ändert keine Maße ins Negative:** Breite, Tiefe, Radius und
+  Wandstärke müssen positiv sein; nur die Höhe hat ein Vorzeichen.
+- **KI hängt nicht mehr bei „CAD-Kern prüft …“,** wenn der Prüflauf
+  selbst abbricht.
+
 ## 0.3.2 — 2026-10-30
 
 - **Rechteck verschwand still:** Bei schräger Sicht auf den Boden rastete

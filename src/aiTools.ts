@@ -111,7 +111,11 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
           : isExtrude(g) && !noFace(g) ? ['hoehe'] : g.type === 'fillet' || g.type === 'chamfer' ? ['radius'] : g.type === 'shell' ? ['dicke'] : [];
         const wrong = set.filter(k => !fits.includes(k));
         if (!set.length || wrong.length) throw new Error(`Schritt ${g.id} (${g.type}) lässt sich ${fits.length ? `nur über ${fits.join(', ')} ändern` : 'nicht ändern'}`);
-        const v = Object.fromEntries(set.map(k => [k, len(a[k], k)]));
+        const v = Object.fromEntries(set.map(k => { // nur die Höhe hat ein Vorzeichen (Richtung)
+          const x = len(a[k], k);
+          if (k !== 'hoehe' && x < 0) throw new Error(`${k}: positive Zahl erwartet`);
+          return [k, x];
+        }));
         if (isExtrude(g)) {
           if (v.hoehe !== undefined && (g.onFace ? v.hoehe > 0 : v.hoehe < 0)) throw new Error(g.onFace ? 'Skizze auf einer Fläche: nur hinein (negativ)' : 'Skizze auf dem Boden: nur nach oben');
           if (v.breite !== undefined) g.p.w = v.breite;

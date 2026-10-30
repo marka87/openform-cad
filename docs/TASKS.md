@@ -403,6 +403,15 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Fix 0.3.3 aus der Durchsicht der Commits 0.2.0–0.3.2:
+  Ende-Taste bei zu schmaler Form (finishSketch-Ergebnis wurde dort
+  ignoriert; getippte Maße sind nicht betroffen, applyTyped filtert ≤ 0),
+  aendern lehnt negative Breite/Tiefe/Radius/Dicke ab (len prüft nur den
+  Betrag; Test in ai.test.ts), Prüflauf im Worker antwortet auch bei
+  Ausnahme. Ende-Taste im Browser geprüft (Hinweis, Form bleibt, nächster
+  Klick legt sie an). Offen, klein: Muster-Pfeil folgt späterem
+  Verschieben des Körpers nicht; Muster aus Skizzen mehrerer Körper legt
+  alle Kopien in den ersten.
 - 2026-10-30 Abgleich docs gegen Code: alle 76 DONE-Pakete haben Code,
   keines widerspricht ihm. Belegslücken: T3.2 (Maß verschieben) ohne Test
   und ohne eigenen Log-Beleg; T1.3b ohne eigenen Test (nur indirekt über

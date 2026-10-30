@@ -66,13 +66,19 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], confirm: [...r.confirm], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
   } else if (data.type === 'check') {
     // wie in main.ts: nachgetragene Bezüge übernehmen und ein zweites Mal rechnen, erst dann zählen die Fehler
-    let fs = data.features, r = buildBody(fs, imports);
-    if (r.fixes.size) {
-      fs = fs.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f);
-      free(r); r = buildBody(fs, imports);
+    // Antwort kommt immer, sonst hängt die KI-Anfrage bei „CAD-Kern prüft …“; der normale Lauf zeigt den Fehler danach ohnehin
+    try {
+      let fs = data.features, r = buildBody(fs, imports);
+      if (r.fixes.size) {
+        fs = fs.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f);
+        free(r); r = buildBody(fs, imports);
+      }
+      free(r);
+      post({ type: 'checked', errors: [...r.errors] });
+    } catch (e) {
+      console.warn('Prüflauf fehlgeschlagen', e);
+      post({ type: 'checked', errors: [] });
     }
-    free(r);
-    post({ type: 'checked', errors: [...r.errors] });
   } else if (data.type === 'project') {
     const s = bodies.get(data.body);
     post({ type: 'projected', lines: s ? projectBody(s, names.get(data.body) ?? [], data.pl) : [] });

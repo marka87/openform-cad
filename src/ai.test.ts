@@ -63,9 +63,10 @@ test('KI ändert vorhandene Schritte über aendern, Auswahl steht im Kontext (T8
   expect(ctx.auswahl).toEqual([2]);
   expect(ctx.schritte.map((s: Record<string, unknown>) => [s.breite, s.dicke, s.radius])).toEqual([[100, undefined, undefined], [undefined, 3, undefined], [undefined, undefined, 2]]);
   const r = applyCalls(fs, [call({ schritt: 2, dicke: 5 }), call({ schritt: 1, breite: 120, hoehe: 8 }), call({ schritt: 3, radius: 4 }),
-    call({ schritt: 2, breite: 5 }), call({ schritt: 1, hoehe: -2 }), call({ schritt: 9, dicke: 1 })], 4);
+    call({ schritt: 2, breite: 5 }), call({ schritt: 1, hoehe: -2 }), call({ schritt: 9, dicke: 1 }), call({ schritt: 1, breite: -50 }), call({ schritt: 2, dicke: -1 })], 4);
   expect(r.results.map(x => x.text)).toEqual(['ok, Schritt 2 geändert', 'ok, Schritt 1 geändert', 'ok, Schritt 3 geändert',
-    'Schritt 2 (shell) lässt sich nur über dicke ändern', 'Skizze auf dem Boden: nur nach oben', 'Schritt 9 gibt es nicht']);
+    'Schritt 2 (shell) lässt sich nur über dicke ändern', 'Skizze auf dem Boden: nur nach oben', 'Schritt 9 gibt es nicht',
+    'breite: positive Zahl erwartet', 'dicke: positive Zahl erwartet']);
   const [p, sh, fi] = r.fs as never as [{ p: { w: number; h: number }; d: number }, { t: number }, { r: number }];
   expect([p.p.w, p.p.h, p.d, sh.t, fi.r]).toEqual([120, 60, 8, 5, 4]);
   expect((fs[1] as { t: number }).t).toBe(3);                                         // Original unverändert (Kopie)
