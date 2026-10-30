@@ -224,6 +224,21 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 
 - [x] T6.4 DONE — Muster/Spiegeln für ganze Körper, mit T10.3 erledigt.
 
+### Rückmeldung des Nutzers zum Muster (2026-10-30)
+Entschieden vom Nutzer: Muster wird ein eigener Schritt (neuer Typ
+`pattern` im Dateiformat), Bedienung durch Ziehen plus Felder, Vorbild
+Shapr3D.
+- [x] T6.5 DONE — Muster als eigener Schritt: Reihe oder Raster (zwei
+      Richtungen), merkt sich Quelle, Anzahl, Abstand, Richtung; ⇄ dreht
+      das bestehende Muster um, Kopien folgen der Quelle.
+- [ ] T6.6 TODO — Muster-Griffe: Pfeile je Richtung am letzten Exemplar
+      ziehen = Abstand, mit Vorschau; Zahl danach im Feld.
+- [ ] T6.7 TODO — Kreis-Muster und Spiegeln ebenfalls als Muster-Schritt
+      (heute noch Einzelkopien).
+- [ ] T6.8 TODO — Rundungen/Fasen an der Quelle mitvervielfältigen und
+      Flächen der Kopien eindeutig benennen (heute teilen alle Kopien den
+      Namen des Muster-Schritts, Bezüge darauf sind mehrdeutig).
+
 ## Epic 7: Pflege
 - [x] T7.1 DONE — 3MF-Export: „Zeichnung / mehr“ → „Körper als 3MF“, ein Objekt je Körper, mm, Z oben.
 - [ ] T7.2 TODO — Wiederkehrende Pflicht bei jedem replicad-Update:
@@ -337,8 +352,26 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 - [x] T10.11 DONE — Boden-Raster wächst mit dem Modell (bisher fest
       400 × 400 mm), Zellen bleiben 10 mm bzw. 1 mm.
 
+### Oberfläche wie Shapr3D (Interview 2026-10-30)
+Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
+- [ ] T10.12 TODO — Werkzeugleiste links: Untermenü-Pfeile groß und
+      klickbar, Leiste kürzer und klarer gegliedert.
+
 ## Log
 (neueste oben)
+- 2026-10-30 T6.5: Neuer Schritt-Typ `pattern` (src, a, b je {ax, n, d}).
+  Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der
+  Quelle (movedCopy + patternOffsets), Kopien flacher Skizzen zeichnet
+  main.ts als Skizzen, Klick darauf wählt das Muster. Skizzen-Feld: „Reihe
+  entlang Achse“ legt das Muster an, „quer dazu“ macht ein Raster (Richtung
+  = n × Achse, in der Fläche); zeigt „Im Muster #N – bearbeiten“, wenn die
+  Skizze schon Quelle ist. Muster-Feld: Anzahl, Abstand, ⇄ je Richtung.
+  Kern-Test: 3 × 2 Bohrungen (Volumen), tiefer gebohrt → alle mit, flache
+  Quelle → nichts, fehlende Quelle → Fehler. Im Browser: flache Kreis-
+  skizze auf Wand → 4 × 5, Klick auf Kopie wählt das Muster, ⇄ ändert es,
+  Quelle −5 mm → 90,97 cm³ (= 96 − 20 · π · 16 · 5 mm³). Gelernt:
+  buildMesh setzt die Matrix selbst, updateMatrix() danach setzt sie
+  zurück. Kreis/Spiegeln bleiben Einzelkopien (T6.7).
 - 2026-10-30 Muster nach Rückmeldung des Nutzers (Feldnotiz Gehäuse):
   Achse „x/y der Skizze (in der Fläche)“, Standard x der Skizze statt
   Welt-Z, damit es auf Seitenwänden ohne Raten der Weltachse geht; Kreis

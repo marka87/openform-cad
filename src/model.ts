@@ -78,8 +78,20 @@ export interface BodyMeta { name?: string; hidden?: boolean; color?: string; mat
 export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, Aluminium: 2.7, Messing: 8.5, PLA: 1.24, ABS: 1.05, Holz: 0.6 };
 // Hilfsebene zum Skizzieren: Mitte c + off·n, Achsen u, v (erzeugt keinen Körper)
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature) & { name?: string }; // name = eigener Name im Baum
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature) => f.body ?? 1;
+// Muster (Reihe oder Raster): die Skizzen src werden je Richtung n-mal im Abstand d entlang ax kopiert (d < 0 = Gegenrichtung),
+// mit b zusätzlich quer dazu (n × b.n Exemplare). Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der Quelle neu
+// shortcut: Rundungen/Fasen an der Quelle werden nicht mitvervielfältigt; Kreis-Muster und Spiegeln legen noch Einzelkopien an
+export interface PatternDir { ax: Vec; n: number; d: number }
+export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; body?: number; hidden?: boolean }
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
+// Versatz aller Exemplare eines Musters außer dem Original (0, 0), Reihe für Reihe
+export const patternOffsets = (p: Pattern): Vec[] => {
+  const out: Vec[] = [], nb = p.b ? Math.max(1, Math.round(p.b.n)) : 1;
+  for (let j = 0; j < nb; j++) for (let i = 0; i < Math.max(1, Math.round(p.a.n)); i++)
+    if (i || j) out.push([0, 1, 2].map(k => p.a.ax[k] * p.a.d * i + (p.b ? p.b.ax[k] * p.b.d * j : 0)) as Vec);
+  return out;
+};
 // Kernlochdurchmesser für metrische Regelgewinde in mm
 export const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';
@@ -382,6 +394,7 @@ export function bodyCopy(features: Feature[], b: number, nextId: number, move: {
     delete g.face; delete g.edge; delete g.faces;
     if (g.type === 'sweep') g.profile = ids.get(g.profile) ?? g.profile;
     if (g.type === 'loft') { g.a = ids.get(g.a) ?? g.a; g.b = ids.get(g.b) ?? g.b; }
+    if (g.type === 'pattern') g.src = g.src.map((s: number) => ids.get(s) ?? s);
     out.push(g);
   }
   if (!out.length) return [];

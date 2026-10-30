@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { assembleWire, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, bulge3, isCut, isExtrude, isFlat, revAxis, splineBeziers, type Dim, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
+import { bodyOf, bulge3, isCut, isExtrude, isFlat, movedCopy, noFace, patternOffsets, revAxis, splineBeziers, type Dim, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -153,6 +153,23 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!body) continue;
         const nm = names.get(k) ?? [];
         done(...edgeOp(f.type, f.id, body, nm, anchor(f.id, anchorEdges(f, body, nm)).edges, f.r));
+        continue;
+      }
+      if (f.type === 'pattern') { // Kopien der Quellskizzen in ihrer aktuellen (vielleicht gewanderten) Lage; flache Skizzen ergeben nichts
+        for (const id of f.src) {
+          const S = moved.get(id) ?? features.find(g => g.id === id);
+          if (!S || !isExtrude(S) || S.hidden) throw new Error('Skizze für das Muster fehlt');
+          if (isFlat(S) || noFace(S)) continue;
+          for (const t of patternOffsets(f)) {
+            const c = movedCopy(S, f.id, t);
+            if (isCut(c) && !body) continue;
+            const s = solidOf(c), nS = nameSolid(c, s);
+            if (!body) { body = s; bodies.set(k, s); names.set(k, nS); continue; }
+            done(...boolean(isCut(c) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
+            body = bodies.get(k)!;
+            s.delete();
+          }
+        }
         continue;
       }
       let s: Shape3D, nS: Named = [];

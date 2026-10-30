@@ -4,7 +4,7 @@ import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad
 import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
-import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -1003,4 +1003,18 @@ test('Text aus der mitgelieferten Schrift: erhaben auf dem Boden, graviert in de
   expect(measureVolume(r.body!)).toBeLessThan(2000 - 1);                       // Gravur nimmt Material weg
   expect(measureVolume(r.body!)).toBeGreaterThan(2000 - 6 * 6);
   expect(buildBody([box(), T(3, TOPO, '  ', -1, 1)]).errors.get(3)).toBe('Kein Text eingegeben');
+});
+
+test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, flache Quelle ergibt nichts', () => {
+  const h = { ...sketchFeature('circle', TOP, [0, 0], [1, 0], 2, true)!, d: -4 };
+  const p: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: -4 }, b: { ax: [0, 0, -1], n: 2, d: 3 } };
+  let r = buildBody([box(), h, p]);
+  expect(r.errors.size).toBe(0);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 - 6 * Math.PI * 4, 0);  // Original + 5 Kopien
+  r = buildBody([box(), { ...h, d: -6 }, p]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 - 6 * Math.PI * 6, 0);  // tiefer gebohrt: alle Kopien mit
+  r = buildBody([box(), { ...h, d: 0 }, p]);
+  expect([r.errors.size, Math.round(measureVolume(r.body!))]).toEqual([0, 2000]); // flache Skizze: nur Anzeige in main.ts
+  r = buildBody([box(), p]);
+  expect(r.errors.get(3)).toBe('Skizze für das Muster fehlt');
 });

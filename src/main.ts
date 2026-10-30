@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
+import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternOffsets } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -282,7 +282,20 @@ function rebuild() {
     if (f.type === 'plane' && !f.hidden) return void group.add(planeMesh(f));
     if (f.type === 'import' || f.hidden) return;
     const M = moveMatrix(movesAfter(L, i));
-    const o = f.type === 'sweep' ? (f.id === selId ? pathLine(f) : null)
+    if (f.type === 'pattern') { // Kopien flacher Skizzen zeigen (Körper-Kopien rechnet der Kern), ausgewählt als Umriss; Klick wählt das Muster
+      const on = f.id === selId || multi.has(f.id);
+      for (const src of f.src.map(id => L.find(g => g.id === id))) {
+        if (!src || !isExtrude(src) || src.hidden || noFace(src) || !isFlat(src) && !on) continue;
+        for (const t of patternOffsets(f)) {
+          const o = buildMesh(movedCopy(src, f.id, t), isFlat(src) ? 'sketch' : 'outline');
+          delete o.userData.id; o.userData.pat = f.id;
+          o.matrix.premultiply(M); // buildMesh setzt die Lage schon in die Matrix
+          group.add(o);
+        }
+      }
+      return;
+    }
+    const o =f.type === 'sweep' ? (f.id === selId ? pathLine(f) : null)
       : !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
       : noFace(f) ? auxLine(f)
       : isFlat(f) ? buildMesh(f, 'sketch')
@@ -431,6 +444,7 @@ function nameOf(f: Feature) {
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'loft') return 'Übergang';
+  if (f.type === 'pattern') return `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
   if (f.type === 'offset') return 'Fläche versetzen';
   if (f.type === 'remove') return 'Fläche löschen';
@@ -504,7 +518,7 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[] }; // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[]; pat?: number }; // pat = Kopie aus diesem Muster // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
 let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
 // Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
@@ -536,7 +550,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
   auxPick = hs.find(h => h.object.userData.aux)?.object.userData.aux ?? null; // Hilfslinie unter der Maus (keine Körperkante)
   const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face && !h.object.userData.aux);
-  const fh = faces.find(h => h.object.userData.id && h.distance < faces[0].distance + 0.05) ?? faces[0];
+  const fh = faces.find(h => (h.object.userData.id || h.object.userData.pat) && h.distance < faces[0].distance + 0.05) ?? faces[0];
   let face: Hit | null = null, edge: EdgeHit | null = null;
   lastPick = { fh, eh: eh && (!fh || eh.distance < fh.distance + 12 * px) ? eh : undefined };
   if (fh) {
@@ -544,7 +558,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
     const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
-    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3) };
+    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat };
   }
   if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
     const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
@@ -979,6 +993,7 @@ function onDown(e: PointerEvent) {
     return showHint(pathHint());
   }
   if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
+  if (tool === 'select' && h?.pat !== undefined && !hp) { if (e.ctrlKey || e.shiftKey) toggleSel(h.pat); else { clearSel(); selId = h.pat; } detachGizmo(); return refresh(); }
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
     if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
@@ -1352,6 +1367,7 @@ function renderFeaturePanel() {
     panel.querySelector<HTMLInputElement>('.sub')!.onchange = e => { pushHistory(); f.sub = (e.target as HTMLInputElement).checked || undefined; refresh(); };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
+  if (f.type === 'pattern') return renderPatternPanel(f);
   if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
     panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -1404,11 +1420,14 @@ function renderFeaturePanel() {
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>
       <button class="act cb">Senkung anlegen</button>` : '') +
     (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
+    features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option value="u" selected>x der Skizze (in der Fläche)</option><option value="v">y der Skizze (in der Fläche)</option><option>X</option><option>Y</option><option>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
       <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}" title="negativ = Gegenrichtung"></label>
-      <button class="flip" title="Richtung umkehren">⇄ Richtung</button>${multi.size ? `<p style="color:var(--muted);margin:4px 0">wirkt auf alle ${multi.size + 1} ausgewählten Skizzen</p>` : ''}
+      <button class="flip" title="Richtung umkehren">⇄ Richtung</button>
+      <label>quer dazu: Anzahl <input class="cnt2" type="number" min="1" value="1"></label>
+      <label>Abstand quer <input class="dist2" type="number" step="0.5" value="${uval(20)}"></label>${multi.size ? `<p style="color:var(--muted);margin:4px 0">wirkt auf alle ${multi.size + 1} ausgewählten Skizzen</p>` : ''}
       <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
     `<button class="del">Löschen</button>`;
@@ -1438,10 +1457,14 @@ function renderFeaturePanel() {
     }
     clearSel(); selId = last; refresh();
   };
-  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, src) => Array.from({ length: n - 1 }, (_, i) => {
-    const t = ref().ax.map(x => x * num('.dist') * U() * (i + 1)) as Vec;
-    return { g: movedCopy(src, nextId++, t), pt: p => p.map((x, k) => x + t[k]) as Vec, dir: d => d };
-  }));
+  panel.querySelectorAll<HTMLButtonElement>('.toPat').forEach(b => b.onclick = () => { clearSel(); selId = +b.dataset.id!; refresh(); });
+  // Reihe/Raster = ein Muster-Schritt (bleibt bearbeitbar), quer dazu in der Ebene der Skizze
+  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => {
+    const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax: ref().ax, n: Math.max(2, Math.round(num('.cnt')) || 2), d: num('.dist') * U() }, body: bodyOf(f) };
+    const n2 = Math.round(num('.cnt2'));
+    if (n2 > 1) p.b = { ax: crossDir(p), n: n2, d: num('.dist2') * U() };
+    pushHistory(); add(p); clearSel(); selId = p.id; refresh();
+  };
   panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, src) => Array.from({ length: n - 1 }, (_, i) => {
     const { ax, c } = ref(), a = 2 * Math.PI * (i + 1) / n;
     return { g: movedCopy(src, nextId++, [0, 0, 0], ax, a, c), pt: p => movePt(p, [0, 0, 0], ax, a, c), dir: d => rotDir(d, ax, a) };
@@ -1667,6 +1690,29 @@ function renderEdgePanel(f: EdgeOp) {
     if (!isFinite(v)) return;
     pushHistory(); f.r = Math.max(0.5, v); refresh();
   };
+  panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+}
+// Zweite Richtung eines Musters: in der Ebene der ersten Quellskizze quer zur ersten (n × a; bei a = x der Skizze ist das y)
+function crossDir(p: Pattern): Vec {
+  const s = getById(p.src[0]), n = s && isExtrude(s) ? s.n : [0, 1, 0], a = p.a.ax;
+  const c = [n[1] * a[2] - n[2] * a[1], n[2] * a[0] - n[0] * a[2], n[0] * a[1] - n[1] * a[0]], l = Math.hypot(...c) || 1;
+  return c.map(x => x / l) as Vec;
+}
+// Muster bearbeiten: je Richtung Anzahl, Abstand und ⇄ (dreht dieses Muster um, legt kein zweites an)
+function renderPatternPanel(f: Pattern) {
+  const row = (k: 'a' | 'b', label: string) => { const d = f[k] ?? { n: 1, d: 20 };
+    return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
+      <label>Abstand <input class="d${k}" type="number" step="0.5" value="${uval(d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
+  panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
+    + row('a', 'Richtung 1') + row('b', 'quer dazu') + `<button class="del">Löschen</button>`;
+  for (const k of ['a', 'b'] as const) {
+    const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
+    const set = (fn: (d: PatternDir) => void) => { pushHistory(); fn(dir()); refresh(); };
+    const n = panel.querySelector<HTMLInputElement>(`.n${k}`)!, d = panel.querySelector<HTMLInputElement>(`.d${k}`)!;
+    n.onchange = () => { const v = Math.round(parseFloat(n.value)); if (v >= 1) set(x => x.n = v); };
+    d.onchange = () => { const v = mmOf(d); if (isFinite(v) && v) set(x => x.d = v); };
+    panel.querySelector<HTMLButtonElement>(`.f${k}`)!.onclick = () => set(x => x.d = -x.d);
+  }
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function renderShellPanel(f: Shell) {
