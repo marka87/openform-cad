@@ -10,7 +10,7 @@ type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
 // Voreinstellungen zum Anklicken; Modellnamen ändern sich bei den Anbietern, deshalb bleiben alle Felder editierbar
 export const PRESETS: { name: string; s: Omit<AiSettings, 'on' | 'key'>; note: string }[] = [
-  { name: 'Groq', s: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }, note: 'Schlüssel auf console.groq.com. Gratis-Stufe: Anfragen können vom Anbieter ausgewertet werden.' },
+  { name: 'Groq', s: { base: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b' }, note: 'Schlüssel auf console.groq.com. Gratis-Stufe: Anfragen können vom Anbieter ausgewertet werden.' },
   { name: 'Lokal (Ollama)', s: { base: 'http://localhost:11434/v1', model: 'qwen2.5:7b' }, note: 'Läuft auf diesem Rechner, nichts verlässt ihn. Kein Schlüssel nötig; Modell vorher mit „ollama pull“ holen.' },
   { name: 'Eigener Anbieter', s: { base: '', model: '' }, note: 'Jede OpenAI-kompatible Schnittstelle (OpenAI, Mistral, OpenRouter …): Basis-URL bis einschließlich /v1.' },
 ];
