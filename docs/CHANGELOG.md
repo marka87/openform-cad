@@ -9,6 +9,16 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.4.1 — 2026-10-30
+
+- **Bohrung, die nichts trifft, wird rot** („Trifft den Körper nicht –
+  schneidet nichts“), z. B. eine Bohrung in der Öffnung einer Schale.
+  Vorher blieb der Schritt unauffällig, obwohl nichts passierte.
+- **Muster-Pfeil** bleibt am letzten Exemplar, auch wenn der Körper
+  danach verschoben oder gedreht wird.
+- **Muster über Skizzen mehrerer Körper:** Jede Kopie landet im Körper
+  ihrer Quelle, nicht mehr alle im ersten.
+
 ## 0.4.0 — 2026-10-30
 
 - **KI auf Seitenwänden:** Rechteck, Kreis und Bohrung lassen sich auf

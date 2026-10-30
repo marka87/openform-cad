@@ -431,6 +431,16 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Fix 0.4.1, die drei Reste aus der Durchsicht: (1) Bohrung/
+  Tasche ohne eigene Fläche im Ergebnis → rot „Trifft den Körper nicht“
+  (gefunden in T8.8: eine Bohrung in der Öffnung einer Schale hing am
+  2-mm-Rand, der noch in der Ebene liegt, und schnitt still nichts);
+  zusätzlich wird eine Skizze ohne Bezug rot, wenn in ihrer Ebene gar
+  keine Fläche mehr liegt. (2) Muster-Pfeil und Ziehrichtung mit der
+  Matrix späterer Verschiebungen (bei Skalieren stimmt der Abstand beim
+  Ziehen nicht maßstäblich — selten, nicht behoben). (3) Muster-Kopien
+  gehen in den Körper ihrer Quelle. Tests in kernel.test.ts, Pfeil im
+  Browser geprüft.
 - 2026-10-30 T6.7: Kreis-Muster und Spiegeln als Muster-Schritt, alte
   Einzelkopien bleiben in alten Dateien Einzelkopien (keine Migration
   nötig, sie sind normale Skizzen). Weltachsen X/Y/Z drehen bzw.

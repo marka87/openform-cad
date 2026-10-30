@@ -322,7 +322,8 @@ export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Ancho
       && Math.abs(dot(sub3(x.center.toTuple(), f.o), f.n)) < 1e-4);
     // shortcut: mehrere Flächen in der Ebene → die mit dem nächsten Schwerpunkt; ungenau bei verschachtelten Flächen → Abstand Punkt–Fläche
     const face = cands.sort((x, y) => Math.hypot(...sub3(x.center.toTuple(), mid)) - Math.hypot(...sub3(y.center.toTuple(), mid)))[0];
-    const ref = face && faceRef(named, face);
+    if (!face) throw new Error('Fläche der Skizze nicht gefunden (in ihrer Ebene liegt keine Fläche mehr, z. B. von einer Schale geöffnet)'); // sonst schneidet sie still nichts
+    const ref = faceRef(named, face);
     return { f, sure: true, ...ref && { patch: { face: ref } } };
   }
   const r = resolveFace(f.face, s, named);

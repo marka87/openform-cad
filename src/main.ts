@@ -331,6 +331,7 @@ function rebuild() {
     const m = new THREE.Mesh(new THREE.ConeGeometry(7 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
     m.position.copy(V(src.o).addScaledVector(V(src.u), c[0]).addScaledVector(V(src.v), c[1]).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 30 * r));
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    m.applyMatrix4(moveMatrix(movesAfter(live(), live().indexOf(s)))); // Körper später verschoben/gedreht: Pfeil geht mit
     m.renderOrder = 1;
     m.userData.pk = k;
     handles.add(m);
@@ -1101,7 +1102,7 @@ function onDown(e: PointerEvent) {
     return;
   } else if (hp?.object.userData.pk) { // Pfeil eines Musters: Abstand ziehen
     const f = getSel() as Pattern, k: 'a' | 'b' = hp.object.userData.pk;
-    drag = { kind: 'patd', f, k, d0: f[k]!.d, P0: hp.object.position.clone(), D: V(f[k]!.ax), sx: e.clientX, sy: e.clientY, started: false };
+    drag = { kind: 'patd', f, k, d0: f[k]!.d, P0: hp.object.position.clone(), D: V(f[k]!.ax).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(f)))), sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp) { // Punkt der ausgewählten Skizze
     const f = getSel() as Extrude | Sweep;
     drag = { kind: 'point', f, f0: structuredClone(f), i: hp.object.userData.i, sx: e.clientX, sy: e.clientY, started: false };

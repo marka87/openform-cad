@@ -161,24 +161,26 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           const S = moved.get(id) ?? features.find(g => g.id === id);
           if (!S || !isExtrude(S) || S.hidden) throw new Error('Skizze für das Muster fehlt');
           if (isFlat(S) || noFace(S)) continue;
+          // jede Kopie gehört zum Körper ihrer Quelle (Mehrfachauswahl über mehrere Körper), nicht zum Körper des Muster-Schritts
+          const kk = key(bodyOf(S));
+          let b = bodies.get(kk) ?? null;
+          const put = (next: Shape3D, nm: Named = []) => { b?.delete(); bodies.set(kk, next); names.set(kk, nm); b = next; };
           // Rundungen/Fasen an der Quelle (vor dem Muster, gelungen) gehen mit: ihr Kantenbezug auf die Kopie umgeschrieben
           const ops = features.slice(0, here).filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !e.hidden && !!e.edge
             && !failed.includes(e.id) && (e.edge.a.f === id || e.edge.b.f === id));
           for (const P of patternCopies(f)) {
             const at = `${id}:${P.key}`, c = P.copy(S, f.id);
-            if (isCut(c) && !body) continue;
+            if (isCut(c) && !b) continue;
             const s = solidOf(c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
-            if (!body) { body = s; bodies.set(k, s); names.set(k, nS); }
+            if (!b) { b = s; bodies.set(kk, s); names.set(kk, nS); }
             else {
-              done(...boolean(isCut(c) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
-              body = bodies.get(k)!;
+              put(...boolean(isCut(c) ? 'cut' : 'fuse', b, names.get(kk) ?? [], s, nS));
               s.delete();
             }
             const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o;
             for (const e of ops) {
-              const fp = e.edge!.fp, nm = names.get(k) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } };
-              done(...edgeOp(e.type, e.id, body!, nm, anchorEdges({ at: P.pt(e.at), edge }, body!, nm).edges, e.r, { at }));
-              body = bodies.get(k)!;
+              const fp = e.edge!.fp, nm = names.get(kk) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } };
+              put(...edgeOp(e.type, e.id, b!, nm, anchorEdges({ at: P.pt(e.at), edge }, b!, nm).edges, e.r, { at }));
             }
           }
         }
@@ -234,6 +236,8 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
       done(...boolean((isExtrude(f) && isCut(f)) || (f.type === 'sweep' && f.sub) || (f.type === 'text' && f.d < 0) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
       s.delete(); // WASM-Speicher freigeben
+      // Bohrung/Tasche ohne eine einzige eigene Fläche im Ergebnis hat nichts getroffen (z. B. in der Öffnung einer Schale): rot statt still
+      if (isExtrude(f) && isCut(f) && !(names.get(k) ?? []).some(n => n.o.f === f.id)) throw new Error('Trifft den Körper nicht – schneidet nichts');
     } catch (e) {
       console.warn('Feature', f.id, 'fehlgeschlagen', e);
       failed.push(f.id);

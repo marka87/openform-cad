@@ -738,6 +738,13 @@ test('KI: Bohrungen in die Seitenwände eines Gehäuses, „durch“ nur durch d
   expect(measureVolume(shell.body!) - measureVolume(b.body!)).toBeCloseTo(4 * Math.PI * 9 * 2, 0); // je ein Loch durch eine 2-mm-Wand
 });
 
+test('Skizze auf einer Fläche, die es nicht mehr gibt, wird rot statt still nichts zu schneiden', () => {
+  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
+  const fs = [...box, { id: 2, type: 'shell', at: [40, 15, 0], t: 2 } as Feature];   // Schale öffnet die Vorderseite
+  const r = applyCalls(fs, [{ id: 'h', name: 'bohrung', raw: '', args: { schritt: 1, seite: 'vorne', x: 40, y: 15, durchmesser: 6, tiefe: 'durch' } }], 3);
+  expect(buildBody(r.fs).errors.get(3)).toBe('Trifft den Körper nicht – schneidet nichts'); // Rand der Öffnung liegt noch in der Ebene
+});
+
 test('KI: lochmuster – Lagen rechnet die App, Reihe/Raster/Lochkreis als Muster-Schritt (T8.7, T6.7)', () => {
   const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
   const fs = [...box, { id: 2, type: 'shell', at: [40, 30, -25], t: 2 } as Feature];
@@ -1045,6 +1052,15 @@ test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, fla
   expect([r.errors.size, Math.round(measureVolume(r.body!))]).toEqual([0, 2000]); // flache Skizze: nur Anzeige in main.ts
   r = buildBody([box(), p]);
   expect(r.errors.get(3)).toBe('Skizze für das Muster fehlt');
+});
+
+test('Muster über Skizzen zweier Körper: jede Kopie landet im Körper ihrer Quelle', () => {
+  const boxB = { ...sketchFeature('rect', GROUND, [30, 0], [50, 10], 5, false)!, d: 10, body: 5 };
+  const boss = (id: number, x: number, body?: number) => ({ ...sketchFeature('rect', { ...TOP, o: [x, 10, -5] }, [-1, -1], [1, 1], id, true)!, d: 3, ...body && { body } });
+  const p: Pattern = { id: 7, type: 'pattern', src: [2, 6], a: { ax: [1, 0, 0], n: 2, d: 3 } };
+  const r = buildBody([box(), boss(2, 10), boxB, boss(6, 40, 5), p]);
+  expect(r.errors.size).toBe(0);
+  expect([1, 5].map(b => Math.round(measureVolume(r.bodies.get(b)!)))).toEqual([2024, 2024]); // je Kiste 2000 + zwei Zapfen à 12, keiner wandert
 });
 
 test('Kreis-Muster und Spiegeln als Muster-Schritt, Rundung der Quelle geht mit (T6.7)', () => {
