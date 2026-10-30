@@ -37,13 +37,13 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.5.0 gebaut, nicht installiert)
+      STL, 3MF, Zeichnung (0.6.0 gebaut, nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
-- [ ] TODO „Durch alles“ als echte Eigenschaft statt fester Tiefe. Heute wird eine
-      Bohrung still zum Sackloch, wenn das Teil dicker wird. Einzige neue Funktion
-      ohne Feldnotiz, weil sonst das gefertigte Teil nicht stimmt.
+- [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
+      ganzen Körper, bei einem Gehäuse also auch durch die Gegenwand; nur durch eine
+      Wand bleibt eine feste Tiefe. KI-Bohrung „durch“ bleibt feste Tiefe.
 
 ### 5. Ausmisten — Claude
 - [x] Dokumente zu dieser einen Datei zusammengeführt
@@ -108,6 +108,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.6.0** Bohrung und Tasche „Durch alles“
 - **0.5.1** Boolesche Operationen geprüft; Warnung vor Export ungültiger Körper; gescheiterte
   Rundung beschädigt den Körper nicht mehr; Schale mit unsinnigem Ergebnis wird rot
 - **0.5.0** Rundung/Fase mit ungültigem Ergebnis wird rot; Seitenfeld aufgeräumt;
@@ -120,6 +121,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-30 Plan Punkt 4 (0.6.0): Extrude.thru; der Kern rechnet die Tiefe aus der Körperhülle
+  und trägt sie in d nach, 1 mm Überstand im Schnitt. Tiefe tippen oder ziehen nimmt den Haken
+  weg. Im Browser: Höhe 18,5 → 30, Bohrung folgt auf −30.
 - 2026-10-30 Plan Punkt 1 (0.5.1): Zufallsprobe fand zwei schwere Fehler: gescheiterte Rundung
   beschädigt den Ausgangskörper in OCCT (Flächen weg, ungültig, Volumen falsch) → Stand davor
   wird neu gerechnet; Schale meldet Erfolg mit Volumen 1e101 und „gültig“ → Volumenprüfung.

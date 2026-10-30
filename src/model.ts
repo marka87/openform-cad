@@ -22,6 +22,7 @@ export interface Extrude extends Frame {
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
   axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
+  thru?: boolean;            // Schnitt durch den ganzen Körper: d rechnet der Kern bei jedem Lauf neu
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
@@ -655,6 +656,7 @@ export function pushTo(part: Part, f0: Extrude, v: number): number | null {
 // Verschiebt den angefassten Teil um t entlang der Flächennormale. Gibt [Beschriftung, Wert] fürs HUD zurück.
 export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: number, i = 0): [string, number] {
   const m = t * k, p = f.p, p0 = f0.p;
+  if (part === 'end') delete f.thru; // Tiefe von Hand = nicht mehr durch alles
   switch (part) {
     case 'seg': { // Kante parallel nach außen/innen verschieben
       const pts = f0.pts!, j = (i + 1) % pts.length, { ox, oy } = segment(pts, i, ...pts[i] as [number, number]);

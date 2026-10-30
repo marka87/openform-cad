@@ -313,6 +313,21 @@ test('Gescheiterte Rundung lässt den Körper davor unversehrt; Schale mit unend
   expect(measureVolume(shell.body!)).toBeLessThan(40000);
 });
 
+test('Bohrung durch alles bleibt durchgehend, wenn das Teil dicker wird; Muster-Kopien auch', () => {
+  const plate = (d: number) => rect(GROUND, [0, 0], [60, 40], 1, d, false), hole = (thru: boolean) => ({ ...circle(top(6), [10, 20], 3, 2, -6), thru });
+  const p: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 20 } };
+  const first = settle([plate(6), hole(true), p]);
+  expect(measureVolume(first.r.body!)).toBeCloseTo(60 * 40 * 6 - 3 * Math.PI * 9 * 6, 1);
+  const thick = settle(first.fs.map(f => f.id === 1 ? { ...f, d: 10 } : f));
+  expect([...thick.r.errors]).toEqual([]);
+  expect((thick.fs[1] as Extrude).d).toBeCloseTo(-10, 6);                 // Feld zeigt die wahre Tiefe
+  expect(measureVolume(thick.r.body!)).toBeCloseTo(60 * 40 * 10 - 3 * Math.PI * 9 * 10, 1);
+  expect(thick.r.fixes.size).toBe(0);                                     // kommt zur Ruhe, kein endloses Nachrechnen
+  expect(valid(thick.r.body!)).toBe(true);
+  const blind = settle(settle([plate(6), hole(false)]).fs.map(f => f.id === 1 ? { ...f, d: 10 } : f));
+  expect(measureVolume(blind.r.body!)).toBeCloseTo(60 * 40 * 10 - Math.PI * 9 * 6, 1); // ohne Haken bleibt es die feste Tiefe
+});
+
 test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
   const { r } = settle([rect(GROUND, [-60, 20], [15, 30], 1, 18.5, false), circle(top(18.5), [-20, 20], 4, 2, -9.5)]);
   expect(invalidBodies(r.bodies)).toEqual([]);

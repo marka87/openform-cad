@@ -281,6 +281,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     // shortcut: danach rechnet der Kern einmal mehr (ohne neue Korrekturen); erst bei langsamen Modellen spürbar → Netz direkt behalten
     if (data.fixes.length && !pending) {
       for (const [id, p] of data.fixes) { const f = features.find(g => g.id === id); if (f) Object.assign(f, p); }
+      if (data.fixes.some(([id, p]) => id === selId && 'd' in p)) renderPanel(); // neu gerechnete Tiefe (durch alles) im Feld zeigen
       rebuild(); save();
     } else if (pending) requestBuild();
   } else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
@@ -1523,6 +1524,7 @@ function renderFeaturePanel() {
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
+    (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
     (f.rev ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
@@ -1590,8 +1592,10 @@ function renderFeaturePanel() {
   }
   panel.querySelector<HTMLButtonElement>('.cb')?.addEventListener('click', () => { // Senkung: weitere Bohrung, 1,8-facher Durchmesser, 1/3 so tief
     pushHistory(); const g: Extrude = { ...structuredClone(f), id: nextId++, p: { ...f.p, r: f.p.r * 1.8 }, d: -Math.max(1, Math.abs(f.d) / 3) };
-    delete (g as Feature).name; add(g); selId = g.id; refresh();
+    delete (g as Feature).name; delete g.thru; add(g); selId = g.id; refresh();
   });
+  const thru = panel.querySelector<HTMLInputElement>('.thru');
+  if (thru) thru.onchange = () => { pushHistory(); if (thru.checked) f.thru = true; else delete f.thru; refresh(); };
   const sub = panel.querySelector<HTMLInputElement>('.sub');
   if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; refresh(); };
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
@@ -1606,6 +1610,7 @@ function renderFeaturePanel() {
     pushHistory();
     const ks = inp.dataset.k!.split('.'), key = ks.at(-1)!;
     const obj: any = ks.length > 1 ? f.p : f;
+    if (key === 'd') delete f.thru;
     obj[key] = ['w', 'h', 'r', 'ry'].includes(key) ? Math.max(0.5, v) : key === 'rev' ? Math.max(1, Math.min(360, v)) : v;
     refresh();
   });

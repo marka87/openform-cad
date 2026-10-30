@@ -83,6 +83,12 @@ export function projectBody(s: Shape3D, named: Named, pl: Frame) {
   return out;
 }
 
+// Tiefe von der Skizzenebene bis zum entferntesten Punkt der Körperhülle gegen die Normale
+function thruDepth(f: Extrude, b: Shape3D) {
+  const [lo, hi] = b.boundingBox.bounds, dot = (x: number, y: number, z: number) => x * f.n[0] + y * f.n[1] + z * f.n[2];
+  const min = Math.min(...[lo[0], hi[0]].flatMap(x => [lo[1], hi[1]].flatMap(y => [lo[2], hi[2]].map(z => dot(x, y, z)))));
+  return Math.round(Math.max(0, dot(f.o[0], f.o[1], f.o[2]) - min) * 1e6) / 1e6;
+}
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
@@ -185,7 +191,8 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
             const at = `${id}:${P.key}`, c = P.copy(S, f.id);
             total++;
             if (isCut(c) && !b) { missed++; continue; }
-            const s = solidOf(c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
+            const cd = c.thru && b && isCut(c) ? thruDepth(c, b) : 0;
+            const s = solidOf(cd ? { ...c, d: -cd - 1 } : c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
             if (!b) { b = s; bodies.set(kk, s); names.set(kk, nS); }
             else {
               put(...boolean(isCut(c) ? 'cut' : 'fuse', b, names.get(kk) ?? [], s, nS));
@@ -248,7 +255,9 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           continue;
         }
         if (isFlat(g) || (isCut(g) && !body)) continue;
-        s = solidOf(g);
+        const depth = g.thru && body && isCut(g) ? thruDepth(g, body) : 0;
+        if (depth && Math.abs(depth + g.d) > 1e-6) anchor(f.id, { sure: true, patch: { d: -depth } });
+        s = solidOf(depth ? { ...g, d: -depth - 1 } : g); // 1 mm überstehen, sonst bleibt am Boden eine Haut
         nS = nameSolid(g, s);
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
