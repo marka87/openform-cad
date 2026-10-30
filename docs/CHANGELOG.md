@@ -19,6 +19,8 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   Löschen, alles Seltene unter „Mehr“.
 - **Hinweis unten kurz und passend zur Maus:** ein Satz zu dem, was Ziehen an
   dieser Stelle tut. Die ganze Hilfe zeigt F1 oder ?.
+- **Kleine Leiste neben der Auswahl:** bei einer Skizze Muster, Spiegeln, Löschen,
+  bei Kanten Runden und Fasen, ohne den Weg zur Seite.
 
 ## 0.4.4 — 2026-10-30
 

@@ -1408,8 +1408,37 @@ function xfClick(h: Hit | null, edge: EdgeHit | null) {
 }
 
 const panel = $('panel');
+// Aktionen neben der Auswahl (T10.15): dieselben Knöpfe wie im Seitenfeld, ein Klick löst den dortigen aus
+const selBar = $('selBar');
+function renderSelBar() {
+  selBar.replaceChildren(...[...panel.querySelectorAll<HTMLButtonElement>('.quick button, button[data-t]')].map(b => {
+    const c = document.createElement('button');
+    c.textContent = b.textContent; c.className = b.classList.contains('del') ? 'del' : '';
+    c.onclick = () => b.click();
+    return c;
+  }));
+}
+function selAnchor(): THREE.Vector3 | null {
+  if (edgeSel.length) return V(edgeSel[0].at);
+  const f = getSel();
+  if (!f || !isExtrude(f)) return null;
+  const pts = f.type === 'rect' ? [[f.p.x + f.p.w / 2, f.p.y + f.p.h / 2]] : f.type === 'circle' ? [[f.p.cx, f.p.cy]] : f.pts ?? [];
+  if (!pts.length) return null;
+  const x = pts.reduce((a, p) => a + p[0], 0) / pts.length, y = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  return V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y).addScaledVector(V(f.n), Math.max(f.d, 0)).applyMatrix4(moveMatrix(movesAfter(live(), live().indexOf(f))));
+}
+function placeSelBar() {
+  const p = tool === 'select' && !drag && selBar.childElementCount ? selAnchor()?.project(camera) : null;
+  if (!p || p.z > 1) { selBar.style.display = 'none'; return; }
+  const r = el.getBoundingClientRect();
+  selBar.style.display = 'flex';
+  const x = r.left + (p.x + 1) / 2 * r.width, y = r.top + (1 - p.y) / 2 * r.height, w = selBar.offsetWidth;
+  selBar.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, x - w / 2))}px`;
+  selBar.style.top = `${Math.max(8, y - 56)}px`;
+}
 function renderPanel() {
   renderFeaturePanel();
+  renderSelBar();
   const f = getSel(), c = f && !edgeSel.length && confirms.get(f.id);
   if (!f || !c) return;
   panel.insertAdjacentHTML('beforeend', `<p style="color:var(--muted);margin:6px 0 4px">Bezug nur unsicher wiedergefunden (gelb). Passt die Lage, hier bestätigen.</p><button class="confirm">Bezug übernehmen</button>`);
@@ -2461,6 +2490,7 @@ renderer.setAnimationLoop(() => {
   controls.update(); renderer.render(scene, camera);
   renderCube();
   updateScale();
+  placeSelBar();
   updateDims();
   placeMeasureLabel();
 });

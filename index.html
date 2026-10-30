@@ -28,6 +28,10 @@
   #panel button.act { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:6px; cursor:pointer; font:inherit; }
   #panel details button { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:5px; cursor:pointer; font:inherit; }
   #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
+  #selBar { position:fixed; display:none; gap:2px; z-index:9; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
+  #selBar button { background:transparent; color:var(--text); border:0; border-radius:6px; padding:4px 8px; cursor:pointer; font:inherit; font-size:12px; white-space:nowrap; }
+  #selBar button:hover { background:#353a42; }
+  #selBar .del { color:#ffb4b4; }
   #panel .quick { display:flex; gap:4px; margin:8px 0 4px; }
   #panel .quick button { flex:1; min-width:0; margin:0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:6px 2px; cursor:pointer; font:inherit; }
   #panel .quick .del { background:#4a2a2a; color:#ffb4b4; }
@@ -173,6 +177,7 @@
 </div>
 <div id="panel"></div>
 <div id="hud"></div>
+<div id="selBar"></div>
 <div id="snapTip"></div>
 <div id="ctx"></div>
 <div id="flyout"></div>

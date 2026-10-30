@@ -36,12 +36,10 @@ Log.
 1. T0.3 — Teil 2 und Teil 3 bauen, Feldnotizen führen, auswerten.
    SPERRE: Bis das erledigt ist, keine Pakete mit VERMUTUNG beginnen.
    Danach ordnet sich alles darunter neu.
-2. T4.3 — aktuellen Installer (0.4.4 gebaut 2026-10-30; noch nicht installiert und durchgeklickt) durchklicken. Läuft
+2. T4.3 — aktuellen Installer (0.5.0 gebaut 2026-10-30; noch nicht installiert und durchgeklickt) durchklicken. Läuft
    zusammen mit Punkt 1.
-3. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
-   Erst nach Punkt 1.
-4. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
-5. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
+3. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+4. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -439,13 +437,19 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
       Seltenes (Versatz, Drehen um, Zug, Übergang, Senkung) zugeklappt
       unter „Mehr“. Heute zeigt eine Skizze rund 13 Felder und Knöpfe
       gleichzeitig.
-- [ ] T10.15 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Aktionen an der Auswahl wie Shapr3D: kleine Leiste
+- [x] T10.15 DONE (VERMUTUNG, Sperre vom Nutzer aufgehoben) — Aktionen an der Auswahl wie Shapr3D: kleine Leiste
       neben der ausgewählten Skizze, Fläche oder Kante (z. B. Muster,
       Spiegeln, Bohrung, Löschen), damit der Weg zur Leiste links
       entfällt. Größerer Umbau, erst nach T10.14 (gleiche Aktionen).
 
 ## Log
 (neueste oben)
+- 2026-10-30 T10.15: #selBar spiegelt die Knöpfe des Seitenfelds (.quick, Kanten-
+  Knöpfe) und löst sie aus, also keine zweite Logik; folgt der Auswahl je Bild, nur
+  im Auswählen-Werkzeug und nicht beim Ziehen. Bewusst kleiner als im Paket gedacht:
+  keine Leiste für Rundung, Schale, Muster-Schritt, Körper, und keine „Bohrung“-Taste,
+  weil Hineinziehen das schon tut. Liegt die Auswahl hinter dem Seitenfeld, verdeckt
+  das Feld die Leiste nicht zwingend sauber (am Rand begrenzt, nicht ausgewichen).
 - 2026-10-30 T10.13: hoverHint in main.ts, nur im Auswählen-Werkzeug und nur solange
   der Grundtext steht (hintAuto), Meldungen und Fehler bleiben also stehen. F1/?
   schaltet die Vollhilfe. Im Browser geprüft: Rahmen, Kante, Höhe, Seite, Radius,
