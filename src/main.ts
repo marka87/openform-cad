@@ -321,6 +321,20 @@ function rebuild() {
     m.userData.i = i;
     handles.add(m);
   });
+  // Muster: Pfeil je Richtung am letzten Exemplar, ziehen = Abstand (T6.6)
+  const src = s?.type === 'pattern' ? getById(s.src[0]) : undefined;
+  if (s?.type === 'pattern' && src && isExtrude(src)) for (const k of ['a', 'b'] as const) {
+    const d = s[k];
+    if (!d || d.n < 2) continue;
+    const c = src.type === 'circle' ? [src.p.cx, src.p.cy] : src.type === 'rect' ? [src.p.x + src.p.w / 2, src.p.y + src.p.h / 2] : [0, 0];
+    const dir = V(d.ax).multiplyScalar(Math.sign(d.d) || 1), r = pxSize();
+    const m = new THREE.Mesh(new THREE.ConeGeometry(7 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+    m.position.copy(V(src.o).addScaledVector(V(src.u), c[0]).addScaledVector(V(src.v), c[1]).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 30 * r));
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    m.renderOrder = 1;
+    m.userData.pk = k;
+    handles.add(m);
+  }
   handles.updateMatrixWorld(true);
   buildDims();
 }
@@ -1064,6 +1078,9 @@ function onDown(e: PointerEvent) {
     const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1, body: h.body };
     pushHistory(); add(f); selId = f.id; setTool('select'); refresh();
     return;
+  } else if (hp?.object.userData.pk) { // Pfeil eines Musters: Abstand ziehen
+    const f = getSel() as Pattern, k: 'a' | 'b' = hp.object.userData.pk;
+    drag = { kind: 'patd', f, k, d0: f[k]!.d, P0: hp.object.position.clone(), D: V(f[k]!.ax), sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp) { // Punkt der ausgewählten Skizze
     const f = getSel() as Extrude | Sweep;
     drag = { kind: 'point', f, f0: structuredClone(f), i: hp.object.userData.i, sx: e.clientX, sy: e.clientY, started: false };
@@ -1194,6 +1211,13 @@ function onMove(e: PointerEvent) {
       drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep()));
       rebuild();
       return showHud(e, `Abstand: ${len(drag.f.off)}`);
+    }
+    if (drag.kind === 'patd') { // letztes Exemplar folgt der Maus, Abstand = Weg / (Anzahl − 1)
+      const s = lineParam(drag.P0, drag.D), dir = drag.f[drag.k];
+      if (s === null) return;
+      dir.d = snap(drag.d0 + s / (dir.n - 1), e, Math.min(0.5, gridStep())) || drag.d0;
+      rebuild();
+      return showHud(e, `Abstand: ${len(dir.d)} · ${dir.n} Stück`);
     }
     if (drag.kind === 'point') {
       delete drag.f.src; // gezogene Projektion wandert nicht mehr mit

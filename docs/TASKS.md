@@ -231,7 +231,7 @@ Shapr3D.
 - [x] T6.5 DONE — Muster als eigener Schritt: Reihe oder Raster (zwei
       Richtungen), merkt sich Quelle, Anzahl, Abstand, Richtung; ⇄ dreht
       das bestehende Muster um, Kopien folgen der Quelle.
-- [ ] T6.6 TODO — Muster-Griffe: Pfeile je Richtung am letzten Exemplar
+- [x] T6.6 DONE — Muster-Griffe: Pfeile je Richtung am letzten Exemplar
       ziehen = Abstand, mit Vorschau; Zahl danach im Feld.
 - [ ] T6.7 TODO — Kreis-Muster und Spiegeln ebenfalls als Muster-Schritt
       (heute noch Einzelkopien).
@@ -359,6 +359,12 @@ Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
 
 ## Log
 (neueste oben)
+- 2026-10-30 T6.6: Ausgewähltes Muster zeigt je Richtung (Anzahl ≥ 2)
+  einen orangen Pfeil am letzten Exemplar; ziehen entlang der Achse setzt
+  Abstand = Startabstand + Weg / (Anzahl − 1), am Raster eingerastet, mit
+  Anzeige und Rückgängig. Im Browser: Pfeil 50 px nach rechts → 13 auf
+  17,5 mm, Feld folgt. Kern-Test: keiner, reine Bedienung (Abstand wirkt
+  über T6.5, dort getestet).
 - 2026-10-30 T6.5: Neuer Schritt-Typ `pattern` (src, a, b je {ax, n, d}).
   Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der
   Quelle (movedCopy + patternOffsets), Kopien flacher Skizzen zeichnet
