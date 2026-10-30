@@ -9,6 +9,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.4.2 — 2026-10-30
+
+- **Messen rastet zuverlässig an Ecken ein.** Weiter hinten liegende
+  Ecken rasteten bisher oft nicht ein, der Punkt landete daneben auf der
+  Kante und das Maß war falsch (z. B. 19,41 statt 20 mm). Der Fangradius
+  gilt jetzt in Bildschirm-Pixeln; verdeckte Ecken rasten nicht ein.
+
 ## 0.4.1 — 2026-10-30
 
 - **Bohrung, die nichts trifft, wird rot** („Trifft den Körper nicht –

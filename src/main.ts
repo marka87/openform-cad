@@ -2178,12 +2178,19 @@ function measurePoints() {
     ...bodyGroup.children.filter(m => m.visible).flatMap(m => edgePoints(m)).map(([p, mid]) => ({ p, mid })),
   ];
 }
-// Punkt unter dem Zeiger, eingerastet an den Messpunkten (8 px), sonst auf Kante oder Fläche
+// Punkt unter dem Zeiger, eingerastet an den Messpunkten (8 px auf dem Bildschirm), sonst auf Kante oder Fläche.
+// In Pixeln, nicht in Weltmaß am Drehpunkt: weiter entfernte Ecken rasteten sonst nicht ein und das Maß stimmte nicht (T5.17).
+// Verdeckte Punkte zählen nicht: höchstens ~10 px (in deren Tiefe) weiter weg von der Kamera als die getroffene Stelle
 function measurePoint(): { p: THREE.Vector3; kind: string } | null {
   const { face: h, edge } = pick(), P = edge ? V(edge.at) : h?.point;
   if (!P) return null;
-  let best: { p: THREE.Vector3; mid: boolean } | null = null, d = 8 * pxSize();
-  for (const c of measurePoints()) { const x = c.p.distanceTo(P); if (x < d) { d = x; best = c; } }
+  const eye = camera.position, far = eye.distanceTo(P) * (1 + 10 * pxSize() / eye.distanceTo(controls.target)), w = el.clientWidth / 2, hh = el.clientHeight / 2;
+  let best: { p: THREE.Vector3; mid: boolean } | null = null, d = 8;
+  for (const c of measurePoints()) {
+    if (eye.distanceTo(c.p) > far) continue;
+    const q = c.p.clone().project(camera), x = Math.hypot((q.x - ndc.x) * w, (q.y - ndc.y) * hh);
+    if (x < d) { d = x; best = c; }
+  }
   return best ? { p: best.p.clone(), kind: best.mid ? 'Mitte' : 'Endpunkt' } : { p: P.clone(), kind: edge ? 'auf Kante' : 'auf Fläche' };
 }
 // Objekt messen: Kante = Länge, Kreis/Bogen = ⌀/R, Fläche = Flächeninhalt

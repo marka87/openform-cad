@@ -35,12 +35,10 @@ Log.
    Danach ordnet sich alles darunter neu.
 2. T4.3 — aktuellen Installer (zuletzt gebaut 0.3.1; 0.4.0 noch ungebaut) durchklicken. Läuft
    zusammen mit Punkt 1.
-3. T5.17 — Messen: erst klären, ob T10.7 das Problem erledigt hat
-   (siehe dort), sonst Fehlerbild aus Teil 2 oder 3.
-4. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
+3. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
-5. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
-6. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
+4. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+5. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -179,9 +177,15 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 - [x] T5.8 DONE — Rechtsklick während des Zeichnens beendet den Zug wie
       Enter, statt das Kontextmenü zu öffnen. Ergibt der Zug keine
       Fläche, bleiben die Punkte stehen (Hinweis), statt zu verschwinden.
-- [ ] T5.17 TODO — Messen überarbeiten. Der Nutzer meldete am
-      2026-10-29, dass es nicht richtig funktioniert; ein genaues
-      Fehlerbild gibt es bis heute nicht.
+- [x] T5.17 DONE — Messen: selbst durchprobiert (Platte 40×20×10,
+      Bohrung ⌀8). Gefunden: Punkt zu Punkt maß 19,41 statt 20 mm, weil
+      die hintere Ecke nicht einrastete — der Fangradius (8 px) war in
+      Weltmaß am Drehpunkt gerechnet, bei Perspektive für entfernte Ecken
+      zu klein. Jetzt in Bildschirm-Pixeln, verdeckte Punkte ausgenommen.
+      Danach im Browser: Abstand 20,00, Kante 20,00, Kreis ⌀ 8,00 / R 4,00
+      / Umfang 25,13, Winkel 90,00°, verdeckte Ecke rastet nicht ein.
+      Falls der Nutzer etwas anderes meinte: neu öffnen.
+      Alter Text:
       ZUERST KLÄREN: T10.7 hat Messen inzwischen in drei Arten neu
       gebaut (Objekt, Punkt zu Punkt, Winkel über drei Punkte). Möglich, dass das Problem
       damit erledigt ist. Einmal ausprobieren und das Paket entweder
@@ -431,6 +435,13 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T5.17 Messen (0.4.2): Fangradius in Bildschirm-Pixeln statt
+  in Weltmaß am Kamera-Drehpunkt; verdeckte Punkte (weiter weg als die
+  getroffene Stelle plus ~10 px in deren Tiefe) ausgenommen. Gelernt beim
+  Prüfen: Screenshots des Vorschau-Fensters sind auf 800 px verkleinert,
+  die Seite ist 1024 px breit — Klickpunkte sind daher ungenauer, als sie
+  aussehen; im versteckten Fenster läuft keine Render-Schleife, die
+  Kameramatrizen sind dann veraltet.
 - 2026-10-30 Fix 0.4.1, die drei Reste aus der Durchsicht: (1) Bohrung/
   Tasche ohne eigene Fläche im Ergebnis → rot „Trifft den Körper nicht“
   (gefunden in T8.8: eine Bohrung in der Öffnung einer Schale hing am
@@ -1187,11 +1198,6 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
   Angehalten vor T1.2 wie verlangt.
 
 ## Offene Fragen
-- 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
-  nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
-  reagiert es gar nicht? Seit einem Tag unbeantwortet, das Paket hängt
-  daran. Vor einer Antwort zuerst prüfen, ob T10.7 (Messen in drei
-  Arten) das Problem schon erledigt hat.
 - 2026-10-29 macOS- und Linux-Builds (T4.4): bauen oder weglassen? Der
   Weg über GitHub Actions ist durch .github/workflows/opencascade.yml
   schon erprobt, es kostet also vor allem Zeit, nicht Risiko. Ohne
@@ -1199,6 +1205,9 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
   zurückstellen, bis jemand außer dem Nutzer die App haben will.
 
 Erledigt:
+- Messen (T5.17): Fehlerbild selbst gefunden (Ecken rasteten nicht ein,
+  falsches Maß), behoben in 0.4.2. Der Nutzer kann es bestätigen oder
+  ein anderes Fehlerbild nennen.
 - KI-Assistent (ADR 0002): direkt einfügen mit Übernehmen/Verwerfen, Schlüssel im
   App-Speicher (v1), tauri-plugin-http – alles wie vorgeschlagen (Nutzer 2026-10-29).
 - Schrift für Text: DejaVu Sans mitgeliefert (Freigabe des Nutzers 2026-10-29).
