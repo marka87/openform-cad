@@ -284,7 +284,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       if (data.fixes.some(([id, p]) => id === selId && 'd' in p)) renderPanel(); // neu gerechnete Tiefe (durch alles) im Feld zeigen
       rebuild(); save();
     } else if (pending) requestBuild();
-  } else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
+  } else if (data.type === 'notice') showNotice(data.text);
+  else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
   else if (data.invalid?.length) { if (confirm(`Körper ${data.invalid.map(b => `#${b}`).join(', ')} ist ungültig, die Datei kann Löcher haben und sich nicht fertigen lassen. Trotzdem exportieren?`)) send({ type: 'export', format: data.format, force: true }); }
@@ -2291,6 +2292,7 @@ const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], bottom
 // Kamera weich zu neuer Lage fahren (300 ms), statt zu springen
 let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number; spin?: number } | null = null;
 function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
+  if (![...pos.toArray(), ...target.toArray()].every(Number.isFinite)) return; // NaN in der Kamera ließe das Bild dauerhaft leer
   fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now() };
 }
 function stepFly() {

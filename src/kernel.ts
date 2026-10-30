@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, cast, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -589,7 +589,27 @@ export function forExport(body: Shape3D): Shape3D {
   return body.clone().rotate(90, [0, 0, 0], [1, 0, 0]);
 }
 
-export async function loadStep(text: string): Promise<Shape3D> {
-  const shape = await importSTEP(new Blob([text])) as Shape3D;
+// FreeCAD schreibt beim Export des ganzen Baums auch Achsen (unendliche Kanten, im Netz NaN), Skizzen und jeden Zwischenstand
+// als eigenen Körper (der Rohblock deckt dann alle Löcher zu). Echte Mehrkörper-Dateien überlappen nicht, also bleibt von
+// überlappenden Körpern nur der erste. shortcut: „der erste“ stimmt für FreeCAD (Body steht vorn), bei anderen Quellen die Meldung beachten
+function cleanStep(shape: Shape3D) {
+  const solids = [...iterTopo(shape.wrapped, 'solid')].map(s => cast(s) as Shape3D), kept: Shape3D[] = [];
+  const overlaps = (a: Shape3D, b: Shape3D) => {
+    if (a.boundingBox.isOut(b.boundingBox)) return false;
+    try {
+      const c = a.clone().intersect(b.clone()), v = measureVolume(c);
+      c.delete();
+      return v > 0.5 * Math.min(measureVolume(a), measureVolume(b));
+    } catch { return false; } // lieber einen Körper zu viel als stillschweigend einen weg
+  };
+  for (const s of solids) if (!kept.some(k => overlaps(k, s))) kept.push(s);
+  const loose = solids.length > 0 && shape.edges.length > solids.reduce((n, s) => n + s.edges.length, 0);
+  if (kept.length === solids.length && !loose) return { shape, dropped: 0 };
+  return { shape: (kept.length > 1 ? makeCompound(kept) : kept[0]) as Shape3D, dropped: solids.length - kept.length };
+}
+
+export async function loadStep(text: string, onDropped?: (n: number) => void): Promise<Shape3D> {
+  const { shape, dropped } = cleanStep(await importSTEP(new Blob([text])) as Shape3D);
+  if (dropped) onDropped?.(dropped);
   return shape.rotate(-90, [0, 0, 0], [1, 0, 0]);
 }

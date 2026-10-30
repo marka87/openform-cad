@@ -2,7 +2,7 @@
 // Selbst ausgedacht, um Fehler zu finden; das sind NICHT die echten Teile aus T0.3.
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
-import { cast, getOC, measureVolume, setOC } from 'replicad';
+import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { GROUND, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
@@ -224,6 +224,21 @@ test('Ersatzteil aus STEP: Bohrung, Fläche versetzen, Rundung, wieder STEP, wie
   expect(r.body!.boundingBox.bounds[1][1]).toBeCloseTo(yTop + 5, 3);
   const st2 = await loadStep(await forExport(r.body!).blobSTEP().text());
   expect(measureVolume(st2)).toBeCloseTo(measureVolume(r.body!), 0);
+});
+
+test('STEP mit Zwischenständen und Hilfslinie: nur das fertige Teil und echte weitere Körper bleiben, Netz ohne NaN', async () => {
+  const fertig = makeCylinder(5, 20).cut(makeCylinder(2, 20)) as Shape3D, block = makeCylinder(5, 20) as Shape3D, anderer = makeCylinder(5, 20, [50, 0, 0]) as Shape3D;
+  const soll = measureVolume(fertig) + measureVolume(anderer), einzeln = await anderer.blobSTEP().text();
+  const step = await (makeCompound([fertig, block, anderer, makeLine([0, 0, 0], [1e9, 0, 0])] as Shape3D[]) as Shape3D).blobSTEP().text();
+  let dropped = 0;
+  const s = await loadStep(step, n => { dropped = n; });
+  expect(dropped).toBe(1);
+  expect(measureVolume(s)).toBeCloseTo(soll, 1);
+  expect(s.edges.every(e => e.length < 1000)).toBe(true);
+  expect(s.meshEdges({ tolerance: 0.1, angularTolerance: 0.5 }).lines.every(Number.isFinite)).toBe(true);
+  let nochmal = 0;
+  await loadStep(einzeln, n => { nochmal = n; }); // einzelner Körper: nichts zu melden
+  expect(nochmal).toBe(0);
 });
 
 test('Teilen, Verschieben, Bohren am verschobenen Körper, Zusammenfügen', () => {

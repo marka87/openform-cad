@@ -1,6 +1,6 @@
 [package]
 name = "openform-cad"
-version = "0.7.0"
+version = "0.7.1"
 description = "OpenForm CAD – Desktop-App"
 edition = "2021"
 

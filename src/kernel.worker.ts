@@ -19,6 +19,7 @@ export type FromWorker =
   | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null; invalid?: number[] }
   | { type: 'error'; message: string }
   | { type: 'checked'; errors: [number, string][] }
+  | { type: 'notice'; text: string }
   | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
   | { type: 'sheet'; svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][] }; // geo: id, Punkte, Kreisradius auf dem Blatt
@@ -48,7 +49,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   if (data.type === 'build') {
     for (const f of data.features) {
       if (f.type !== 'import' || imports.has(f.id)) continue;
-      try { imports.set(f.id, await loadStep(f.step)); } catch (e) { console.warn('STEP-Import fehlgeschlagen', e); }
+      try { imports.set(f.id, await loadStep(f.step, n => post({ type: 'notice', text: `${f.name}: ${n} überlappende Körper weggelassen (Zwischenstände aus dem Export)` }))); } catch (e) { console.warn('STEP-Import fehlgeschlagen', e); }
     }
     for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
     if (body && bodies.size > 1) body.delete(); // Verbund; ein einzelner Körper wird unten mit gelöscht
