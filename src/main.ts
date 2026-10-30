@@ -744,17 +744,21 @@ function hudText(f: Extrude) {
   return f.type === 'rect' ? `${fmt(f.p.w)} × ${len(f.p.h)}` : f.p.ry ? `${fmt(f.p.r)} × ${len(f.p.ry)}` : f.type === 'circle' ? `R ${len(f.p.r)}`
     : tool === 'ngon' ? `${sides}-Eck R ${len(Math.hypot(f.pts![0][0] - drag.a[0], f.pts![0][1] - drag.a[1]))}` : 'Langloch';
 }
+// false = keine Fläche (eine Seite nach dem Einrasten 0, z. B. bei schräger Sicht auf den Boden): Form bleibt an der Maus statt still zu verschwinden
 function finishSketch(b?: number[]) {
   if (b) drag.b = b;
   disposeGroup(preview);
   if (tool === 'rect' && rectMode === '3pt') { // Kante gezogen: jetzt die Breite
-    if (Math.hypot(drag.b[0] - drag.a[0], drag.b[1] - drag.a[1]) < 0.5) return;
+    if (Math.hypot(drag.b[0] - drag.a[0], drag.b[1] - drag.a[1]) < 0.5) return false;
     rect3 = { pl: drag.pl, a: drag.a, b: drag.b, onFace: drag.onFace, body: drag.body };
-    return showHint('Breite: Maus quer zur Kante bewegen, klicken · Esc = abbrechen');
+    showHint('Breite: Maus quer zur Kante bewegen, klicken · Esc = abbrechen');
+    return true;
   }
   const f = toolFeature(drag.pl, drag.a, drag.b, drag.onFace);
   if (f) { f.body = drag.body ?? f.id; pushHistory(); nextId++; add(f); selId = f.id; setTool('select'); }
+  return !!f;
 }
+const TOO_THIN = 'zu schmal (eine Seite 0) – weiter bewegen und klicken, Maß tippen, Shift = ohne Einrasten · Esc = abbrechen';
 // Eingetippte Maße als Felder im HUD: Rechteck/Langloch zwei Felder (Tab wechselt), sonst eins
 const lineTyping = () => !drag && !!poly?.pts.length && !poly.smooth && !poly.arcEnd; // Linie: Länge, Tab, Winkel
 function showTyped() {
@@ -975,7 +979,7 @@ function onDown(e: PointerEvent) {
   if (gizmo.object) (gizmo as any).pointerHover({ x: ndc.x, y: ndc.y, button: 0 }); // Treffer auch ohne vorherige Mausbewegung
   if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
   if (drag?.kind === 'sketch' && drag.armed) { // Form per Klick-Klick: zweiter Klick setzt den Endpunkt
-    onMove(e); finishSketch(); drag = null; hud.style.display = 'none'; controls.enabled = true; return refresh();
+    onMove(e); if (!finishSketch()) return showHud(e, TOO_THIN); drag = null; hud.style.display = 'none'; controls.enabled = true; return refresh();
   }
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
@@ -1270,7 +1274,7 @@ el.addEventListener('pointerup', e => {
     drag.armed = true; controls.enabled = true;
     return showHud(e, 'nochmal klicken = fertig · Maß tippen + Enter · Esc = abbrechen');
   }
-  if (drag.kind === 'sketch') finishSketch();
+  if (drag.kind === 'sketch' && !finishSketch()) { drag.armed = true; controls.enabled = true; return showHud(e, TOO_THIN); }
   if (drag.kind === 'box') boxSelect(drag);
   if (drag.kind === 'edge' && !drag.started && !drag.f) {
     const near = (a: { at: Vec }) => V(a.at).distanceTo(V(drag.edge.at)) < 4 * pxSize();
@@ -1330,7 +1334,7 @@ function setTool(t: Tool) {
   typed = '';
   tool = t;
   document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  showHint(t === 'measure' ? MEASURE_HINT[measureMode] : HINTS[t]);
+  if (ready) showHint(t === 'measure' ? MEASURE_HINT[measureMode] : HINTS[t]); // solange der Kern lädt, bleibt die Ladeanzeige stehen (Klicks wirken noch nicht)
 }
 document.querySelectorAll<HTMLButtonElement>('#toolbar button[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool as Tool));
 // Verschieben/Drehen, Muster, Spiegeln aus der Leiste: wirken auf die Auswahl (Körper bzw. Skizze/Schritt) und öffnen das passende Feld

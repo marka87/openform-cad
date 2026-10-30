@@ -359,6 +359,14 @@ Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
 
 ## Log
 (neueste oben)
+- 2026-10-30 Eigener Bedien-Durchgang im Browser (Nutzerwunsch: Mängel
+  finden, bevor er drüberstolpert). Gefunden und behoben: (1) Rechteck mit
+  zwei Klicks bei Schrägsicht → eine Seite nach Einrasten 0 → toolFeature
+  null → still verworfen, Werkzeug blieb; jetzt bleibt die Form an der
+  Maus mit Hinweis (finishSketch gibt false). (2) setTool überschrieb die
+  Ladeanzeige, Klicks vor „ready“ verpufften unbemerkt. Der Durchgang
+  brach danach ab: Das Vorschau-Fenster wechselte die Größe, Klicks trafen
+  daneben. Restliche Punkte aus dem Code, Liste an den Nutzer.
 - 2026-10-30 Fix (0.3.1, Rückmeldung Nutzer „kann Muster nicht als Loch
   durchschieben“): Ziehen an einer Kopie startet das Hineindrücken der
   Quelle (Mesh trägt userData.src); Flächen schon gebohrter Kopien findet

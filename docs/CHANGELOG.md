@@ -9,6 +9,15 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.3.2 — 2026-10-30
+
+- **Rechteck verschwand still:** Bei schräger Sicht auf den Boden rastete
+  der Endpunkt oft auf dieselbe Rasterlinie wie der Start, eine Seite wurde
+  0 und das Rechteck verschwand ohne Meldung. Jetzt bleibt die Form an der
+  Maus mit dem Hinweis „zu schmal“ (gilt für alle Formen mit zwei Klicks).
+- **Ladeanzeige** „CAD-Kern wird geladen“ bleibt stehen, auch wenn man
+  währenddessen ein Werkzeug wählt (Klicks wirken erst danach).
+
 ## 0.3.1 — 2026-10-30
 
 - **Muster-Kopien lassen sich hineindrücken:** Ziehen an einer Kopie
