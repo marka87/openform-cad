@@ -28,13 +28,13 @@
   #panel button.act { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:6px; cursor:pointer; font:inherit; }
   #panel details button { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:5px; cursor:pointer; font:inherit; }
   #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
-  #selBar { position:fixed; display:none; gap:2px; z-index:9; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
-  #selBar button { background:transparent; color:var(--text); border:0; border-radius:6px; padding:4px 8px; cursor:pointer; font:inherit; font-size:12px; white-space:nowrap; }
-  #selBar button:hover { background:#353a42; }
-  #selBar .del { color:#ffb4b4; }
-  #panel .quick { display:flex; gap:4px; margin:8px 0 4px; }
-  #panel .quick button { flex:1; min-width:0; margin:0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:6px 2px; cursor:pointer; font:inherit; }
-  #panel .quick .del { background:#4a2a2a; color:#ffb4b4; }
+  #panel .seg { display:flex; gap:2px; margin:0 0 8px; background:#1e2126; border-radius:8px; padding:2px; }
+  #panel .seg button { flex:1; background:transparent; color:var(--muted); border:0; border-radius:6px; padding:5px 2px; cursor:pointer; font:inherit; }
+  #panel .seg button.on { background:#353a42; color:var(--text); }
+  #panel .row2 { display:flex; gap:4px; align-items:center; }
+  #panel .row2 input { width:60px; }
+  #panel .row2 button { background:#353a42; color:var(--text); border:0; border-radius:6px; padding:4px 7px; cursor:pointer; font:inherit; }
+  #panel button.run { background:var(--accent); color:#1e2126; font-weight:600; margin-top:8px; }
   #panel .del { margin-top:10px; width:100%; background:#4a2a2a; color:#ffb4b4; border:0; border-radius:8px; padding:7px; cursor:pointer; }
   #tree { position:fixed; right:12px; bottom:48px; width:220px; max-height:35vh; overflow:auto; background:var(--panel);
     border:1px solid var(--line); border-radius:14px; padding:8px; }
@@ -177,7 +177,6 @@
 </div>
 <div id="panel"></div>
 <div id="hud"></div>
-<div id="selBar"></div>
 <div id="snapTip"></div>
 <div id="ctx"></div>
 <div id="flyout"></div>

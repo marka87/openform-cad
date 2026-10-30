@@ -1015,17 +1015,16 @@ function onDown(e: PointerEvent) {
     const b = patPickBody;
     patPickBody = null;
     patRef = edge ? { ax: edge.dir, c: edge.at, label: 'gewählte Kante' } : h ? { ax: h.n.toArray() as Vec, c: h.point.toArray() as Vec, label: 'gewählte Fläche' } : null;
-    clearSel(); selBody = b;
+    clearSel(); selBody = b; if (patRef) patVals.ax = 'ref';
     showHint(patRef ? `Bezug: ${patRef.label}` : 'Nichts getroffen');
     refresh();
-    panel.querySelector<HTMLDetailsElement>('details.pat')?.setAttribute('open', '');
     return;
   }
   if (patPickFor !== null) { // Bezug für Muster/Spiegeln: Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
     const id = patPickFor;
     patPickFor = null;
     patRef = edge ? { ax: edge.dir, c: edge.at, label: 'gewählte Kante' } : h ? { ax: h.n.toArray() as Vec, c: h.point.toArray() as Vec, label: 'gewählte Fläche' } : null;
-    selId = id;
+    selId = id; if (patRef) patVals.ax = 'ref';
     showHint(patRef ? `Bezug: ${patRef.label}` : 'Nichts getroffen');
     return refresh();
   }
@@ -1381,10 +1380,14 @@ function transformAct(act: string) {
     if (act === 'axis') { xfPick = { b: bb, kind: 'axis' }; return showNotice('Drehachse: gerade Kante anklicken (Winkel aus „Genau verschieben / drehen“) · Esc = abbrechen'); }
     if (act === 'align') { xfPick = { b: bb, kind: 'from' }; return showNotice('Ausrichten: erst eine ebene Fläche dieses Körpers anklicken · Esc = abbrechen'); }
   }
-  const d = panel.querySelector<HTMLDetailsElement>(act === 'values' ? 'details.vals' : 'details.pat');
+  if (act === 'pattern' || act === 'mirror') {
+    patView = { mode: act === 'mirror' ? 'mir' : 'lin', key: selBody !== null ? `b${selBody}` : `s${selId}` };
+    patVals.ax = selBody !== null ? 'Z' : 'u'; patRef = null;
+    return renderPanel();
+  }
+  const d = panel.querySelector<HTMLDetailsElement>('details.vals');
   if (d) { d.open = true; d.scrollIntoView({ block: 'nearest' }); }
-  showNotice(act === 'values' ? 'Werte eintragen, dann Verschieben, Drehen oder Skalieren'
-    : act === 'mirror' ? 'Spiegelebene wählen (⟂ Achse, oder Fläche anklicken), dann „Spiegeln“' : 'Achse, Anzahl und Abstand wählen, dann „Reihe“ oder „Kreis“');
+  showNotice('Werte eintragen, dann Verschieben, Drehen oder Skalieren');
 }
 // Klick während „Drehen um Achse“ / „Ausrichten“: legt eine Bewegung des Körpers an (wie die Griffe, mit Rückgängig)
 function xfClick(h: Hit | null, edge: EdgeHit | null) {
@@ -1410,37 +1413,8 @@ function xfClick(h: Hit | null, edge: EdgeHit | null) {
 }
 
 const panel = $('panel');
-// Aktionen neben der Auswahl (T10.15): dieselben Knöpfe wie im Seitenfeld, ein Klick löst den dortigen aus
-const selBar = $('selBar');
-function renderSelBar() {
-  selBar.replaceChildren(...[...panel.querySelectorAll<HTMLButtonElement>('.quick button, button[data-t]')].map(b => {
-    const c = document.createElement('button');
-    c.textContent = b.textContent; c.className = b.classList.contains('del') ? 'del' : '';
-    c.onclick = () => b.click();
-    return c;
-  }));
-}
-function selAnchor(): THREE.Vector3 | null {
-  if (edgeSel.length) return V(edgeSel[0].at);
-  const f = getSel();
-  if (!f || !isExtrude(f)) return null;
-  const pts = f.type === 'rect' ? [[f.p.x + f.p.w / 2, f.p.y + f.p.h / 2]] : f.type === 'circle' ? [[f.p.cx, f.p.cy]] : f.pts ?? [];
-  if (!pts.length) return null;
-  const x = pts.reduce((a, p) => a + p[0], 0) / pts.length, y = pts.reduce((a, p) => a + p[1], 0) / pts.length;
-  return V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y).addScaledVector(V(f.n), Math.max(f.d, 0)).applyMatrix4(moveMatrix(movesAfter(live(), live().indexOf(f))));
-}
-function placeSelBar() {
-  const p = tool === 'select' && !drag && selBar.childElementCount ? selAnchor()?.project(camera) : null;
-  if (!p || p.z > 1) { selBar.style.display = 'none'; return; }
-  const r = el.getBoundingClientRect();
-  selBar.style.display = 'flex';
-  const x = r.left + (p.x + 1) / 2 * r.width, y = r.top + (1 - p.y) / 2 * r.height, w = selBar.offsetWidth;
-  selBar.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, x - w / 2))}px`;
-  selBar.style.top = `${Math.max(8, y - 56)}px`;
-}
 function renderPanel() {
   renderFeaturePanel();
-  renderSelBar();
   const f = getSel(), c = f && !edgeSel.length && confirms.get(f.id);
   if (!f || !c) return;
   panel.insertAdjacentHTML('beforeend', `<p style="color:var(--muted);margin:6px 0 4px">Bezug nur unsicher wiedergefunden (gelb). Passt die Lage, hier bestätigen.</p><button class="confirm">Bezug übernehmen</button>`);
@@ -1448,6 +1422,7 @@ function renderPanel() {
 }
 function renderFeaturePanel() {
   const f = getSel();
+  if (patView && patView.key !== (f && selBody === null ? `s${f.id}` : `b${selBody}`)) patView = null; // Auswahl gewechselt
   if (edgeSel.length) { panel.style.display = 'block'; return renderEdgeSetPanel(); }
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
   if (!f) { panel.style.display = 'none'; return; }
@@ -1505,6 +1480,7 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (!isExtrude(f)) return renderEdgePanel(f);
+  if (patView) return renderSketchPat(f);
   const fields = f.type === 'rect' ? [['X', 'p.x'], ['Y', 'p.y'], ['Breite', 'p.w'], ['Tiefe', 'p.h'], ['Höhe', 'd']]
     : f.p.ry ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Halbachse X', 'p.r'], ['Halbachse Y', 'p.ry'], ['Höhe', 'd']]
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
@@ -1528,47 +1504,10 @@ function renderFeaturePanel() {
     (f.rev ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
-    `<div class="quick"><button class="qPat">Muster</button><button class="qMir">Spiegeln</button><button class="del">Löschen</button></div>` +
-    `<details><summary>Muster / Spiegeln</summary>
-      <label>Achse <select class="ax"><option value="u" selected>x der Skizze (in der Fläche)</option><option value="v">y der Skizze (in der Fläche)</option><option>X</option><option>Y</option><option>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
-      <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
-      <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}" title="negativ = Gegenrichtung"></label>
-      <button class="flip" title="Richtung umkehren">⇄ Richtung</button>
-      <label>quer dazu: Anzahl <input class="cnt2" type="number" min="1" value="1"></label>
-      <label>Abstand quer <input class="dist2" type="number" step="0.5" value="${uval(20)}"></label>${multi.size ? `<p style="color:var(--muted);margin:4px 0">wirkt auf alle ${multi.size + 1} ausgewählten Skizzen</p>` : ''}
-      <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
-    </details>` +
+    `<button class="del">Löschen</button>` +
     (more ? `<details class="more"${moreOpen ? ' open' : ''}><summary>Mehr</summary>${more}</details>` : '');
-  const patD = panel.querySelector('.lin')!.closest('details')!;
-  patD.classList.add('pat');
-  panel.querySelector<HTMLButtonElement>('.qPat')!.onclick = () => { patD.open = true; panel.querySelector<HTMLInputElement>('.cnt')!.focus(); };
-  panel.querySelector<HTMLButtonElement>('.qMir')!.onclick = () => { patD.open = true; panel.querySelector<HTMLButtonElement>('.mir')!.focus(); };
   panel.querySelector<HTMLDetailsElement>('details.more')?.addEventListener('toggle', e => moreOpen = (e.target as HTMLDetailsElement).open);
-  // Muster und Spiegeln im Raum; Achsen wie in der Exportdatei (Z oben = Szene +Y), Kreis und Spiegelebene durch den Ursprung
-  // Bezug: Achse durch den Ursprung oder angeklickte Kante (Richtung, durch die Kante) bzw. Fläche (Normale, durch den Klickpunkt;
-  // beim Spiegeln = Spiegelebene). Rundungen/Fasen an den Flächen des Features werden mitkopiert.
-  const AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] };
-  const num = (c: string) => parseFloat(panel.querySelector<HTMLInputElement>(c)!.value);
-  const axSel = panel.querySelector<HTMLSelectElement>('.ax')!;
-  axSel.onchange = () => { if (axSel.value === 'pick') { patPickFor = f.id; showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); } };
-  // u/v: Achsen der Skizze, liegen in der Fläche, auf der sie gezeichnet ist (Seitenwand ohne Raten der Weltachse); Kreis dann um den Skizzenursprung
-  const ref = () => axSel.value === 'ref' && patRef ? patRef : axSel.value === 'u' || axSel.value === 'v' ? { ax: f[axSel.value], c: f.o }
-    : { ax: AXES[axSel.value] ?? AXES.Z, c: [0, 0, 0] as Vec };
-  panel.querySelector<HTMLButtonElement>('.flip')!.onclick = () => { const d = panel.querySelector<HTMLInputElement>('.dist')!; d.value = String(-parseFloat(d.value)); };
-  // Mehrfachauswahl: jede ausgewählte Skizze wird gleich vervielfältigt (z. B. eine Lochreihe zur vollen Fläche)
-  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
   panel.querySelectorAll<HTMLButtonElement>('.toPat').forEach(b => b.onclick = () => { clearSel(); selId = +b.dataset.id!; refresh(); });
-  // Reihe/Raster, Kreis-Muster und Spiegeln = ein Muster-Schritt (bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit), quer dazu in der Ebene der Skizze
-  const addPattern = (kind?: 'rot' | 'mir') => {
-    const { ax, c } = ref();
-    const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax, n: Math.max(2, Math.round(num('.cnt')) || 2), d: num('.dist') * U() }, body: bodyOf(f), ...kind && { [kind]: { ax, c } } };
-    const n2 = Math.round(num('.cnt2'));
-    if (n2 > 1 && !p.rot && !p.mir) p.b = { ax: crossDir(p), n: n2, d: num('.dist2') * U() };
-    pushHistory(); add(p); clearSel(); selId = p.id; refresh();
-  };
-  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addPattern();
-  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addPattern('rot');
-  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addPattern('mir');
   if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
   if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
@@ -1905,7 +1844,7 @@ function openCtx(e: PointerEvent) {
     const b = sel.type === 'move' ? sel.body : sel.type !== 'combine' && sel.type !== 'plane' ? bodyOf(sel) : null;
     if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
     if (isExtrude(sel)) items.push([`Alle ${KINDS[sel.type]} (${sel.d ? 'Körper' : 'Skizzen'}) auswählen`, () => showNotice(`${selectWhere(f => f.type === sel.type && !f.d === !sel.d)} ausgewählt`)]);
-    if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details.pat'); if (d) d.open = true; }]);
+    if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => transformAct('pattern')]);
     items.push(null);
   } else if (edge) items.push(['Kante runden / fasen …', () => { clearSel(); edgeSel = [edge]; refresh(); }], null);
   if (h) { // Fläche löschen; mit Shift zur gewählten Löschung dazu
@@ -2122,13 +2061,14 @@ function escapeStep() {
   ctx.style.display = 'none';
   if (typed) { typed = ''; hud.style.display = 'none'; return; }
   if (rect3) { rect3 = null; disposeGroup(preview); return showHint(HINTS[tool]); }
-  if (axisFor !== null || patPickFor !== null || patPickBody !== null || xfPick) { axisFor = patPickFor = patPickBody = null; xfPick = null; return showHint(HINTS[tool]); }
+  if (axisFor !== null || patPickFor !== null || patPickBody !== null || xfPick) { axisFor = patPickFor = patPickBody = null; xfPick = null; if (patView) renderPanel(); return showHint(HINTS[tool]); }
   if (poly) {
     if (tool === 'line' && !poly.smooth && poly.path === undefined && poly.pts.length >= 2) return finishPoly(false);
     cancelPoly(); return showHint(HINTS[tool]);
   }
   if (drag) { drag = null; disposeGroup(preview); hud.style.display = 'none'; controls.enabled = true; return refresh(); }
   if (tool !== 'select') return setTool('select');
+  if (patView) { patView = null; patRef = null; return renderPanel(); }
   if (selId !== null || selBody !== null || multi.size || edgeSel.length || gizmo.object) { clearSel(); detachGizmo(); return refresh(); }
   if (workHit) { setWorkPlane(null); showHint(HINTS[tool]); }
 }
@@ -2154,7 +2094,68 @@ function addMove(q: THREE.Quaternion, t: THREE.Vector3, s = 1) {
   refresh();
 }
 function commitGizmo() { addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart)); }
+// Muster und Spiegeln: eigene Ansicht im Seitenfeld, geöffnet über die Leiste links; zeigt nur die Felder der gewählten Art
+type PatMode = 'lin' | 'rot' | 'mir';
+let patView: { mode: PatMode; key: string } | null = null;
+const patVals = { ax: '', cnt: 3, dist: 20, cnt2: 1, dist2: 20 }; // Abstände in mm; bleiben beim Wechsel der Art und nach dem Anklicken eines Bezugs erhalten
+const WORLD_AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }; // wie in der Exportdatei (Z oben = Szene +Y), durch den Ursprung
+function renderPatView(title: string, axes: [string, string][], cross: boolean, note: string, pick: () => void, run: (mode: PatMode, axis: string) => void) {
+  const m = patView!.mode, lab = { lin: 'Richtung', rot: 'Drehachse', mir: 'Senkrecht zur Ebene' }[m];
+  const tab = (k: PatMode, t: string) => `<button data-m="${k}"${k === m ? ' class="on"' : ''}>${t}</button>`;
+  panel.innerHTML = `<h3>${title}</h3><div class="seg">${tab('lin', 'Reihe')}${tab('rot', 'Kreis')}${tab('mir', 'Spiegeln')}</div>
+    <label>${lab} <select class="ax">${axes.map(([v, t]) => `<option value="${v}"${v === patVals.ax ? ' selected' : ''}>${t}</option>`).join('')}${patRef ? `<option value="ref"${patVals.ax === 'ref' ? ' selected' : ''}>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>` +
+    (m !== 'mir' ? `<label>${m === 'rot' ? 'Anzahl auf 360°' : 'Anzahl'} <input class="cnt" type="number" min="2" value="${patVals.cnt}"></label>` : '') +
+    (m === 'lin' ? `<label>Abstand <span class="row2"><button class="flip" title="Richtung umkehren">⇄</button><input class="dist" type="number" step="0.5" value="${uval(patVals.dist)}"></span></label>` : '') +
+    (m === 'lin' && cross ? `<label>Reihen quer dazu <input class="cnt2" type="number" min="1" value="${patVals.cnt2}"></label><label>Abstand quer <input class="dist2" type="number" step="0.5" value="${uval(patVals.dist2)}"></label>` : '') +
+    (note ? `<p style="color:var(--muted);margin:4px 0">${note}</p>` : '') +
+    `<button class="act run">${{ lin: 'Reihe anlegen', rot: 'Kreis anlegen', mir: 'Spiegeln' }[m]}</button><button class="act back">Zurück</button>`;
+  const q = <T extends HTMLElement>(c: string) => panel.querySelector<T>(c);
+  const keep = () => {
+    const n = (c: string) => parseFloat(q<HTMLInputElement>(c)?.value ?? '');
+    if (isFinite(n('.cnt'))) patVals.cnt = Math.max(2, Math.round(n('.cnt')));
+    if (isFinite(n('.dist'))) patVals.dist = n('.dist') * U();
+    if (isFinite(n('.cnt2'))) patVals.cnt2 = Math.max(1, Math.round(n('.cnt2')));
+    if (isFinite(n('.dist2'))) patVals.dist2 = n('.dist2') * U();
+  };
+  panel.querySelectorAll<HTMLButtonElement>('.seg button').forEach(b => b.onclick = () => { keep(); patView!.mode = b.dataset.m as PatMode; renderPanel(); });
+  const ax = q<HTMLSelectElement>('.ax')!;
+  ax.onchange = () => {
+    keep();
+    if (ax.value === 'pick') { pick(); return showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); }
+    patVals.ax = ax.value;
+  };
+  q<HTMLButtonElement>('.flip')?.addEventListener('click', e => { e.preventDefault(); const d = q<HTMLInputElement>('.dist')!; d.value = String(-parseFloat(d.value)); });
+  q<HTMLButtonElement>('.run')!.onclick = () => { keep(); const mode = patView!.mode; patView = null; run(mode, patVals.ax); };
+  q<HTMLButtonElement>('.back')!.onclick = () => { patView = null; patRef = null; renderPanel(); };
+}
+// Skizze: ein Muster-Schritt, bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit. Mehrfachauswahl wird gemeinsam vervielfältigt
+function renderSketchPat(f: Extrude) {
+  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
+  renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [['u', 'x der Skizze'], ['v', 'y der Skizze'], ['X', 'X'], ['Y', 'Y'], ['Z', 'Z']], true,
+    multi.size ? `Wirkt auf alle ${multi.size + 1} ausgewählten Skizzen` : '', () => { patPickFor = f.id; }, (mode, a) => {
+      // u/v liegen in der Fläche der Skizze (Seitenwand ohne Raten der Weltachse), Kreis dann um den Skizzenursprung
+      const { ax, c } = a === 'ref' && patRef ? patRef : a === 'u' || a === 'v' ? { ax: f[a], c: f.o } : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec };
+      const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax, n: patVals.cnt, d: patVals.dist }, body: bodyOf(f), ...mode !== 'lin' && { [mode]: { ax, c } } };
+      if (mode === 'lin' && patVals.cnt2 > 1) p.b = { ax: crossDir(p), n: patVals.cnt2, d: patVals.dist2 };
+      pushHistory(); add(p); clearSel(); selId = p.id; patRef = null; refresh();
+    });
+}
+// Ganzer Körper: je Exemplar Kopie aller Schritte + Bewegung (bodyCopy); Kreis: gleichmäßig auf 360°
+function renderBodyPat(b: number) {
+  renderPatView(`Körper #${b} vervielfältigen`, [['X', 'X'], ['Y', 'Y'], ['Z', 'Z']], false, '', () => { patPickBody = b; }, (mode, a) => {
+    const { ax, c } = a === 'ref' && patRef ? patRef : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec }, k = patVals.cnt, m = V(ax).normalize();
+    const moves: { c: Vec; q: number[]; t: Vec; s?: number }[] = mode === 'mir' ? [{ c, q: [m.x, m.y, m.z, 0], t: [0, 0, 0], s: -1 }] // −1 und halbe Drehung um die Normale = Spiegelung
+      : Array.from({ length: k - 1 }, (_, i) => mode === 'lin' ? { c: [0, 0, 0] as Vec, q: [0, 0, 0, 1], t: ax.map(x => x * patVals.dist * (i + 1)) as Vec }
+        : { c, q: new THREE.Quaternion().setFromAxisAngle(m, 2 * Math.PI * (i + 1) / k).toArray(), t: [0, 0, 0] as Vec });
+    pushHistory();
+    let out: Feature[] = [];
+    for (const mv of moves) { const cp = bodyCopy(features, b, nextId, mv); nextId += cp.length; out = [...out, ...cp]; }
+    add(...out); detachGizmo(); patRef = null; refresh();
+    showNotice(`${moves.length} Kopie${moves.length > 1 ? 'n' : ''} von Körper #${b} angelegt`);
+  });
+}
 function renderBodyPanel(b: number) {
+  if (patView) return renderBodyPat(b);
   const others = bodyIds.filter(o => o !== b), planes = live().filter(f => f.type === 'plane');
   const bm = meta[b] ?? {};
   panel.innerHTML = `<h3>Körper #${b}</h3>
@@ -2169,12 +2170,6 @@ function renderBodyPanel(b: number) {
       <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option></select></label>
       <label>Winkel ° <input type="number" step="5" value="90" class="ang"></label><button class="rt">Drehen um Mitte</button>
       <label>Maßstab % <input type="number" step="10" value="200" class="sc"></label><button class="scl">Skalieren um Mitte</button>
-    </details>
-    <details class="pat"><summary>Muster / Spiegeln (ganzer Körper)</summary>
-      <label>Achse <select class="pax"><option>X</option><option>Y</option><option selected>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
-      <label>Anzahl <input class="pcnt" type="number" min="2" value="3"></label>
-      <label>Abstand <input class="pdist" type="number" step="0.5" value="${uval(30)}"></label>
-      <button class="plin">Reihe entlang Achse</button><button class="prot">Kreis um Achse</button><button class="pmir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
     (planes.length ? `<label>an <select class="pl">${planes.map(p => `<option value="${p.id}">${nameOf(p)} #${p.id}</option>`).join('')}</select></label><button class="split">Teilen</button>`
       : `<p style="color:var(--muted)">Teilen: erst mit E eine Ebene anlegen</p>`) +
@@ -2207,22 +2202,6 @@ function renderBodyPanel(b: number) {
     const ax = V({ X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }[q<HTMLSelectElement>('.ax').value]!);
     addMove(new THREE.Quaternion().setFromAxisAngle(ax, num('.ang') * Math.PI / 180), new THREE.Vector3());
   };
-  // Muster/Spiegeln des ganzen Körpers: je Exemplar Kopie aller Schritte + Bewegung (bodyCopy); Achse durch den Ursprung oder
-  // angeklickte Kante/Fläche wie beim Skizzen-Muster. Kreis: Exemplare gleichmäßig auf 360° verteilt
-  const PAX: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }, pax = q<HTMLSelectElement>('.pax');
-  pax.onchange = () => { if (pax.value === 'pick') { patPickBody = b; showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); } };
-  const pref = () => pax.value === 'ref' && patRef ? patRef : { ax: PAX[pax.value] ?? PAX.Z, c: [0, 0, 0] as Vec };
-  const copies = (moves: { c: Vec; q: number[]; t: Vec; s?: number }[]) => {
-    pushHistory();
-    let out: Feature[] = [];
-    for (const m of moves) { const c = bodyCopy(features, b, nextId, m); nextId += c.length; out = [...out, ...c]; }
-    add(...out); detachGizmo(); refresh();
-    showNotice(`${moves.length} Kopie${moves.length > 1 ? 'n' : ''} von Körper #${b} angelegt`);
-  };
-  const n = () => Math.max(2, Math.round(num('.pcnt')) || 2);
-  q<HTMLButtonElement>('.plin').onclick = () => { const { ax } = pref(), d = num('.pdist') * U(); copies(Array.from({ length: n() - 1 }, (_, i) => ({ c: [0, 0, 0] as Vec, q: [0, 0, 0, 1], t: ax.map(x => x * d * (i + 1)) as Vec }))); };
-  q<HTMLButtonElement>('.prot').onclick = () => { const { ax, c } = pref(), k = n(); copies(Array.from({ length: k - 1 }, (_, i) => ({ c, q: new THREE.Quaternion().setFromAxisAngle(V(ax).normalize(), 2 * Math.PI * (i + 1) / k).toArray(), t: [0, 0, 0] as Vec }))); };
-  q<HTMLButtonElement>('.pmir').onclick = () => { const { ax, c } = pref(), m = V(ax).normalize(); copies([{ c, q: [m.x, m.y, m.z, 0], t: [0, 0, 0], s: -1 }]); }; // −1 und halbe Drehung um die Normale = Spiegelung
   panel.querySelectorAll<HTMLButtonElement>('.op').forEach(x => x.onclick = () => { // b nimmt den anderen Körper auf
     const f: Combine = { id: nextId++, type: 'combine', op: x.dataset.op as Combine['op'], a: b, b: +q<HTMLSelectElement>('.other').value };
     pushHistory(); add(f); detachGizmo(); refresh();
@@ -2496,7 +2475,6 @@ renderer.setAnimationLoop(() => {
   controls.update(); renderer.render(scene, camera);
   renderCube();
   updateScale();
-  placeSelBar();
   updateDims();
   placeMeasureLabel();
 });

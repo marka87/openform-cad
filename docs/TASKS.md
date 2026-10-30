@@ -37,7 +37,7 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.6.1 gebaut, nicht installiert)
+      STL, 3MF, Zeichnung (0.6.2 gebaut, nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -75,7 +75,7 @@ Nur anfassen, wenn ein echtes Teil es verlangt.
 - [x] Muster und Spiegeln als eigener Schritt, Text, Gewinde-Kernlöcher, Senkung
 - [x] Zeichnung mit Einzelbemaßung und Toleranzen; SVG, PDF, DXF
 - [x] Export und Import: STEP rein und raus, STL, 3MF
-- [x] Messen, Schnittansicht, Hinweis passend zur Maus, Auswahlleiste
+- [x] Messen, Schnittansicht, Hinweis passend zur Maus
 - [x] mm und Zoll, Desktop-App mit Installer
 - [x] KI-Assistent ist eingebaut, standardmäßig aus, wird nicht weiter ausgebaut
 
@@ -111,6 +111,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.6.2** Leiste auf dem Modell entfernt; Muster und Spiegeln als eigene Ansicht
 - **0.6.1** Großes Lochraster stürzt nicht mehr ab und rechnet ein Vielfaches schneller
 - **0.6.0** Bohrung und Tasche „Durch alles“
 - **0.5.1** Boolesche Operationen geprüft; Warnung vor Export ungültiger Körper; gescheiterte
@@ -125,6 +126,12 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-30 Rückmeldung des Nutzers (0.6.2): Muster/Spiegeln/Löschen erschienen zu oft, vor
+  allem auf dem Modell; das Muster-Feld soll besser und separat sein. Leiste auf dem Modell und
+  Knopfreihe entfernt, Muster und Spiegeln öffnen über die Leiste links oder das Kontextmenü eine
+  eigene Ansicht mit Reihe, Kreis, Spiegeln, nur mit den nötigen Feldern; gilt für Skizze und Körper.
+  Geprüft im Browser, Raster 4 × 2 mit 91,98 cm³ wie gerechnet. Körper-Kopien und „Fläche anklicken“
+  in der neuen Ansicht nicht durchgeklickt.
 - 2026-10-30 Tempo-Messung (0.6.1), Platte 300×200, nur Kern ohne Oberfläche: 300 Löcher
   stürzten ab (memory out of bounds), 100 Löcher 6,7 s. Muster schneidet nun alle Kopien in
   einem Schnitt, wenn sie sich nicht überlappen und keine Rundung mitgeht: 100 Löcher 0,7 s,
