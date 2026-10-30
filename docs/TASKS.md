@@ -354,11 +354,17 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ### Oberfläche wie Shapr3D (Interview 2026-10-30)
 Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
-- [ ] T10.12 TODO — Werkzeugleiste links: Untermenü-Pfeile groß und
+- [x] T10.12 DONE — Werkzeugleiste links: Untermenü-Pfeile groß und
       klickbar, Leiste kürzer und klarer gegliedert.
 
 ## Log
 (neueste oben)
+- 2026-10-30 T10.12: Werkzeugleiste in Gruppen (Skizze, Hilfen, Körper,
+  Prüfen; Text zu Skizze, Schale zu Körper). Untermenü-Pfeil ▸ wurde ein
+  umrandeter ▾-Knopf (≈ 22 × 18 px), Rechtsklick auf das Werkzeug öffnet
+  das Untermenü ebenfalls. Zeilen 1 px enger, damit Leiste samt Gruppen in
+  768 px Fensterhöhe ohne Scrollen passt (geprüft: 488 von 488 px). Weitere
+  Shapr3D-Schritte (Werkzeuge an der Auswahl) folgen nach Rückmeldung.
 - 2026-10-30 T6.6: Ausgewähltes Muster zeigt je Richtung (Anzahl ≥ 2)
   einen orangen Pfeil am letzten Exemplar; ziehen entlang der Achse setzt
   Abstand = Startabstand + Weg / (Anzahl − 1), am Raster eingerastet, mit

@@ -1288,6 +1288,8 @@ function modeLabels() {
   document.querySelector('#toolbar [data-tool="ngon"] .mode')!.textContent = `${sides} Ecken`;
   document.querySelector('#toolbar [data-tool="measure"] .mode')!.textContent = MENUS.measure.find(m => m[0] === measureMode)![1];
 }
+// Rechtsklick auf ein Werkzeug mit Untermenü öffnet es ebenfalls (großes Ziel statt nur des ▾-Knopfs)
+document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.parentElement!.oncontextmenu = e => { e.preventDefault(); d.click(); });
 document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.onclick = e => {
   e.stopPropagation();
   const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : m === 'measure' ? measureMode : m === 'xf' ? '' : String(sides);

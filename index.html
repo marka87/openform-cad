@@ -9,12 +9,12 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
   canvas { display:block; }
-  #toolbar { position:fixed; left:12px; top:120px; max-height:calc(100% - 270px); overflow-y:auto; display:flex; flex-direction:column; gap:2px; /* nur so hoch wie die Werkzeuge, bei kleinen Fenstern scrollen */
+  #toolbar { position:fixed; left:12px; top:120px; max-height:calc(100% - 270px); overflow-y:auto; display:flex; flex-direction:column; gap:1px; /* nur so hoch wie die Werkzeuge, bei kleinen Fenstern scrollen */
     background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
   #toolbar button:hover, #top button:hover { background:#353a42; }
-  #toolbar button { padding:2px 10px; } /* 18 Einträge: passt so ohne Scrollen in 768 px Fensterhöhe */
+  #toolbar button { padding:1px 10px; } /* 18 Einträge + 4 Gruppen: passt so ohne Scrollen in 768 px Fensterhöhe */
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
   #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
   #top { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:4px;
@@ -84,8 +84,11 @@
   #snapTip { position:fixed; pointer-events:none; font:11px system-ui; color:#1e2126; background:#ffd2a8; border-radius:4px; padding:1px 5px; display:none; }
   #hud b { display:inline-block; min-width:34px; background:#1e2126; color:var(--accent); border-radius:4px; padding:0 4px; margin:0 2px; text-align:right; }
   #hud b.on { outline:2px solid #1e2126; background:#fff; color:#1e2126; }
-  #toolbar .dd { float:right; margin-left:6px; padding:0 4px; border-radius:4px; color:var(--muted); }
-  #toolbar .dd:hover { background:#454b55; color:var(--text); }
+  /* Untermenü: eigener, gut treffbarer Knopf (vorher kleines ▸, schwer zu sehen und zu treffen) */
+  #toolbar .dd { float:right; margin:0 -6px 0 8px; min-width:22px; padding:0 4px; text-align:center; font-size:15px; line-height:16px;
+    border:1px solid var(--line); border-radius:6px; background:#2b2f36; color:var(--text); }
+  #toolbar .dd:hover { background:#4a515c; border-color:var(--accent); }
+  #toolbar .grp { color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px 0; line-height:10px; }
   #toolbar small.mode { color:var(--muted); font-size:11px; margin-left:3px; }
   #snapMenu { position:fixed; display:none; z-index:20; left:270px; bottom:14px; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 12px; flex-direction:column; gap:5px; }
   #snapMenu b { margin-top:4px; color:var(--muted); font-weight:600; }
@@ -132,23 +135,27 @@
 <body>
 <div id="toolbar">
   <button data-tool="select">Auswählen / Ziehen <kbd>V</kbd></button>
-  <button data-tool="rect">Rechteck <small class="mode"></small><kbd>R</kbd><span class="dd" data-menu="rect" title="Art wählen">▸</span></button>
+  <div class="grp">Skizze</div>
+  <button data-tool="rect">Rechteck <small class="mode"></small><kbd>R</kbd><span class="dd" data-menu="rect" title="Art wählen (auch Rechtsklick)">▾</span></button>
   <button data-tool="circle">Kreis <kbd>C</kbd></button>
   <button data-tool="ellipse">Ellipse <kbd>I</kbd></button>
-  <button data-tool="ngon">Vieleck <small class="mode"></small><kbd>N</kbd><span class="dd" data-menu="ngon" title="Ecken wählen">▸</span></button>
+  <button data-tool="ngon">Vieleck <small class="mode"></small><kbd>N</kbd><span class="dd" data-menu="ngon" title="Ecken wählen (auch Rechtsklick)">▾</span></button>
   <button data-tool="slot">Langloch <kbd>O</kbd></button>
   <button data-tool="line">Linie <kbd>L</kbd></button>
-  <button data-tool="aux" title="Hilfslinie: bildet keine Fläche, nur zum Einrasten">Hilfslinie <kbd>G</kbd></button>
-  <button data-tool="trim" title="Hilfslinie trimmen (Klick) oder verlängern (Shift+Klick)">Trimmen <kbd>T</kbd></button>
   <button data-tool="arc">Bogen <kbd>A</kbd></button>
   <button data-tool="spline">Spline <kbd>S</kbd></button>
-  <button data-tool="shell">Schale <kbd>H</kbd></button>
-  <button data-tool="plane">Ebene <kbd>E</kbd></button>
   <button data-tool="text" title="Text auf Boden oder Fläche: erhaben oder graviert">Text</button>
-  <button data-act="move" title="Ausgewählten Körper (oder den Körper der Skizze) mit Griffen verschieben/drehen">Verschieben / Drehen<span class="dd" data-menu="xf" title="Transformieren: Skalieren, Werte, Drehen um Achse, Ausrichten …">▸</span></button>
-  <button data-act="pattern" title="Ausgewählten Körper oder Skizze als Reihe oder Kreis vervielfältigen">Muster</button>
+  <div class="grp">Hilfen</div>
+  <button data-tool="aux" title="Hilfslinie: bildet keine Fläche, nur zum Einrasten">Hilfslinie <kbd>G</kbd></button>
+  <button data-tool="trim" title="Hilfslinie trimmen (Klick) oder verlängern (Shift+Klick)">Trimmen <kbd>T</kbd></button>
+  <button data-tool="plane">Ebene <kbd>E</kbd></button>
+  <div class="grp">Körper</div>
+  <button data-tool="shell">Schale <kbd>H</kbd></button>
+  <button data-act="move" title="Ausgewählten Körper (oder den Körper der Skizze) mit Griffen verschieben/drehen">Verschieben / Drehen<span class="dd" data-menu="xf" title="Transformieren: Skalieren, Werte, Drehen um Achse, Ausrichten … (auch Rechtsklick)">▾</span></button>
+  <button data-act="pattern" title="Ausgewählten Körper oder Skizze als Reihe, Raster oder Kreis vervielfältigen">Muster</button>
   <button data-act="mirror" title="Ausgewählten Körper oder Skizze spiegeln">Spiegeln</button>
-  <button data-tool="measure">Messen <small class="mode"></small><kbd>M</kbd><span class="dd" data-menu="measure" title="Art des Messens">▸</span></button>
+  <div class="grp">Prüfen</div>
+  <button data-tool="measure">Messen <small class="mode"></small><kbd>M</kbd><span class="dd" data-menu="measure" title="Art des Messens (auch Rechtsklick)">▾</span></button>
 </div>
 <div id="top">
   <button id="bNew" title="Neues, leeres Modell">Neu</button>
