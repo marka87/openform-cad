@@ -15,6 +15,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   die Seiten eines Rechteck-Schritts legen (vorne, hinten, links,
   rechts), z. B. Löcher in die Wand eines Gehäuses. „durch“ geht bei
   einer Schale nur durch die Wand.
+- **KI-Lochmuster:** Reihe, Raster oder Lochkreis in einem Auftrag, z. B.
+  „Lüftungsraster rechts: 4 Reihen mit je 6 Löchern ⌀3, Abstand 6“. Die
+  Lagen rechnet das Programm, nicht die KI; Reihe und Raster werden ein
+  bearbeitbarer Muster-Schritt.
+- **KI legt nichts doppelt an:** Wiederholte Aufrufe und Bohrungen an
+  derselben Stelle werden abgelehnt. „Die Schale“ oder „das Gehäuse“ als
+  Ziel meint den Körper.
 
 ## 0.3.3 — 2026-10-30
 

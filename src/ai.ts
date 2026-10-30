@@ -40,7 +40,7 @@ export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], d
       return await doFetch(s.base.replace(/\/+$/, '') + '/chat/completions', {
         method: 'POST', signal: ctl.signal,
         headers: { 'Content-Type': 'application/json', ...s.key && { Authorization: `Bearer ${s.key}` } },
-        body: JSON.stringify({ model: s.model, messages, ...tools.length && { tools, tool_choice: 'auto' }, temperature: 0 }),
+        body: JSON.stringify({ model: s.model, messages, ...tools.length && { tools, tool_choice: 'auto' }, temperature: 0, max_tokens: 3000 }), // Obergrenze: kleine Modelle schreiben sonst endlos weiter (Denkmodelle wie gpt-oss zählen ihr Denken mit)
       });
     } catch (e) {
       throw new Error(ctl.signal.aborted ? `Keine Antwort nach ${Math.round(timeoutMs / 1000)} s` : `Anbieter nicht erreichbar (${e instanceof Error ? e.message : e})`);

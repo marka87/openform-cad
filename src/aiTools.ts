@@ -1,7 +1,7 @@
 // KI-Werkzeuge (ADR 0002): Schemata für das Modell und ihre Umsetzung in normale Features. Reine Funktionen, ohne Oberfläche.
 // Stufe T8.3: Rechteck, Kreis, Extrudieren, Bohrung. Als Fläche nur die Oberseite eines extrudierten Schritts; mehr, wenn es gebraucht wird.
 import type { Msg, Tool, ToolCall } from './ai';
-import { bodyOf, GROUND, isExtrude, noFace, sketchFeature, THREADS, type Extrude, type Feature, type Frame, type Vec } from './model';
+import { bodyOf, GROUND, isExtrude, noFace, sketchFeature, THREADS, type Extrude, type Feature, type Frame, type Pattern, type Vec } from './model';
 
 const num = (desc: string) => ({ type: 'number', description: desc });
 // Flache Parameter: kleine Modelle (7B, lokal) füllen verschachtelte oder „entweder–oder“-Felder unzuverlässig aus
@@ -25,6 +25,11 @@ export const TOOLS: Tool[] = [
   fn('bohrung', 'Runde Bohrung in eine Fläche: Durchmesser oder metrisches Gewinde (Kernloch), Tiefe in mm oder durch.',
     { schritt: { type: 'integer', description: 'Nummer des Schritts, in dessen Fläche gebohrt wird' }, seite, x: num('Mitte, mm'), y: num('Mitte, mm'), durchmesser: num('mm, wenn kein Gewinde'),
       gewinde: { type: 'string', enum: Object.keys(THREADS) }, tiefe: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['durch'] }] } }, ['schritt', 'x', 'y', 'tiefe']),
+  fn('lochmuster', 'Mehrere gleiche Bohrungen auf einmal: Reihe, Raster oder Lochkreis. Die Lagen rechnet das Programm; ohne Abstand gleichmäßig über die Fläche verteilt, ohne Mitte in der Flächenmitte.',
+    { schritt: { type: 'integer' }, seite, anzahl: { type: 'integer', description: 'Löcher je Reihe (beim Lochkreis: alle)' }, reihen: { type: 'integer', description: 'Standard 1; mehr = Raster' },
+      abstand: num('mm zwischen Lochmitten in einer Reihe, optional'), abstand_reihen: num('mm zwischen den Reihen, optional'),
+      mitte_x: num('Mitte des Musters, optional'), mitte_y: num('Mitte des Musters, optional'), lochkreis_radius: num('mm; angegeben = Löcher auf einem Kreis statt in Reihen'),
+      durchmesser: num('mm, wenn kein Gewinde'), gewinde: { type: 'string', enum: Object.keys(THREADS) }, tiefe: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['durch'] }], description: 'Standard durch' } }, ['schritt', 'anzahl']),
 ];
 
 export const SYSTEM = `Du steuerst das CAD-Programm OpenForm über Werkzeuge. Antworte ausschließlich mit Werkzeugaufrufen, ohne Text.
@@ -37,7 +42,8 @@ Beispiel für „Platte 80×40×4 mit 2 Bohrungen M4 links und rechts mittig“ 
 tiefe 40, hoehe 4 (ohne auf_schritt, wird Schritt 1), danach bohrung mit schritt 1, x 8, y 20, gewinde M4, tiefe durch, und
 bohrung mit schritt 1, x 72, y 20, gewinde M4, tiefe durch.
 Seitenwände (z. B. Gehäuse): seite vorne/hinten/links/rechts beim Rechteck-Schritt, x/y dann auf dieser Seite gemessen; „durch“
-geht bei einer Schale nur durch die Wand.
+geht bei einer Schale nur durch die Wand. Mehrere gleiche Löcher (Reihe, Raster, Lochkreis, „gleichmäßig verteilt“) immer mit
+lochmuster in einem Aufruf, nicht als einzelne Bohrungen; Lagen nicht selbst ausrechnen.
 Bestehendes ändern: „auswahl“ im Kontext sind die Schritte, die der Nutzer gerade markiert hat; „das“, „diese“ oder „die Wand“
 meint diese. Mit aendern die neuen absoluten Maße setzen, z. B. „Wand 2 mm dicker“ bei einer Schale mit dicke 3: aendern mit dicke 5.`;
 
@@ -75,22 +81,45 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
   };
   // Ebene der neuen Skizze: ohne Schritt der Boden, sonst die Oberseite des Schritts mit dessen u/v (x/y bleiben gleich)
   // oder eine Seite des Rechtecks (Ursprung in deren linker unterer Ecke, y = Normale des Schritts). thru = Tiefe für „durch“,
-  // size = Ausdehnung der Seitenfläche zum Prüfen der Lage
-  type Where = { pl: Frame; onFace: boolean; body?: number; thru?: number; size?: number[] };
+  // box = Fläche in Skizzenkoordinaten [x0, y0, x1, y1] (zum Prüfen der Lage und Verteilen im Lochmuster; Vieleck: keine)
+  type Where = { pl: Frame; onFace: boolean; body?: number; thru?: number; box?: number[] };
   const plane = (schritt: unknown, side: unknown = 'oben'): Where => {
     if (schritt === undefined || schritt === null) return { pl: GROUND, onFace: false };
-    const f = fs.find(g => g.id === schritt);
+    let f = fs.find(g => g.id === schritt);
+    // Schale, Rundung, Bohrung … gemeint ist der Körper („das Gehäuse“): dessen Grundskizze auf dem Boden
+    if (f && (!isExtrude(f) || !(f.d > 0)) && f.type !== 'plane') { const b = (f as { body?: number }).body ?? 1; f = fs.find(g => isExtrude(g) && !g.onFace && g.d > 0 && (g.body ?? 1) === b) ?? f; }
     if (!f) throw new Error(`Schritt ${schritt} gibt es nicht${fs.length ? ` (vorhanden: ${fs.map(g => g.id).join(', ')})` : ''} – ein neues Teil ohne auf_schritt anlegen`);
     if (!isExtrude(f)) throw new Error(`Schritt ${schritt} ist keine Skizze`);
     if (!(f.d > 0)) throw new Error(`Schritt ${schritt} ist nicht nach oben extrudiert`);
-    if (side === undefined || side === null || side === 'oben') return { pl: { o: f.o.map((x, i) => x + f.d * f.n[i]) as Frame['o'], n: f.n, u: f.u, v: f.v }, onFace: true, body: bodyOf(f), thru: f.d };
+    if (side === undefined || side === null || side === 'oben') {
+      const { x, y, w, h, cx, cy, r } = f.p, box = f.type === 'rect' ? [x, y, x + w, y + h] : f.type === 'circle' && f.p.ry === undefined ? [cx - r, cy - r, cx + r, cy + r] : undefined;
+      return { pl: { o: f.o.map((x, i) => x + f.d * f.n[i]) as Frame['o'], n: f.n, u: f.u, v: f.v }, onFace: true, body: bodyOf(f), thru: f.d, box };
+    }
     if (!SIDES.includes(side as string)) throw new Error(`seite: ${SIDES.join(', ')}`);
     if (f.type !== 'rect') throw new Error(`Seitenflächen kennt die KI nur bei Rechtecken, Schritt ${schritt} ist ${f.type}`);
     const { x, y, w, h } = f.p, at = (s: number, t: number) => f.o.map((o, i) => o + f.u[i] * s + f.v[i] * t) as Vec, neg = (a: Vec) => a.map(c => -c) as Vec;
     const sd = { vorne: { o: at(x, y), u: f.u, n: neg(f.v), w, across: h }, hinten: { o: at(x + w, y + h), u: neg(f.u), n: f.v, w, across: h },
       rechts: { o: at(x + w, y), u: f.v, n: f.u, w: h, across: w }, links: { o: at(x, y + h), u: neg(f.v), n: neg(f.u), w: h, across: w } }[side as 'vorne'];
     const shell = fs.find(g => g.type === 'shell' && !g.hidden && bodyOf(g) === bodyOf(f)); // Gehäuse: „durch“ = durch die Wand
-    return { pl: { o: sd.o, u: sd.u, v: f.n, n: sd.n }, onFace: true, body: bodyOf(f), thru: shell?.type === 'shell' ? shell.t : sd.across, size: [sd.w, f.d] };
+    return { pl: { o: sd.o, u: sd.u, v: f.n, n: sd.n }, onFace: true, body: bodyOf(f), thru: shell?.type === 'shell' ? shell.t : sd.across, box: [0, 0, sd.w, f.d] };
+  };
+  const inside = (where: Where, x: number, y: number) => {
+    const b = where.box;
+    if (b && !(x > b[0] && x < b[2] && y > b[1] && y < b[3])) throw new Error(`Mitte ${+x.toFixed(2)}, ${+y.toFixed(2)} liegt nicht auf der Fläche (x ${b[0]}–${b[2]}, y ${b[1]}–${b[3]})`);
+  };
+  // Bohrung: Durchmesser/Gewinde und Tiefe wie im Werkzeug bohrung, an x, y der Fläche
+  const hole = (where: Where, a: Record<string, unknown>, x: number, y: number) => {
+    const dia = a.gewinde !== undefined ? THREADS[a.gewinde as string] : len(a.durchmesser, 'durchmesser');
+    if (!dia) throw new Error(`Gewinde ${a.gewinde} unbekannt (${Object.keys(THREADS).join(', ')})`);
+    inside(where, x, y);
+    // gleiche Bohrung an gleicher Stelle (kleine Modelle wiederholen Aufrufe mit leicht anderen Argumenten): ablehnen statt doppelt anlegen
+    const at = (g: Extrude, px: number, py: number) => g.o.map((o, i) => o + g.u[i] * px + g.v[i] * py);
+    const P = at(where.pl as Extrude, x, y), twin = fs.find(g => g.type === 'circle' && g.d < 0 && Math.abs(g.p.r - dia / 2) < 1e-6
+      && g.n.every((c, i) => Math.abs(c - where.pl.n[i]) < 1e-6) && at(g, g.p.cx, g.p.cy).every((c, i) => Math.abs(c - P[i]) < 1e-3));
+    if (twin) throw new Error(`An dieser Stelle gibt es schon diese Bohrung (Schritt ${twin.id}) – nicht wiederholen`);
+    const g = place(sketchFeature('circle', where.pl, [x, y], [x + dia / 2, y], nextId, true), where, -(a.tiefe === 'durch' ? where.thru! : len(a.tiefe, 'tiefe')));
+    if (a.gewinde !== undefined) (g as Feature).name = `Gewinde ${a.gewinde}`;
+    return g;
   };
   const place = (f: Extrude | null, where: Where, hoehe: unknown) => {
     if (!f) throw new Error('Maße ergeben keine Fläche');
@@ -104,7 +133,7 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
   for (const c of calls) {
     try {
       if (!c.args) throw new Error('Argumente sind kein gültiges JSON');
-      const a = c.args;
+      const a = Object.fromEntries(Object.entries(c.args).filter(([, v]) => v !== null)); // kleine Modelle schicken leere Felder als null
       let f: Extrude & { name?: string };
       if (c.name === 'skizze_rechteck') {
         const where = plane(a.auf_schritt, a.seite), x = coord(a.x ?? 0, 'x'), y = coord(a.y ?? 0, 'y');
@@ -148,13 +177,40 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
         f.d = d;
       } else if (c.name === 'bohrung') {
         if (a.schritt === undefined) throw new Error('schritt fehlt: in welchen Schritt wird gebohrt?');
-        const where = plane(a.schritt, a.seite), dia = a.gewinde !== undefined ? THREADS[a.gewinde as string] : len(a.durchmesser, 'durchmesser');
-        if (!dia) throw new Error(`Gewinde ${a.gewinde} unbekannt (${Object.keys(THREADS).join(', ')})`);
-        const depth = a.tiefe === 'durch' ? where.thru! : len(a.tiefe, 'tiefe');
-        const x = coord(a.x, 'x'), y = coord(a.y, 'y');
-        if (where.size && !(x > 0 && x < where.size[0] && y > 0 && y < where.size[1])) throw new Error(`Mitte liegt nicht auf der Seite (x 0–${where.size[0]}, y 0–${where.size[1]})`);
-        f = place(sketchFeature('circle', where.pl, [x, y], [x + dia / 2, y], nextId, true), where, -depth);
-        if (a.gewinde !== undefined) f.name = `Gewinde ${a.gewinde}`;
+        f = hole(plane(a.schritt, a.seite), a, coord(a.x, 'x'), coord(a.y, 'y'));
+      } else if (c.name === 'lochmuster') {
+        // Reihe/Raster: erste Bohrung + Muster-Schritt (bleibt im Baum bearbeitbar); Lochkreis: Einzelbohrungen (Kreis-Muster fehlt noch, T6.7)
+        a.tiefe ??= 'durch';
+        const where = plane(a.schritt, a.seite), b = where.box, n = Math.round(len(a.anzahl, 'anzahl', 1)), rows = Math.round(a.reihen === undefined ? 1 : len(a.reihen, 'reihen', 1));
+        if (n < 1 || rows < 1 || n * rows > 400) throw new Error('anzahl und reihen: 1 bis 400 Löcher');
+        const mx = a.mitte_x === undefined ? b && (b[0] + b[2]) / 2 : coord(a.mitte_x, 'mitte_x'), my = a.mitte_y === undefined ? b && (b[1] + b[3]) / 2 : coord(a.mitte_y, 'mitte_y');
+        if (mx === undefined || my === undefined) throw new Error('mitte_x und mitte_y angeben (Fläche ohne bekannte Größe)');
+        const fs0 = fs.length, id0 = nextId;
+        try {
+          if (a.lochkreis_radius !== undefined) {
+            const R = len(a.lochkreis_radius, 'lochkreis_radius');
+            for (let i = 0; i < n; i++) hole(where, a, mx + R * Math.cos(2 * Math.PI * i / n), my + R * Math.sin(2 * Math.PI * i / n));
+            results.push({ id: c.id, ok: true, text: `ok, Lochkreis R ${R} mit ${n} Bohrungen, Schritte ${id0}–${nextId - 1}` });
+            continue;
+          }
+          // ohne Abstand: gleich große Lücken zwischen Rand und Loch und zwischen den Löchern
+          const step = (v: unknown, what: string, k: number, span?: number) => {
+            if (v !== undefined) return len(v, what);
+            if (k < 2) return 0;
+            if (span === undefined) throw new Error(`${what} angeben (Fläche ohne bekannte Größe)`);
+            return span / (k + 1);
+          };
+          const dx = step(a.abstand, 'abstand', n, b && b[2] - b[0]), dy = step(a.abstand_reihen, 'abstand_reihen', rows, b && b[3] - b[1]);
+          const first = hole(where, a, mx - dx * (n - 1) / 2, my - dy * (rows - 1) / 2);
+          inside(where, mx + dx * (n - 1) / 2, my + dy * (rows - 1) / 2); // gegenüberliegende Ecke des Musters
+          if (n * rows > 1) {
+            const p: Pattern = { id: nextId++, type: 'pattern', src: [first.id], a: { ax: where.pl.u, n, d: dx || 1 }, body: where.body };
+            if (rows > 1) p.b = { ax: where.pl.v, n: rows, d: dy };
+            fs.push(p);
+          }
+          results.push({ id: c.id, ok: true, text: `ok, Bohrung Schritt ${first.id}${n * rows > 1 ? ` und Muster Schritt ${nextId - 1}: ${n}${rows > 1 ? ` × ${rows}` : ''}, Abstand ${+dx.toFixed(2)}${rows > 1 ? ` / ${+dy.toFixed(2)}` : ''} mm` : ''}` });
+        } catch (e) { fs.splice(fs0); nextId = id0; throw e; } // ganz oder gar nicht
+        continue;
       } else throw new Error(`Unbekanntes Werkzeug ${c.name}`);
       results.push({ id: c.id, ok: true, text: `ok, Schritt ${f.id}` });
     } catch (e) {
@@ -185,6 +241,7 @@ export async function runRequest(ask: (m: Msg[]) => Promise<{ content: string | 
 Auftrag: ${text}` }];
   const firstId = nextId, before = new Map(features.map(f => [f.id, JSON.stringify(f)]));
   let fs = features, made = 0, failing = 0, reply = '', problems: string[] = [], kernelTries = 0;
+  const done = new Set<string>(), key = (c: ToolCall) => c.name + JSON.stringify(c.args); // gelungene Aufrufe: kleine Modelle wiederholen sie gern
   const touched = (id: number) => before.get(id) !== JSON.stringify(fs.find(f => f.id === id)); // neu oder von der KI geändert
   for (let round = 0; round < 12 && failing < 3; round++) {
     status(round ? `KI arbeitet … (${made} angelegt)` : 'KI arbeitet …');
@@ -205,7 +262,11 @@ Auftrag: ${text}` }];
       msgs.push(r.message, { role: 'user', content: `Der CAD-Kern lehnt ab: ${bad.map(([id, why]) => `Schritt ${id}: ${why}`).join('; ')}. Korrigiere das (schritt_entfernen und neu anlegen, oder extrudieren mit anderer Höhe), dann antworte mit „fertig“.` });
       continue;
     }
-    const out = applyCalls(fs, r.toolCalls, nextId, firstId), bad = out.results.filter(x => !x.ok);
+    const fresh = r.toolCalls.filter((c, i) => !done.has(key(c)) && r.toolCalls.findIndex(d => key(d) === key(c)) === i);
+    const out = applyCalls(fs, fresh, nextId, firstId);
+    out.results.forEach((x, i) => { if (x.ok) done.add(key(fresh[i])); });
+    out.results.push(...r.toolCalls.filter(c => !fresh.includes(c)).map(c => ({ id: c.id, ok: false, text: 'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“' })));
+    const bad = out.results.filter(x => !x.ok);
     fs = out.fs; nextId = out.nextId; made += out.results.length - bad.length;
     problems = bad.map(x => x.text);
     failing = bad.length ? failing + 1 : 0;

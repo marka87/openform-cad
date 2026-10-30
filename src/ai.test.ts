@@ -45,6 +45,20 @@ test('KI-Adapter: 429 einmal nach retry-after wiederholt, Abbruch mitten im Auft
   await expect(runRequest(async () => { throw new Error('nicht erreichbar'); }, [], 1, 'mm', 'x')).rejects.toThrow('nicht erreichbar'); // ohne Angelegtes: Fehler wie bisher
 });
 
+test('KI-Ablauf: null = nicht angegeben, Wiederholungen und doppelte Bohrungen abgelehnt (T8.7)', async () => {
+  const call = (name: string, args: Record<string, unknown>): ToolCall => ({ id: name + Math.random(), name, args, raw: '' });
+  const plate = call('skizze_rechteck', { breite: 60, tiefe: 40, hoehe: 5, auf_schritt: null, seite: null });
+  const kreis = (gewinde: unknown, durchmesser: unknown) => call('lochmuster', { schritt: 1, anzahl: 4, lochkreis_radius: 10, gewinde, durchmesser });
+  const answers = [[plate], [kreis(null, 2.5), kreis(null, 2.5)], [kreis(null, 2.5), kreis('M3', null)], []];
+  const sent: string[][] = [];
+  const r = await runRequest(async m => { sent.push(m.filter(x => x.role === 'tool').map(x => String(x.content))); const a = answers.shift()!;
+    return { content: a.length ? null : 'fertig', toolCalls: a, message: { role: 'assistant', content: null } }; }, [], 1, 'mm', 'Lochkreis');
+  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5]);                                // Platte + 4 Bohrungen, nichts doppelt
+  expect(sent[2].slice(-2)).toEqual(['ok, Lochkreis R 10 mit 4 Bohrungen, Schritte 2–5', 'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“']);
+  expect(sent[3].slice(-2)).toEqual(['An dieser Stelle gibt es schon diese Bohrung (Schritt 2) – nicht wiederholen', // M3-Kernloch = 2,5 mm, gleiche Stelle
+    'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“']);    // neue Aufrufe zuerst, Zuordnung über die id
+});
+
 test('KI-Ablauf: ein Aufruf je Antwort, Fehler werden korrigiert, Ende mit Text (T8.3)', async () => {
   const call = (name: string, args: Record<string, unknown>): ToolCall => ({ id: name + Math.random(), name, args, raw: '' });
   const answers = [[call('skizze_rechteck', { breite: 100, tiefe: 60, hoehe: 5 })], [call('bohrung', { schritt: 7, x: 8, y: 8, gewinde: 'M5', tiefe: 'durch' })],

@@ -301,9 +301,16 @@ aus.
       scheitert ein KI-Schritt erst im Kern (z. B. Rundung zu groß), den
       Grund bis zu zweimal zurückschicken. Braucht ein Warten auf das
       Ergebnis des Kernlaufs (inkl. zweitem Lauf nach Bezugsnachträgen).
-- [ ] T8.7 TODO — KI-Werkzeug `lochmuster` (Reihe/Raster und Lochkreis):
-      Positionen rechnet die App, nicht das Modell (Feldnotiz Gehäuse:
-      kleine Modelle scheitern an Trigonometrie und vielen Einzelaufrufen).
+- [x] T8.7 DONE — KI-Werkzeug `lochmuster`: anzahl, reihen, optional
+      abstand/abstand_reihen/mitte/lochkreis_radius; Lagen rechnet die App
+      (ohne Abstand gleiche Lücken über die Fläche, ohne Mitte die
+      Flächenmitte). Reihe/Raster = erste Bohrung + Muster-Schritt
+      (bearbeitbar), Lochkreis = Einzelbohrungen (bis T6.7). Ganz oder gar
+      nicht: liegt ein Loch neben der Fläche, wird nichts angelegt. Dazu
+      gegen kleine Modelle: null = nicht angegeben, Schale/Bohrung als
+      Ziel = Grundskizze des Körpers, gleiche Aufrufe und gleiche
+      Bohrungen an gleicher Stelle abgelehnt, max_tokens 3000. Tests in
+      kernel.test.ts und ai.test.ts.
 - [x] T8.8 DONE — KI auf Seitenflächen: skizze_rechteck, skizze_kreis
       und bohrung haben `seite` (oben/vorne/hinten/links/rechts). Nur bei
       Rechteck-Schritten; die Ebenen ergeben sich aus Rechteck und Höhe,
@@ -412,6 +419,17 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.7 lochmuster. Live mit qwen2.5:7b (Gehäuse 80×50×30,
+  Schale 2 mm), je 2 Läufe: Raster rechts 6×4 ⌀3 Abstand 6 → 1 von 2
+  richtig (einmal unsinnige Mitte, nach der Fehlermeldung aufgegeben);
+  Lochkreis links 6×M3 R8 → 2 von 2 richtig, nachdem doppelte Bohrungen
+  abgelehnt werden (vorher legte das Modell denselben Kreis dreimal an,
+  18 Bohrungen übereinander); 3 Löcher vorne „gleichmäßig“ → das Modell
+  nimmt dafür weiter Einzelbohrungen, x 20/40/60 richtig, y 20 statt 15.
+  Einmal hing ein Lauf 120 s, weil das Modell nach dem Raster endlos
+  schrieb → max_tokens 3000 (Denkmodelle wie gpt-oss zählen ihr Denken
+  mit; zu knapp ergibt abgeschnittene Aufrufe, darum nicht weniger).
+  Nicht geprüft: Groq mit gpt-oss-20b.
 - 2026-10-30 T8.8: KI auf Seitenflächen von Rechteck-Schritten. Live mit
   qwen2.5:7b, 3 Läufe „3 Löcher ⌀5 vorne in die Gehäusewand, halbe Höhe,
   gleichmäßig“: Seite immer richtig (vorne, nur durch die 2-mm-Wand),

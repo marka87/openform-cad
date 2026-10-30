@@ -738,6 +738,21 @@ test('KI: Bohrungen in die Seitenwände eines Gehäuses, „durch“ nur durch d
   expect(measureVolume(shell.body!) - measureVolume(b.body!)).toBeCloseTo(4 * Math.PI * 9 * 2, 0); // je ein Loch durch eine 2-mm-Wand
 });
 
+test('KI: lochmuster – Lagen rechnet die App, Reihe/Raster als Muster-Schritt, Lochkreis einzeln (T8.7)', () => {
+  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
+  const fs = [...box, { id: 2, type: 'shell', at: [40, 30, -25], t: 2 } as Feature];
+  const lm = (args: Record<string, unknown>) => ({ id: String(Math.random()), name: 'lochmuster', raw: '', args: { schritt: 1, durchmesser: 5, tiefe: 'durch', ...args } });
+  const r = applyCalls(fs, [lm({ seite: 'vorne', anzahl: 3 }), lm({ seite: 'hinten', anzahl: 4, reihen: 2, abstand: 12, abstand_reihen: 10 }),
+    lm({ seite: 'links', anzahl: 6, lochkreis_radius: 8 }), lm({ seite: 'rechts', anzahl: 5, abstand: 20 })], 3);
+  expect(r.results.map(x => x.text)).toEqual(['ok, Bohrung Schritt 3 und Muster Schritt 4: 3, Abstand 20 mm', 'ok, Bohrung Schritt 5 und Muster Schritt 6: 4 × 2, Abstand 12 / 10 mm',
+    'ok, Lochkreis R 8 mit 6 Bohrungen, Schritte 7–12', 'Mitte -15, 15 liegt nicht auf der Fläche (x 0–50, y 0–30)']); // 5 × 20 mm passt nicht auf 50 mm
+  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);        // abgelehntes Muster hinterlässt nichts
+  expect([(r.fs[2] as Extrude).p.cx, (r.fs[2] as Extrude).p.cy]).toEqual([20, 15]);     // 80 mm, 3 Löcher: gleiche Lücken von 20 mm, halbe Höhe
+  const b = buildBody(r.fs), v0 = measureVolume(buildBody(fs).body!);
+  expect(b.failed).toEqual([]);
+  expect(v0 - measureVolume(b.body!)).toBeCloseTo((3 + 8 + 6) * Math.PI * 6.25 * 2, 0); // 17 Löcher durch je eine 2-mm-Wand
+});
+
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {
   const aux: Extrude = { id: 7, ...GROUND, type: 'poly', p: {}, pts: [[0, 0], [10, 0], [10, 10]], d: 0, aux: true, open: true };
   expect(keyPoints(aux).length).toBe(2 * (3 + 2));                     // 3 Ecken + 2 Mitten (kein Schlusssegment), je unten/oben
