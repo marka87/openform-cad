@@ -257,7 +257,7 @@ aus.
       einem Hinweis, dass Gratis-Stufen in der Regel mitlesen.
 - [x] T8.3 DONE — Text zu Teil für einen engen Fall:
       „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken".
-- [ ] T8.4 TODO — Ändern per Text an bestehender Auswahl
+- [x] T8.4 DONE — Ändern per Text an bestehender Auswahl
       („Wand 2 mm dicker").
 - [ ] T8.5 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
       zu beheben ist.
@@ -330,6 +330,15 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.4: Werkzeug `aendern` (schritt + breite/tiefe/radius/
+  hoehe/dicke, absolute Werte) für Rechteck, Kreis, Skizzenhöhe, Rundung,
+  Fase und Schale; was nicht zum Typ passt, wird mit der erlaubten Liste
+  abgelehnt. Kontext trägt jetzt `auswahl` (markierte Schritte) und die
+  Maße unter denselben Namen wie die Werkzeuge (breite statt p.w, dicke,
+  radius), damit kleine Modelle sie direkt übernehmen. Kantenauswahl
+  (edgeSel) geht noch nicht mit, nur Schritte. Geprüft: Kern-Check im
+  Browser-Worker liefert für eine zu große Rundung „Rundung
+  fehlgeschlagen“; mit echtem Sprachmodell noch nicht geprüft.
 - 2026-10-30 T8.6: Sagt die KI „fertig“, rechnet der Worker den Stand
   einmal still (Nachricht `check`, inkl. zweitem Lauf nach nachgetragenen
   Bezügen, Anzeige bleibt). Scheitern dabei Schritte, die die KI in diesem

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { chat, type AiSettings, type ToolCall } from './ai';
-import { runRequest } from './aiTools';
+import { aiContext, applyCalls, runRequest } from './aiTools';
 
 const S: AiSettings = { on: true, base: 'https://example.test/v1/', model: 'm', key: 'k' };
 const reply = (status: number, body: unknown) => async () => new Response(JSON.stringify(body), { status });
@@ -43,7 +43,7 @@ test('KI-Ablauf: ein Aufruf je Antwort, Fehler werden korrigiert, Ende mit Text 
 
 test('KI-Ablauf: Kernfehler gehen höchstens zweimal zurück, nur eigene Schritte entfernbar (T8.6)', async () => {
   const call = (name: string, args: Record<string, unknown>): ToolCall => ({ id: name + Math.random(), name, args, raw: '' });
-  const old = { id: 1, type: 'rect', d: 5 } as never; // Schritt des Nutzers, darf nicht entfernt werden
+  const old = { id: 1, type: 'rect', p: { x: 0, y: 0, w: 10, h: 10 }, d: 5 } as never; // Schritt des Nutzers, darf nicht entfernt werden
   const answers = [[call('skizze_kreis', { radius: 5, hoehe: 3 })], [], [call('schritt_entfernen', { schritt: 1 }), call('schritt_entfernen', { schritt: 2 }), call('skizze_kreis', { radius: 4, hoehe: 3 })], [], []];
   const sent: string[] = [];
   let checks = 0;
@@ -53,4 +53,20 @@ test('KI-Ablauf: Kernfehler gehen höchstens zweimal zurück, nur eigene Schritt
   expect(r.problems).toEqual(['Schritt 1 wurde nicht in diesem Auftrag angelegt']);
   expect(r.fs.map(f => f.id)).toEqual([1, 3]);
   expect(checks).toBe(2);                                                              // danach Schluss, der Fehler bleibt sichtbar
+});
+
+test('KI ändert vorhandene Schritte über aendern, Auswahl steht im Kontext (T8.4)', () => {
+  const call = (args: Record<string, unknown>): ToolCall => ({ id: String(Math.random()), name: 'aendern', args, raw: '' });
+  const plate = applyCalls([], [{ id: 'a', name: 'skizze_rechteck', args: { breite: 100, tiefe: 60, hoehe: 5 }, raw: '' }], 1).fs[0];
+  const fs = [plate, { id: 2, type: 'shell', at: [0, 0, 5], t: 3 }, { id: 3, type: 'fillet', at: [0, 0, 0], dir: [1, 0, 0], r: 2 }] as never[];
+  const ctx = JSON.parse(aiContext(fs, 4, 'mm', [2]));
+  expect(ctx.auswahl).toEqual([2]);
+  expect(ctx.schritte.map((s: Record<string, unknown>) => [s.breite, s.dicke, s.radius])).toEqual([[100, undefined, undefined], [undefined, 3, undefined], [undefined, undefined, 2]]);
+  const r = applyCalls(fs, [call({ schritt: 2, dicke: 5 }), call({ schritt: 1, breite: 120, hoehe: 8 }), call({ schritt: 3, radius: 4 }),
+    call({ schritt: 2, breite: 5 }), call({ schritt: 1, hoehe: -2 }), call({ schritt: 9, dicke: 1 })], 4);
+  expect(r.results.map(x => x.text)).toEqual(['ok, Schritt 2 geändert', 'ok, Schritt 1 geändert', 'ok, Schritt 3 geändert',
+    'Schritt 2 (shell) lässt sich nur über dicke ändern', 'Skizze auf dem Boden: nur nach oben', 'Schritt 9 gibt es nicht']);
+  const [p, sh, fi] = r.fs as never as [{ p: { w: number; h: number }; d: number }, { t: number }, { r: number }];
+  expect([p.p.w, p.p.h, p.d, sh.t, fi.r]).toEqual([120, 60, 8, 5, 4]);
+  expect((fs[1] as { t: number }).t).toBe(3);                                         // Original unverändert (Kopie)
 });

@@ -1,7 +1,7 @@
 // KI-Werkzeuge (ADR 0002): Schemata für das Modell und ihre Umsetzung in normale Features. Reine Funktionen, ohne Oberfläche.
 // Stufe T8.3: Rechteck, Kreis, Extrudieren, Bohrung. Als Fläche nur die Oberseite eines extrudierten Schritts; mehr, wenn es gebraucht wird.
 import type { Msg, Tool, ToolCall } from './ai';
-import { bodyOf, GROUND, isExtrude, sketchFeature, THREADS, type Extrude, type Feature, type Frame } from './model';
+import { bodyOf, GROUND, isExtrude, noFace, sketchFeature, THREADS, type Extrude, type Feature, type Frame } from './model';
 
 const num = (desc: string) => ({ type: 'number', description: desc });
 // Flache Parameter: kleine Modelle (7B, lokal) füllen verschachtelte oder „entweder–oder“-Felder unzuverlässig aus
@@ -16,6 +16,9 @@ export const TOOLS: Tool[] = [
     { auf_schritt: auf, x: num('Mitte, mm, Standard 0'), y: num('Mitte, mm, Standard 0'), radius: num('mm'), hoehe: num('mm, optional; negativ = in den Körper hinein') }, ['radius']),
   fn('schritt_entfernen', 'Einen in diesem Auftrag angelegten Schritt wieder entfernen, z. B. weil der CAD-Kern ihn ablehnt.', { schritt: { type: 'integer' } }, ['schritt']),
   fn('extrudieren', 'Vorhandene Skizze auf eine Höhe ziehen (negativ = hineindrücken).', { schritt: { type: 'integer' }, hoehe: num('mm') }, ['schritt', 'hoehe']),
+  fn('aendern', 'Maße eines vorhandenen Schritts neu setzen (absolute Werte, nicht die Differenz). Nur angeben, was sich ändert.',
+    { schritt: { type: 'integer' }, breite: num('Rechteck, mm'), tiefe: num('Rechteck, mm'), radius: num('Kreis, Rundung oder Fase, mm'),
+      hoehe: num('Skizze, mm; negativ = in den Körper hinein'), dicke: num('Wandstärke einer Schale, mm') }, ['schritt']),
   fn('bohrung', 'Runde Bohrung in eine Fläche: Durchmesser oder metrisches Gewinde (Kernloch), Tiefe in mm oder durch.',
     { schritt: { type: 'integer', description: 'Nummer des Schritts, in dessen Oberseite gebohrt wird' }, x: num('Mitte, mm'), y: num('Mitte, mm'), durchmesser: num('mm, wenn kein Gewinde'),
       gewinde: { type: 'string', enum: Object.keys(THREADS) }, tiefe: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['durch'] }] } }, ['schritt', 'x', 'y', 'tiefe']),
@@ -29,14 +32,23 @@ Gewinde (M3–M12) immer über „gewinde“ angeben, nicht als Durchmesser. Sch
 korrigiere nur diesen Aufruf. Rufe die Werkzeuge nacheinander auf, bis alles angelegt ist; erst dann antworte nur mit „fertig“.
 Beispiel für „Platte 80×40×4 mit 2 Bohrungen M4 links und rechts mittig“ im leeren Modell: zuerst skizze_rechteck mit breite 80,
 tiefe 40, hoehe 4 (ohne auf_schritt, wird Schritt 1), danach bohrung mit schritt 1, x 8, y 20, gewinde M4, tiefe durch, und
-bohrung mit schritt 1, x 72, y 20, gewinde M4, tiefe durch.`;
+bohrung mit schritt 1, x 72, y 20, gewinde M4, tiefe durch.
+Bestehendes ändern: „auswahl“ im Kontext sind die Schritte, die der Nutzer gerade markiert hat; „das“, „diese“ oder „die Wand“
+meint diese. Mit aendern die neuen absoluten Maße setzen, z. B. „Wand 2 mm dicker“ bei einer Schale mit dicke 3: aendern mit dicke 5.`;
 
-// Was die KI über das Modell erfährt (ADR 0002, Abschnitt 5): Schritte mit Maßen, keine Namen von Dateien oder Körpern
-export function aiContext(fs: Feature[], nextId: number, unit: 'mm' | 'in') {
-  const schritte = fs.filter(f => !f.hidden).map(f => isExtrude(f)
-    ? { schritt: f.id, art: f.type, auf: f.onFace ? 'Fläche' : 'Boden', masse: f.p, hoehe: f.d }
-    : { schritt: f.id, art: f.type });
-  return JSON.stringify({ einheit: 'mm', anzeige: unit, naechste_nummer: nextId, schritte });
+// Was die KI über das Modell erfährt (ADR 0002, Abschnitt 5): Schritte mit Maßen, keine Namen von Dateien oder Körpern.
+// Maße unter denselben Namen wie in den Werkzeugen, damit die KI sie direkt in aendern verwenden kann
+function masse(f: Feature) {
+  if (f.type === 'rect') return { x: f.p.x, y: f.p.y, breite: f.p.w, tiefe: f.p.h, hoehe: f.d };
+  if (f.type === 'circle') return { x: f.p.cx, y: f.p.cy, radius: f.p.r, ...f.p.ry !== undefined && { radius_y: f.p.ry }, hoehe: f.d };
+  if (isExtrude(f)) return { hoehe: f.d };
+  if (f.type === 'fillet' || f.type === 'chamfer') return { radius: f.r };
+  if (f.type === 'shell') return { dicke: f.t };
+  return {};
+}
+export function aiContext(fs: Feature[], nextId: number, unit: 'mm' | 'in', sel: number[] = []) {
+  const schritte = fs.filter(f => !f.hidden).map(f => ({ schritt: f.id, art: f.type, ...isExtrude(f) && { auf: f.onFace ? 'Fläche' : 'Boden' }, ...masse(f) }));
+  return JSON.stringify({ einheit: 'mm', anzeige: unit, naechste_nummer: nextId, auswahl: sel, schritte });
 }
 
 type Result = { id: string; ok: boolean; text: string };
@@ -91,6 +103,25 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
         fs.splice(i, 1);
         results.push({ id: c.id, ok: true, text: `ok, Schritt ${a.schritt} entfernt` });
         continue;
+      } else if (c.name === 'aendern') {
+        const g = fs.find(h => h.id === a.schritt);
+        if (!g) throw new Error(`Schritt ${a.schritt} gibt es nicht`);
+        const set = Object.keys(a).filter(k => k !== 'schritt' && a[k] !== undefined && a[k] !== null);
+        const fits = g.type === 'rect' ? ['breite', 'tiefe', 'hoehe'] : g.type === 'circle' && g.p.ry === undefined ? ['radius', 'hoehe']
+          : isExtrude(g) && !noFace(g) ? ['hoehe'] : g.type === 'fillet' || g.type === 'chamfer' ? ['radius'] : g.type === 'shell' ? ['dicke'] : [];
+        const wrong = set.filter(k => !fits.includes(k));
+        if (!set.length || wrong.length) throw new Error(`Schritt ${g.id} (${g.type}) lässt sich ${fits.length ? `nur über ${fits.join(', ')} ändern` : 'nicht ändern'}`);
+        const v = Object.fromEntries(set.map(k => [k, len(a[k], k)]));
+        if (isExtrude(g)) {
+          if (v.hoehe !== undefined && (g.onFace ? v.hoehe > 0 : v.hoehe < 0)) throw new Error(g.onFace ? 'Skizze auf einer Fläche: nur hinein (negativ)' : 'Skizze auf dem Boden: nur nach oben');
+          if (v.breite !== undefined) g.p.w = v.breite;
+          if (v.tiefe !== undefined) g.p.h = v.tiefe;
+          if (v.radius !== undefined) g.p.r = v.radius;
+          if (v.hoehe !== undefined) g.d = v.hoehe;
+        } else if (g.type === 'shell') g.t = v.dicke;
+        else if (g.type === 'fillet' || g.type === 'chamfer') g.r = v.radius;
+        results.push({ id: c.id, ok: true, text: `ok, Schritt ${g.id} geändert` });
+        continue;
       } else if (c.name === 'extrudieren') {
         f = sketch(a.schritt);
         const d = len(a.hoehe, 'hoehe');
@@ -118,8 +149,8 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
 // check (T8.6): rechnet den Stand im Kern; scheitern dabei Schritte dieses Auftrags, geht der Grund höchstens zweimal an die KI zurück
 export async function runRequest(ask: (m: Msg[]) => Promise<{ content: string | null; toolCalls: ToolCall[]; message: Msg }>,
   features: Feature[], nextId: number, unit: 'mm' | 'in', text: string, status: (t: string) => void = () => {},
-  check?: (fs: Feature[]) => Promise<[number, string][]>) {
-  const msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, unit)}
+  check?: (fs: Feature[]) => Promise<[number, string][]>, sel: number[] = []) {
+  const msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, unit, sel)}
 
 Auftrag: ${text}` }];
   const firstId = nextId, before = new Map(features.map(f => [f.id, JSON.stringify(f)]));
