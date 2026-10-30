@@ -330,6 +330,12 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-30 Fix Installer-Bau auf frischem Checkout: tauri.conf.json
+  verlangt target/release/WebView2Loader.dll als Ressource, die legt aber
+  niemand dort ab (webview2-com-sys kopiert sie nur in sein OUT_DIR); auf
+  dem ersten Rechner lag sie zufällig schon da. build.rs kopiert sie jetzt
+  aus der Cargo-Registry (Version aus Cargo.lock). Installer gebaut:
+  src-tauri/target/release/bundle/nsis/, 9,9 MB.
 - 2026-10-30 T8.4: Werkzeug `aendern` (schritt + breite/tiefe/radius/
   hoehe/dicke, absolute Werte) für Rechteck, Kreis, Skizzenhöhe, Rundung,
   Fase und Schale; was nicht zum Typ passt, wird mit der erlaubten Liste
