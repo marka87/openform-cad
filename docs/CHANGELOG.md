@@ -15,6 +15,9 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   Kreis → Kreis wird jetzt richtig hohl (vorher rot). Rechteck → Kreis
   schafft der Kern noch nicht; der Schritt wird rot mit klarer Meldung,
   statt ohne Wirkung und ohne Hinweis durchzulaufen.
+- **Zoll durchgängig:** Volumen und Oberfläche in in³/in², Raster,
+  Ziehen und Griffe rasten auf runde Zollwerte (0,1 in statt 2,54 mm in
+  krummen Zahlen). Die Rasterauswahl zählt in der gewählten Einheit.
 
 ## 0.4.2 — 2026-10-30
 

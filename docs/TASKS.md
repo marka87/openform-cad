@@ -140,7 +140,7 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
       (T10.9 bis T10.11, Feldnotiz Teil 1). Der Grundzweck ist damit
       erfüllt.
       Offen bleibt der systematische Durchlauf am aktuellen Stand
-      (0.3.1, 9,9 MB, src-tauri/target/release/bundle/nsis/; 0.3.2 noch ungebaut): Öffnen,
+      (src-tauri/target/release/bundle/nsis/): Öffnen,
       Speichern, Doppelklick auf eine `.ofc`-Datei, STEP-, STL- und
       3MF-Export, Zeichnung. Läuft zusammen mit T0.3.
 - [ ] T4.4 TODO — macOS- und Linux-Build über GitHub Actions. Der Weg
@@ -443,6 +443,15 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Zoll (0.4.3, Pflicht aus CLAUDE.md „mm und Zoll überall
+  konsistent“): Volumen/Oberfläche standen auch im Zoll-Modus in cm³/cm²,
+  Raster und Griffe rasteten auf mm, ein gezogenes Rechteck hatte 1,7717 in
+  Breite. Jetzt 0,1 in als kleinstes Auto-Raster, Ziehen auf 0,05 in, Griffe
+  auf 0,1 in; Auswahl „Raster“ zählt in der Anzeigeeinheit (Wert wird beim
+  Umschalten nicht umgerechnet, nur neu gedeutet). Im Browser geprüft:
+  2 × 1 × 0,5 in ergibt 1,000 in³ / 7,000 in² und 16,39 cm³ / 45,2 cm²;
+  gezogenes Rechteck 1,9 × 0,2 in. Kein Kern-Test, das ist reine Anzeige;
+  Griffe (gizmo) nicht von Hand durchgezogen.
 - 2026-10-30 Belastungsprobe, Fix 0.4.3: Neue src/teile.test.ts baut
   Halter, Flansch, Schlauchadapter, Rohrbogen, Gehäuse mit Domen und
   Deckel, Ersatzteil aus STEP, geteilten Körper, Drehteil, Langlöcher,

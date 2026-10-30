@@ -249,7 +249,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     if (selBody !== null && !bodyIds.includes(selBody)) { selBody = null; renderPanel(); }
     if (gizmo.object) attachGizmo(gizmo.mode as 'translate' | 'rotate'); // Griffe an die neue Lage setzen
     applyDisplay();
-    bodyInfo = data.volume ? ` · ${(data.volume / 1000).toFixed(2)} cm³ · ${(data.area / 100).toFixed(1)} cm²` : '';
+    bodyTotal = data.volume ? { v: data.volume, a: data.area } : null;
     problems = new Map(data.unsure.map(id => [id, { bad: false, why: 'Bezug nur unsicher wiedergefunden – bitte prüfen' }]));
     for (const [id, why] of data.errors) problems.set(id, { bad: true, why });
     confirms = new Map(data.confirm);
@@ -444,7 +444,7 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');
-let bodyInfo = ''; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
+let bodyTotal: { v: number; a: number } | null = null; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
 // Schritte mit Problemen, vom Kern gemeldet: bad = nicht berechnet, sonst Bezug nur unsicher gefunden
 let problems = new Map<number, { bad: boolean; why: string }>();
 let confirms = new Map<number, Record<string, unknown>>(); // gelbe Schritte: Bezug auf das Gefundene, „Bezug übernehmen“ schreibt ihn ins Feature
@@ -480,7 +480,7 @@ function renderTree() {
   tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
-    `<h3>Schritte${bodyInfo}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
+    `<h3>Schritte${bodyTotal ? ` · ${volText(bodyTotal.v)} · ${display.unit === 'in' ? areaText(bodyTotal.a) : `${(bodyTotal.a / 100).toFixed(1)} cm²`}` : ''}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
     `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}${problems.has(f.id) ? problems.get(f.id)!.bad ? ' bad' : ' unsure' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
     (problems.get(f.id)?.bad && aiOn ? '<button data-a="why" title="KI erklärt, warum der Schritt scheitert">?</button>' : '') +
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
@@ -598,7 +598,8 @@ function planeHit(pl: Frame) {
   return ray.ray.intersectPlane(P, new THREE.Vector3());
 }
 function toLocal(pl: Frame, p: THREE.Vector3) { const d = p.clone().sub(V(pl.o)); return [d.dot(V(pl.u)), d.dot(V(pl.v))]; }
-const gridStep = () => display.grid || autoStep(pxSize()); // Rastergröße in mm (Auswahl unten links, 0 = Auto nach Zoom)
+const gridStep = () => (display.grid || autoStep(pxSize() / U())) * U(); // Rastergröße in mm; Auswahl unten links und Auto zählen in der Anzeigeeinheit (0 = Auto nach Zoom)
+const pullStep = () => Math.min((U() > 1 ? 0.05 : 0.5) * U(), gridStep()); // Raster beim Ziehen von Höhe, Radius, Abstand
 // Einheit nur für Anzeige und Eingabe; das Modell rechnet immer in mm
 const U = () => display.unit === 'in' ? 25.4 : 1;
 const fmt = (mm: number, d = 1) => (mm / U()).toFixed(U() > 1 ? d + 2 : d);      // Zahl in der Anzeigeeinheit
@@ -1211,7 +1212,7 @@ function onMove(e: PointerEvent) {
       if (!drag.f) { drag.f = { id: nextId++, type: 'offset', at: drag.at, n: drag.n, d: 0, body: drag.body } satisfies Offset; add(drag.f); selId = drag.f.id; }
       const s = lineParam(drag.P0, drag.D);
       if (s === null) return;
-      drag.f.d = snap(s, e, Math.min(0.5, gridStep()));
+      drag.f.d = snap(s, e, pullStep());
       rebuild();
       return showHud(e, `Versatz: ${len(drag.f.d)}`);
     }
@@ -1223,21 +1224,21 @@ function onMove(e: PointerEvent) {
         drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         add(drag.f); selId = drag.f.id;
       }
-      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, Math.min(0.5, gridStep())));
+      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, pullStep()));
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${len(drag.f.r)}`);
     }
     if (drag.kind === 'plane') { // Ebene entlang ihrer Normalen verschieben
       const s = lineParam(drag.P0, drag.D);
       if (s === null) return;
-      drag.f.off = drag.off0 + snap(s, e, Math.min(0.5, gridStep()));
+      drag.f.off = drag.off0 + snap(s, e, pullStep());
       rebuild();
       return showHud(e, `Abstand: ${len(drag.f.off)}`);
     }
     if (drag.kind === 'patd') { // letztes Exemplar folgt der Maus, Abstand = Weg / (Anzahl − 1)
       const s = lineParam(drag.P0, drag.D), dir = drag.f[drag.k];
       if (s === null) return;
-      dir.d = snap(drag.d0 + s / (dir.n - 1), e, Math.min(0.5, gridStep())) || drag.d0;
+      dir.d = snap(drag.d0 + s / (dir.n - 1), e, pullStep()) || drag.d0;
       rebuild();
       return showHud(e, `Abstand: ${len(dir.d)} · ${dir.n} Stück`);
     }
@@ -1258,7 +1259,7 @@ function onMove(e: PointerEvent) {
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
-    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, Math.min(0.5, gridStep())), drag.i);
+    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, pullStep()), drag.i);
     if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
@@ -2125,7 +2126,7 @@ function renderBodyPanel(b: number) {
   q<HTMLInputElement>('.col').onchange = e => setMeta('color', (e.target as HTMLInputElement).value);
   const split = panel.querySelector<HTMLButtonElement>('.split');
   if (split) split.onclick = () => { pushHistory(); add({ id: nextId++, type: 'split', body: b, plane: +q<HTMLSelectElement>('.pl').value }); detachGizmo(); refresh(); };
-  q('.info').textContent = bodyVol[b] ? `${(bodyVol[b] / 1000).toFixed(2)} cm³${massText(b)}` : '';
+  q('.info').textContent = bodyVol[b] ? `${volText(bodyVol[b])}${massText(b)}` : '';
   q<HTMLButtonElement>('.scl').onclick = () => {
     const s = num('.sc') / 100;
     if (s <= 0) return;
@@ -2170,6 +2171,7 @@ function placeMeasureLabel() {
   const s = measAt.clone().project(camera), r = el.getBoundingClientRect();
   Object.assign(measLabel.style, { left: `${r.left + (s.x + 1) / 2 * r.width}px`, top: `${r.top + (1 - s.y) / 2 * r.height}px` });
 }
+const volText = (v: number) => display.unit === 'in' ? `${(v / 16387.064).toFixed(3)} in³` : `${(v / 1000).toFixed(2)} cm³`;
 const areaText = (a: number) => display.unit === 'in' ? `${(a / 645.16).toFixed(3)} in²` : `${a.toFixed(a < 100 ? 2 : 1)} mm²`;
 // Einrastpunkte fürs Messen: Skizzenpunkte und Körperkanten (Enden, Mitten, Kreismitten); zwischengespeichert bis zum nächsten Bau
 function measurePoints() {
@@ -2360,10 +2362,12 @@ function applyDisplay() {
   $('secOff').style.display = display.section ? '' : 'none';
   $<HTMLInputElement>('secOff').value = String(display.secOff);
   $<HTMLSelectElement>('gridStep').value = String(display.grid);
+  $('gridUnit').textContent = display.unit;
+  gizmo.setTranslationSnap(U() > 1 ? 2.54 : 1); // 0,1 in bzw. 1 mm
   $<HTMLSelectElement>('unit').value = display.unit;
 }
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
-$<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); buildDims(); };
+$<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); renderTree(); buildDims(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
 // Einrasten-Menü: Schalter je Fangart, Anzeige, Rastergröße (alles lokal gemerkt wie die übrige Darstellung)
 const snapMenu = $('snapMenu');
