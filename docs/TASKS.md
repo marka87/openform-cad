@@ -33,7 +33,7 @@ Log.
 1. T0.3 — Teil 2 und Teil 3 bauen, Feldnotizen führen, auswerten.
    SPERRE: Bis das erledigt ist, keine Pakete mit VERMUTUNG beginnen.
    Danach ordnet sich alles darunter neu.
-2. T4.3 — aktuellen Installer (zuletzt gebaut 0.3.1; 0.4.0 noch ungebaut) durchklicken. Läuft
+2. T4.3 — aktuellen Installer (0.4.2 gebaut 2026-10-30, 9,42 MiB, enthält WebView2Loader.dll; noch nicht installiert und durchgeklickt) durchklicken. Läuft
    zusammen mit Punkt 1.
 3. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
