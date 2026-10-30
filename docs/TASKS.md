@@ -357,6 +357,25 @@ Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
 - [x] T10.12 DONE — Werkzeugleiste links: Untermenü-Pfeile groß und
       klickbar, Leiste kürzer und klarer gegliedert.
 
+Aus dem eigenen Bedien-Durchgang (2026-10-30), Reihenfolge = Empfehlung.
+Verwandt und schon erfasst: Kreis-Muster/Spiegeln als Schritt (T6.7),
+Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
+(T8.7, T8.8).
+- [ ] T10.13 TODO — Hinweis unten kurz und situativ: ein Satz zur Lage
+      unter der Maus (über Fläche „ziehen = hochziehen/hineindrücken“,
+      über Kante „ziehen = runden, hinein = fasen“, über Skizzenpunkt
+      „ziehen = verschieben“, ins Leere „ziehen = Rahmen“). Die heutige
+      Vollhilfe (drei Zeilen Fließtext) per „?“ oder F1 erreichbar.
+- [ ] T10.14 TODO — Feld rechts aufräumen: oben nur die Maße der Auswahl,
+      darunter eine Zeile mit den 3–4 häufigsten Aktionen als Knöpfe,
+      Seltenes (Versatz, Drehen um, Zug, Übergang, Senkung) zugeklappt
+      unter „Mehr“. Heute zeigt eine Skizze rund 13 Felder und Knöpfe
+      gleichzeitig.
+- [ ] T10.15 TODO — Aktionen an der Auswahl wie Shapr3D: kleine Leiste
+      neben der ausgewählten Skizze, Fläche oder Kante (z. B. Muster,
+      Spiegeln, Bohrung, Löschen), damit der Weg zur Leiste links
+      entfällt. Größerer Umbau, erst nach T10.14 (gleiche Aktionen).
+
 ## Log
 (neueste oben)
 - 2026-10-30 Eigener Bedien-Durchgang im Browser (Nutzerwunsch: Mängel
