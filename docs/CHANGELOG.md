@@ -9,6 +9,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.4.4 — 2026-10-30
+
+- **Muster meldet Kopien neben dem Körper.** „2 von 4 Kopien treffen den
+  Körper nicht“: Der Schritt wird rot, die treffenden Löcher bleiben.
+  Trifft keine Kopie, schneidet das Muster nichts und meldet auch das.
+  Vorher fehlten diese Löcher ohne jeden Hinweis.
+
 ## 0.4.3 — 2026-10-30
 
 - **Schale auf einem Übergang (Loft) bleibt nicht mehr still massiv.**

@@ -157,6 +157,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       }
       if (f.type === 'pattern') { // Kopien der Quellskizzen in ihrer aktuellen (vielleicht gewanderten) Lage; flache Skizzen ergeben nichts
         const here = features.indexOf(f);
+        let total = 0, missed = 0;
         for (const id of f.src) {
           const S = moved.get(id) ?? features.find(g => g.id === id);
           if (!S || !isExtrude(S) || S.hidden) throw new Error('Skizze für das Muster fehlt');
@@ -170,12 +171,14 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
             && !failed.includes(e.id) && (e.edge.a.f === id || e.edge.b.f === id));
           for (const P of patternCopies(f)) {
             const at = `${id}:${P.key}`, c = P.copy(S, f.id);
-            if (isCut(c) && !b) continue;
+            total++;
+            if (isCut(c) && !b) { missed++; continue; }
             const s = solidOf(c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
             if (!b) { b = s; bodies.set(kk, s); names.set(kk, nS); }
             else {
               put(...boolean(isCut(c) ? 'cut' : 'fuse', b, names.get(kk) ?? [], s, nS));
               s.delete();
+              if (isCut(c) && !(names.get(kk) ?? []).some(n => n.o.f === f.id && n.o.at === at)) missed++;
             }
             const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o;
             for (const e of ops) {
@@ -184,6 +187,9 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
             }
           }
         }
+        // Kopien neben dem Körper schneiden nichts: nie still; die treffenden bleiben, deshalb nur Meldung, kein Abbruch
+        if (missed && missed === total) throw new Error('Keine Kopie trifft den Körper – schneidet nichts');
+        if (missed) errors.set(f.id, `${missed} von ${total} Kopien treffen den Körper nicht`);
         continue;
       }
       let s: Shape3D, nS: Named = [];

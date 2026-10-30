@@ -277,3 +277,16 @@ test('Langloch-Muster, Spline-Kontur, Bögen im Vieleck: rundum dicht', () => {
   const cut = settle([spline, { ...circle(top(8), [15, 12], 5, 3, -8) }]);
   expect([...cut.r.errors]).toEqual([]);
 });
+
+test('Muster, dessen Kopien neben dem Körper liegen, meldet das statt still nichts zu schneiden', () => {
+  const plate = rect(GROUND, [0, 0], [60, 40], 1, 6, false), hole = circle(top(6), [10, 20], 3, 2, -6);
+  const row = (n: number, d: number): Pattern => ({ id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n, d } });
+  const all = (d: number, n: number) => settle([plate, hole, row(n, d)]).r;
+  const v1 = 60 * 40 * 6 - Math.PI * 9 * 6;
+  expect(all(20, 3).errors.size).toBe(0);
+  const part = all(20, 5);                                               // Löcher bei x 10, 30, 50, 70, 90: zwei liegen daneben
+  expect(part.errors.get(3)).toBe('2 von 4 Kopien treffen den Körper nicht');
+  expect(part.failed).toEqual([]);
+  expect(measureVolume(part.body!)).toBeCloseTo(v1 - 2 * Math.PI * 9 * 6, 1);   // die treffenden bleiben
+  expect(all(100, 2).errors.get(3)).toMatch(/Keine Kopie/);
+});

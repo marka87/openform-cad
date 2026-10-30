@@ -443,6 +443,14 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Zufallsprobe, Fix 0.4.4: 180 zufällige Änderungsketten (Schritt
+  verschieben, löschen, ausblenden, Maß × 0,3–4) an Halter, Gehäuse, Flansch,
+  geprüft auf Absturz, ungültigen Körper, Lauf über 8 s, Schritt ohne Wirkung.
+  Kein Absturz, nichts ungültig, nichts langsam. Ein Fund: Muster, dessen
+  Kopien neben dem Körper liegen, blieb unauffällig (gleiche Art wie die
+  Bohrung in 0.4.1). Jetzt Meldung, bei Teiltreffern ohne Abbruch (errors,
+  nicht failed). Probe nicht ins Repo übernommen, sie läuft 3 Minuten; der Fall
+  steht in teile.test.ts.
 - 2026-10-30 Zoll (0.4.3, Pflicht aus CLAUDE.md „mm und Zoll überall
   konsistent“): Volumen/Oberfläche standen auch im Zoll-Modus in cm³/cm²,
   Raster und Griffe rasteten auf mm, ein gezogenes Rechteck hatte 1,7717 in
