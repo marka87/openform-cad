@@ -2,7 +2,36 @@
 
 Neueste oben. Einzelheiten und Begründungen stehen im Log in [TASKS.md](TASKS.md).
 
-## 2026-10-29
+Versionsnummer `MAJOR.MINOR.PATCH`, steht in `package.json` (die
+Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
+- **PATCH** (0.2.0 → 0.2.1): nur Fehlerbehebungen, nichts Neues zu lernen
+- **MINOR** (0.2.x → 0.3.0): neue Werkzeuge oder Funktionen
+- **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
+  und alte Dateien garantiert aufgehen
+
+## 0.2.0 — 2026-10-30
+
+### Modellieren
+- **Muster in der Fläche:** Achse „x/y der Skizze“ liegt in der Fläche, auf
+  der gezeichnet wurde, auch auf Seitenwänden. Knopf **„⇄ Richtung“**.
+- **Muster für mehrere Skizzen:** Alle markierten Skizzen werden gleich
+  vervielfältigt, z. B. eine Lochreihe in einem Schritt zum vollen Raster.
+
+### KI-Assistent
+- **Ändern per Text** an bestehenden Schritten („Wand 2 mm dicker“), die
+  Auswahl geht als Bezug mit.
+- **„?“ an roten Schritten:** Die KI erklärt, warum ein Schritt scheitert.
+- **Korrekturrunden:** Lehnt der CAD-Kern einen KI-Schritt ab, bekommt die
+  KI den Grund und darf bis zu zweimal nachbessern.
+- Groq-Voreinstellung: `openai/gpt-oss-20b` (llama-3.3-70b gibt es dort
+  nur noch für Enterprise). Altes Testergebnis verschwindet beim Wechsel.
+
+### Desktop-App
+- Installer lässt sich auch auf einem frisch geklonten Stand bauen
+  (WebView2Loader.dll fehlte).
+- Versionsnummer wird jetzt gepflegt (vorher immer 0.1.0).
+
+## 0.1.0 — 2026-10-29
 
 ### Desktop-App
 - **Installer startet auf jedem Windows-Rechner.** Die App brauchte bisher
