@@ -1984,7 +1984,7 @@ function askAi(explain?: number) {
     if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
     const s = loadSettings(), sel = selId === null ? [] : [selId, ...multi];
     let r: Awaited<ReturnType<typeof runRequest>>;
-    try { r = await runRequest(m => chat(s, m, TOOLS), features, nextId, display.unit, text, aiStatus, kernelCheck, sel); }
+    try { r = await runRequest(m => chat(s, m, TOOLS, undefined, undefined, sec => aiStatus(`Anbieter bremst (429) – warte ${sec} s …`)), features, nextId, display.unit, text, aiStatus, kernelCheck, sel); }
     catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
     const left = r.problems.length ? ` (nicht umgesetzt: ${r.problems.join(' · ')})` : '';
     if (!r.made) return aiStatus(`Nichts angelegt${left || (r.reply ? `: ${r.reply}` : '')}`);

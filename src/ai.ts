@@ -29,21 +29,30 @@ const defaultFetch: Fetch = async (url, init) => '__TAURI_INTERNALS__' in global
   ? (await import('@tauri-apps/plugin-http')).fetch(url, local(url) ? { ...init, headers: { ...init.headers as Record<string, string>, Origin: 'http://localhost' } } : init)
   : fetch(url, init);
 
-// Eine Anfrage; Antwort als Text und/oder Werkzeugaufrufe. Fehler als verständliche Meldung (Error.message)
-export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], doFetch: Fetch = defaultFetch, timeoutMs = 60000) {
+// Eine Anfrage; Antwort als Text und/oder Werkzeugaufrufe. Fehler als verständliche Meldung (Error.message).
+// 429 (Gratis-Stufen: Token je Minute schnell voll, T8.9): einmal die Wartezeit aus retry-after abwarten (fehlt sie: 10 s, höchstens 60 s) und wiederholen
+export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], doFetch: Fetch = defaultFetch, timeoutMs = 60000, onWait: (sec: number) => void = () => {}) {
   if (!s.on) throw new Error('KI ist ausgeschaltet');
   if (!s.base || !s.model) throw new Error('Basis-URL und Modell eintragen');
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
-  let res: Response;
-  try {
-    res = await doFetch(s.base.replace(/\/+$/, '') + '/chat/completions', {
-      method: 'POST', signal: ctl.signal,
-      headers: { 'Content-Type': 'application/json', ...s.key && { Authorization: `Bearer ${s.key}` } },
-      body: JSON.stringify({ model: s.model, messages, ...tools.length && { tools, tool_choice: 'auto' }, temperature: 0 }),
-    });
-  } catch (e) {
-    throw new Error(ctl.signal.aborted ? `Keine Antwort nach ${Math.round(timeoutMs / 1000)} s` : `Anbieter nicht erreichbar (${e instanceof Error ? e.message : e})`);
-  } finally { clearTimeout(timer); }
+  const send = async () => {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+      return await doFetch(s.base.replace(/\/+$/, '') + '/chat/completions', {
+        method: 'POST', signal: ctl.signal,
+        headers: { 'Content-Type': 'application/json', ...s.key && { Authorization: `Bearer ${s.key}` } },
+        body: JSON.stringify({ model: s.model, messages, ...tools.length && { tools, tool_choice: 'auto' }, temperature: 0 }),
+      });
+    } catch (e) {
+      throw new Error(ctl.signal.aborted ? `Keine Antwort nach ${Math.round(timeoutMs / 1000)} s` : `Anbieter nicht erreichbar (${e instanceof Error ? e.message : e})`);
+    } finally { clearTimeout(timer); }
+  };
+  let res = await send();
+  const wait = Math.ceil(parseFloat(res.headers.get('retry-after') ?? '10'));
+  if (res.status === 429 && wait >= 0 && wait <= 60) { // länger = Tageskontingent, Warten lohnt nicht
+    onWait(wait);
+    await new Promise(ok => setTimeout(ok, wait * 1000));
+    res = await send();
+  }
   if (!res.ok) {
     const why = res.status === 401 ? 'Schlüssel abgelehnt' : res.status === 403 ? `Zugriff verweigert${local(s.base) ? ' – Ollama erlaubt diese Herkunft nicht (OLLAMA_ORIGINS)' : ' (Schlüssel oder Freigabe)'}`
       : res.status === 404 ? 'Adresse oder Modell nicht gefunden (Modell geladen? „ollama pull …“)'

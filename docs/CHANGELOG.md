@@ -17,6 +17,10 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   Wandstärke müssen positiv sein; nur die Höhe hat ein Vorzeichen.
 - **KI hängt nicht mehr bei „CAD-Kern prüft …“,** wenn der Prüflauf
   selbst abbricht.
+- **429 „Zu viele Anfragen“ (Groq-Gratis-Stufe):** Die KI wartet die vom
+  Anbieter genannte Zeit (bis 60 s) und versucht es einmal erneut. Bricht
+  ein Auftrag trotzdem ab, bleibt das schon Angelegte erhalten
+  (Übernehmen / Verwerfen).
 
 ## 0.3.2 — 2026-10-30
 

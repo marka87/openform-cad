@@ -21,7 +21,7 @@ test('KI-Adapter: Anfrage im OpenAI-Format, Werkzeugaufrufe gelesen (T8.2)', asy
 test('KI-Adapter: verständliche Fehler, kein Senden wenn aus (T8.2)', async () => {
   await expect(chat({ ...S, on: false }, [])).rejects.toThrow('ausgeschaltet');
   await expect(chat(S, [], [], reply(401, {}))).rejects.toThrow('Schlüssel abgelehnt (401)');
-  await expect(chat(S, [], [], reply(429, {}))).rejects.toThrow('Kontingent erschöpft (429)');
+  await expect(chat(S, [], [], async () => new Response('{}', { status: 429, headers: { 'retry-after': '3600' } }))).rejects.toThrow('Kontingent erschöpft (429)'); // Tageskontingent: nicht warten
   await expect(chat({ ...S, base: 'http://localhost:11434/v1' }, [], [], reply(403, {}))).rejects.toThrow('OLLAMA_ORIGINS'); // nicht „Schlüssel“
   await expect(chat({ ...S, base: 'http://localhost:11434/v1' }, [], [], reply(404, {}))).rejects.toThrow('ollama pull');
   await expect(chat(S, [], [], async () => { throw new TypeError('Failed to fetch'); })).rejects.toThrow('nicht erreichbar');
@@ -29,6 +29,20 @@ test('KI-Adapter: verständliche Fehler, kein Senden wenn aus (T8.2)', async () 
   await expect(chat(S, [], [], hang, 20)).rejects.toThrow('Keine Antwort nach 0 s');
   const noKey = await chat({ ...S, key: '' }, [], [], async (_u, i) => { expect((i.headers as Record<string, string>).Authorization).toBeUndefined(); return reply(200, { choices: [{ message: { content: 'OK' } }] })(); });
   expect(noKey.content).toBe('OK');                                             // Ollama: ohne Schlüssel kein Authorization-Kopf
+});
+
+test('KI-Adapter: 429 einmal nach retry-after wiederholt, Abbruch mitten im Auftrag behält Angelegtes (T8.9)', async () => {
+  const queue = [429, 200, 429, 429];
+  const doFetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), { status: queue.shift()!, headers: { 'retry-after': '0' } });
+  const waits: number[] = [];
+  expect((await chat(S, [], [], doFetch, 1000, s => waits.push(s))).content).toBe('OK');
+  await expect(chat(S, [], [], doFetch, 1000, s => waits.push(s))).rejects.toThrow('(429)');     // nur einmal wiederholt
+  expect(waits).toEqual([0, 0]);
+  const answers: (ToolCall[] | Error)[] = [[{ id: 'a', name: 'skizze_rechteck', args: { breite: 10, tiefe: 10, hoehe: 2 }, raw: '' }], new Error('Zu viele Anfragen (429)')];
+  const ask = async () => { const a = answers.shift()!; if (a instanceof Error) throw a; return { content: null, toolCalls: a, message: { role: 'assistant' as const, content: null } }; };
+  const r = await runRequest(ask, [], 1, 'mm', 'Platte');
+  expect([r.made, r.fs.length, r.problems]).toEqual([1, 1, ['abgebrochen: Zu viele Anfragen (429)']]);
+  await expect(runRequest(async () => { throw new Error('nicht erreichbar'); }, [], 1, 'mm', 'x')).rejects.toThrow('nicht erreichbar'); // ohne Angelegtes: Fehler wie bisher
 });
 
 test('KI-Ablauf: ein Aufruf je Antwort, Fehler werden korrigiert, Ende mit Text (T8.3)', async () => {

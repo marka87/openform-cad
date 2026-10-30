@@ -172,7 +172,13 @@ Auftrag: ${text}` }];
   const touched = (id: number) => before.get(id) !== JSON.stringify(fs.find(f => f.id === id)); // neu oder von der KI geändert
   for (let round = 0; round < 12 && failing < 3; round++) {
     status(round ? `KI arbeitet … (${made} angelegt)` : 'KI arbeitet …');
-    const r = await ask(msgs);
+    let r: Awaited<ReturnType<typeof ask>>;
+    try { r = await ask(msgs); }
+    catch (e) { // z. B. 429 mitten im Auftrag: schon Angelegtes bleibt (Verwerfen möglich), statt mit dem Fehler verloren zu gehen
+      if (!made) throw e;
+      problems = [`abgebrochen: ${e instanceof Error ? e.message : e}`];
+      break;
+    }
     if (!r.toolCalls.length) {
       reply = r.content ?? '';
       if (!made || !check || kernelTries === 2) break;

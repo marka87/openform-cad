@@ -37,17 +37,15 @@ Log.
    zusammen mit Punkt 1.
 3. T5.17 — Messen: erst klären, ob T10.7 das Problem erledigt hat
    (siehe dort), sonst Fehlerbild aus Teil 2 oder 3.
-4. T8.9 — 429 bei Groq. Aus Feldnotiz Teil 1, hat den Nutzer zum
-   Handzeichnen gezwungen.
-5. T8.8, T8.7 — KI auf Seitenflächen, Werkzeug `lochmuster`. Beide aus
+4. T8.8, T8.7 — KI auf Seitenflächen, Werkzeug `lochmuster`. Beide aus
    Feldnotiz Teil 1.
-6. T6.8 — Flächen der Musterkopien eindeutig benennen. Mehrdeutige
+5. T6.8 — Flächen der Musterkopien eindeutig benennen. Mehrdeutige
    Bezüge sind ein Risiko für Epic 1, deshalb vor T6.7.
-7. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
-8. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
+6. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
+7. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
-9. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
-10. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
+8. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+9. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -308,10 +306,14 @@ aus.
       kleine Modelle scheitern an Trigonometrie und vielen Einzelaufrufen).
 - [ ] T8.8 TODO — KI auf Seitenflächen: auf_schritt kennt nur die
       Oberseite; Seitenwände (Gehäuse) braucht Fläche + Ebene aus dem Kern.
-- [ ] T8.9 TODO — 429 bei Groq-Gratis-Stufe (Feldnotiz Gehäuse): jede
-      Runde schickt Werkzeuge und Verlauf neu, das Token-Limit pro Minute
-      ist schnell voll. Prüfen: Wartezeit aus retry-after abwarten und
-      einmal wiederholen, Verlauf kürzen.
+- [x] T8.9 DONE — 429 bei Groq-Gratis-Stufe (Feldnotiz Gehäuse): chat
+      wartet einmal die Zeit aus retry-after ab (fehlt sie: 10 s; über
+      60 s = Tageskontingent, kein Warten) und wiederholt; die Leiste zeigt
+      „warte N s“. Bricht ein Auftrag mitten drin ab, bleibt das schon
+      Angelegte (Übernehmen/Verwerfen) statt verloren zu gehen. Test in
+      ai.test.ts. Verlauf kürzen nicht gemacht: die Ergebnisse sind schon
+      kurz, den Großteil machen System-Text und Werkzeuge aus — erst, wenn
+      die Feldnotizen trotz Warten 429 zeigen.
 
 ## Epic 9: Skizzieren, Bereiche aus offenen Linien (Weg B)
 Große Architekturänderung, bewusst ans Ende. Erst sinnvoll, wenn Weg A
@@ -403,6 +405,12 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.9: 429 einmal nach retry-after wiederholt, Abbruch
+  mitten im Auftrag behält Angelegtes (vorher ging bei einem Fehler in
+  Runde 5 alles aus Runde 1–4 verloren — das war der eigentliche
+  Schaden). Nicht gegen echtes Groq geprüft: ob der Browser retry-after
+  lesen darf (CORS-Expose), ist offen; fehlt der Kopf, wartet chat 10 s.
+  In der Desktop-App (tauri-plugin-http) gibt es keine CORS-Sperre.
 - 2026-10-30 Fix 0.3.3 aus der Durchsicht der Commits 0.2.0–0.3.2:
   Ende-Taste bei zu schmaler Form (finishSketch-Ergebnis wurde dort
   ignoriert; getippte Maße sind nicht betroffen, applyTyped filtert ≤ 0),
