@@ -1405,9 +1405,10 @@ function renderFeaturePanel() {
       <button class="act cb">Senkung anlegen</button>` : '') +
     (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     `<details><summary>Muster / Spiegeln</summary>
-      <label>Achse <select class="ax"><option>X</option><option>Y</option><option selected>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
+      <label>Achse <select class="ax"><option value="u" selected>x der Skizze (in der Fläche)</option><option value="v">y der Skizze (in der Fläche)</option><option>X</option><option>Y</option><option>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
-      <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}"></label>
+      <label>Abstand <input class="dist" type="number" step="0.5" value="${uval(20)}" title="negativ = Gegenrichtung"></label>
+      <button class="flip" title="Richtung umkehren">⇄ Richtung</button>${multi.size ? `<p style="color:var(--muted);margin:4px 0">wirkt auf alle ${multi.size + 1} ausgewählten Skizzen</p>` : ''}
       <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
     `<button class="del">Löschen</button>`;
@@ -1419,28 +1420,35 @@ function renderFeaturePanel() {
   const num = (c: string) => parseFloat(panel.querySelector<HTMLInputElement>(c)!.value);
   const axSel = panel.querySelector<HTMLSelectElement>('.ax')!;
   axSel.onchange = () => { if (axSel.value === 'pick') { patPickFor = f.id; showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); } };
-  const ref = () => axSel.value === 'ref' && patRef ? patRef : { ax: AXES[axSel.value] ?? AXES.Z, c: [0, 0, 0] as Vec };
-  const edgesOf = features.filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !!e.edge && (e.edge.a.f === f.id || e.edge.b.f === f.id));
-  const addCopies = (make: (i: number) => { g: Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec }[]) => {
+  // u/v: Achsen der Skizze, liegen in der Fläche, auf der sie gezeichnet ist (Seitenwand ohne Raten der Weltachse); Kreis dann um den Skizzenursprung
+  const ref = () => axSel.value === 'ref' && patRef ? patRef : axSel.value === 'u' || axSel.value === 'v' ? { ax: f[axSel.value], c: f.o }
+    : { ax: AXES[axSel.value] ?? AXES.Z, c: [0, 0, 0] as Vec };
+  panel.querySelector<HTMLButtonElement>('.flip')!.onclick = () => { const d = panel.querySelector<HTMLInputElement>('.dist')!; d.value = String(-parseFloat(d.value)); };
+  // Mehrfachauswahl: jede ausgewählte Skizze wird gleich vervielfältigt (z. B. eine Lochreihe zur vollen Fläche)
+  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
+  const addCopies = (make: (n: number, g: Extrude) => { g: Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec }[]) => {
     pushHistory();
-    const cs = make(Math.max(2, Math.round(num('.cnt')) || 2));
-    for (const { g, pt, dir } of cs) {
-      add(g);
-      for (const e of edgesOf) { const c = structuredClone(e); delete c.edge; add({ ...c, id: nextId++, at: pt(e.at), dir: dir(e.dir), body: g.body }); } // Kante findet der Kern neu
+    let last = f.id;
+    for (const src of targets) {
+      const edgesOf = features.filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !!e.edge && (e.edge.a.f === src.id || e.edge.b.f === src.id));
+      for (const { g, pt, dir } of make(Math.max(2, Math.round(num('.cnt')) || 2), src)) {
+        add(g); last = g.id;
+        for (const e of edgesOf) { const c = structuredClone(e); delete c.edge; add({ ...c, id: nextId++, at: pt(e.at), dir: dir(e.dir), body: g.body }); } // Kante findet der Kern neu
+      }
     }
-    selId = cs.at(-1)!.g.id; refresh();
+    clearSel(); selId = last; refresh();
   };
-  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies(n => Array.from({ length: n - 1 }, (_, i) => {
+  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addCopies((n, src) => Array.from({ length: n - 1 }, (_, i) => {
     const t = ref().ax.map(x => x * num('.dist') * U() * (i + 1)) as Vec;
-    return { g: movedCopy(f, nextId++, t), pt: p => p.map((x, k) => x + t[k]) as Vec, dir: d => d };
+    return { g: movedCopy(src, nextId++, t), pt: p => p.map((x, k) => x + t[k]) as Vec, dir: d => d };
   }));
-  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies(n => Array.from({ length: n - 1 }, (_, i) => {
+  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, src) => Array.from({ length: n - 1 }, (_, i) => {
     const { ax, c } = ref(), a = 2 * Math.PI * (i + 1) / n;
-    return { g: movedCopy(f, nextId++, [0, 0, 0], ax, a, c), pt: p => movePt(p, [0, 0, 0], ax, a, c), dir: d => rotDir(d, ax, a) };
+    return { g: movedCopy(src, nextId++, [0, 0, 0], ax, a, c), pt: p => movePt(p, [0, 0, 0], ax, a, c), dir: d => rotDir(d, ax, a) };
   }));
-  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies(() => {
+  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, src) => {
     const { ax, c } = ref();
-    return [{ g: mirroredCopy(f, nextId++, ax, c), pt: p => mirrorPt(p, ax, c), dir: d => mirrorDir(d, ax) }];
+    return [{ g: mirroredCopy(src, nextId++, ax, c), pt: p => mirrorPt(p, ax, c), dir: d => mirrorDir(d, ax) }];
   });
   if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');

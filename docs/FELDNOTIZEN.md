@@ -41,12 +41,24 @@ Häufigkeit dessen Rang belegt.
 
 ---
 
-## Teil 1: (Name, Datum)
+## Teil 1: Gehäuse mit Lochraster in der Seitenwand (2026-10-30)
 
-Was ist es, wofür brauchst du es:
+Was ist es, wofür brauchst du es: Kasten mit Tasche, eine Seitenwand
+voll mit gleich großen, gleich verteilten runden Löchern.
 
 Notizen:
--
+- [Gehäuse] Wollte: Lochraster per Muster auf der Seitenwand |
+  Passiert: Muster lief aus dem Modell hinaus, wenn die erste Bohrung
+  nicht in der passenden Ecke saß | Umweg: in genau der richtigen Ecke
+  anfangen (behoben 2026-10-30, siehe Log)
+- [Gehäuse] Wollte: die untere Reihe (4 Kreise) auf einmal nach oben
+  vervielfältigen | Passiert: Muster wirkte nur auf einen Kreis |
+  Umweg: Kreise einzeln vervielfältigen, viele Klicks (behoben
+  2026-10-30, siehe Log)
+- [Gehäuse] Wollte: Lochraster per KI („Both sides along the X-axis,
+  circular hole pattern full, equal spacing and size“), Groq
+  gpt-oss-20b | Passiert: „Zu viele Anfragen oder Kontingent erschöpft
+  (429)“ | Umweg: von Hand gezeichnet
 
 ## Teil 2: (Name, Datum)
 

@@ -265,6 +265,15 @@ aus.
       scheitert ein KI-Schritt erst im Kern (z. B. Rundung zu groß), den
       Grund bis zu zweimal zurückschicken. Braucht ein Warten auf das
       Ergebnis des Kernlaufs (inkl. zweitem Lauf nach Bezugsnachträgen).
+- [ ] T8.7 TODO — KI-Werkzeug `lochmuster` (Reihe/Raster und Lochkreis):
+      Positionen rechnet die App, nicht das Modell (Feldnotiz Gehäuse:
+      kleine Modelle scheitern an Trigonometrie und vielen Einzelaufrufen).
+- [ ] T8.8 TODO — KI auf Seitenflächen: auf_schritt kennt nur die
+      Oberseite; Seitenwände (Gehäuse) braucht Fläche + Ebene aus dem Kern.
+- [ ] T8.9 TODO — 429 bei Groq-Gratis-Stufe (Feldnotiz Gehäuse): jede
+      Runde schickt Werkzeuge und Verlauf neu, das Token-Limit pro Minute
+      ist schnell voll. Prüfen: Wartezeit aus retry-after abwarten und
+      einmal wiederholen, Verlauf kürzen.
 
 ## Epic 9: Skizzieren, Bereiche aus offenen Linien (Weg B)
 Große Architekturänderung, bewusst ans Ende. Erst sinnvoll, wenn Weg A
@@ -330,6 +339,16 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-30 Muster nach Rückmeldung des Nutzers (Feldnotiz Gehäuse):
+  Achse „x/y der Skizze (in der Fläche)“, Standard x der Skizze statt
+  Welt-Z, damit es auf Seitenwänden ohne Raten der Weltachse geht; Kreis
+  um diese Achsen dreht um den Skizzenursprung. Knopf „⇄ Richtung“
+  (negativer Abstand war schon möglich, aber unsichtbar). Mehrfachauswahl:
+  alle ausgewählten Skizzen werden gleich vervielfältigt (4 Kreise unten
+  → volles Raster in einem Schritt). Im Browser geprüft: 4 Bohrungen in
+  einer Wand, Reihe y der Skizze, 5 × 14 mm → 4 × 5 Raster, keine Fehler.
+  Kern-Test: keiner, reine Oberflächenverdrahtung (movedCopy ist getestet).
+  Neu daraus: T8.7–T8.9.
 - 2026-10-30 T8.5: Roter Schritt bekommt im Baum einen Knopf „?“, wenn
   die KI eingeschaltet ist. Gesendet werden Meldung des Kerns, der Schritt
   und bis zu 3 Schritte davor und 1 danach mit Maßen (explainMsgs), ohne
