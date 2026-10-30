@@ -9,6 +9,25 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.3.0 — 2026-10-30
+
+### Muster
+- **Muster ist ein eigener Schritt** („Muster 4 × 5“ im Baum) und bleibt
+  bearbeitbar: Anzahl und Abstand je Richtung ändern, **⇄** dreht das
+  bestehende Muster um, statt ein zweites anzulegen.
+- **Raster in einem Schritt:** „quer dazu“ ergibt Reihen und Spalten
+  zugleich, in der Fläche der Skizze.
+- **Abstand ziehen:** Orange Pfeile am letzten Exemplar je Richtung.
+- Kopien folgen der Quelle: Wird die Quellskizze hineingedrückt oder
+  geändert, gehen alle Kopien mit. Klick auf eine Kopie wählt das Muster,
+  an der Quelle steht „Im Muster … – bearbeiten“.
+- Kreis-Muster und Spiegeln legen vorerst weiterhin Einzelkopien an.
+
+### Oberfläche
+- **Werkzeugleiste in Gruppen:** Skizze, Hilfen, Körper, Prüfen.
+- **Untermenüs** (Rechteck-Art, Vieleck-Ecken, Transformieren, Messen):
+  großer ▾-Knopf, Rechtsklick auf das Werkzeug öffnet sie ebenfalls.
+
 ## 0.2.0 — 2026-10-30
 
 ### Modellieren
