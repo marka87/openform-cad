@@ -20,9 +20,10 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 - [x] Schale, Zug und Fläche löschen prüfen ihr Ergebnis
 - [x] Rundung und Fase prüfen ihr Ergebnis (0.5.0)
 - [x] Schale ohne Wirkung, Bohrung und Muster ohne Treffer werden gemeldet
-- [ ] TODO Fläche versetzen und Boolesche Operationen prüfen ihr Ergebnis
-- [ ] TODO Gesamtprüfung vor jedem Export, ungültig = klare Warnung
-- [ ] TODO Zufallsprobe mit Bohrungen auf Kanten findet nichts Stilles mehr
+- [x] Fläche versetzen und Boolesche Operationen prüfen ihr Ergebnis
+- [x] Gesamtprüfung vor STEP, STL, 3MF, ungültig = Warnung mit Nachfrage (OBJ läuft über
+      das Anzeigenetz, ohne Prüfung; Nachfrage nicht in der Oberfläche durchgeklickt)
+- [x] Zufallsprobe mit Bohrungen auf Kanten findet nichts Stilles mehr (544 Läufe)
 
 ### 2. Export wirklich belegen — zusammen
 - [ ] TODO STEP in FreeCAD öffnen
@@ -107,6 +108,8 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.5.1** Boolesche Operationen geprüft; Warnung vor Export ungültiger Körper; gescheiterte
+  Rundung beschädigt den Körper nicht mehr; Schale mit unsinnigem Ergebnis wird rot
 - **0.5.0** Rundung/Fase mit ungültigem Ergebnis wird rot; Seitenfeld aufgeräumt;
   Hinweis passend zur Maus, F1 = ganze Hilfe; Leiste neben der Auswahl
 - **0.4.4** Muster meldet Kopien neben dem Körper; Druck auf flache Skizze greift nicht
@@ -117,4 +120,8 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-30 Plan Punkt 1 (0.5.1): Zufallsprobe fand zwei schwere Fehler: gescheiterte Rundung
+  beschädigt den Ausgangskörper in OCCT (Flächen weg, ungültig, Volumen falsch) → Stand davor
+  wird neu gerechnet; Schale meldet Erfolg mit Volumen 1e101 und „gültig“ → Volumenprüfung.
+  Danach 544 Läufe ohne Fund, 358 davon mit roten Schritten.
 - 2026-10-30 Dokumente zusammengeführt; altes Log siehe Git, Commit 0f9525a.

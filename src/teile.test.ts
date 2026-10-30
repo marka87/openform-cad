@@ -2,8 +2,8 @@
 // Selbst ausgedacht, um Fehler zu finden; das sind NICHT die echten Teile aus T0.3.
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
-import { getOC, measureVolume, setOC } from 'replicad';
-import { buildBody, forExport, loadStep, sheetSVG, to3MF } from './kernel';
+import { cast, getOC, measureVolume, setOC } from 'replicad';
+import { buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { GROUND, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -300,4 +300,24 @@ test('Fase, die in eine Bohrung läuft und einen ungültigen Körper ergäbe, wi
   expect(valid(r.body!)).toBe(true);
   const m = closed(to3MF([...r.bodies.values()]));
   expect([m.dup, m.open]).toEqual([0, 0]);
+});
+
+test('Gescheiterte Rundung lässt den Körper davor unversehrt; Schale mit unendlichem Ergebnis wird rot', () => {
+  const base = rect(GROUND, [0, 0], [60, 40], 1, 15, false), boss = circle(top(15), [0, 26], 8, 2, 8);
+  const failed = settle([base, boss, edge('fillet', 3, [0, 15, -20], [0, 0, 1], 5)]).r;
+  expect(failed.errors.has(3)).toBe(true);
+  expect(invalidBodies(failed.bodies)).toEqual([]);
+  expect(measureVolume(failed.body!)).toBeCloseTo(36000 + Math.PI * 64 * 8, 1);
+  const shell = settle([base, circle(top(15), [7, 40], 1, 2, 3), { id: 3, type: 'shell', at: [30, 15, -20], t: 4 } as Shell]).r;
+  expect(shell.errors.has(3)).toBe(true);
+  expect(measureVolume(shell.body!)).toBeLessThan(40000);
+});
+
+test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
+  const { r } = settle([rect(GROUND, [-60, 20], [15, 30], 1, 18.5, false), circle(top(18.5), [-20, 20], 4, 2, -9.5)]);
+  expect(invalidBodies(r.bodies)).toEqual([]);
+  const oc = getOC() as any, b = new oc.BRepFilletAPI_MakeChamfer(r.body!.wrapped);    // dieselbe Fase wie oben, am Kern vorbei
+  r.body!.edges.filter(e => { const [x, y, z] = e.pointAt(0.5).toTuple(); return x < -24 && Math.abs(y - 18.5) < 1e-6 && Math.abs(z + 20) < 1e-6; }).forEach(e => b.Add(7.5, e.wrapped));
+  b.Build(new oc.Message_ProgressRange());
+  expect(invalidBodies(new Map([[1, cast(b.Shape()) as any]]))).toEqual([1]);
 });

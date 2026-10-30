@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { assembleWire, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
-import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
+import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -86,6 +86,18 @@ export function projectBody(s: Shape3D, named: Named, pl: Frame) {
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
+  // Eine gescheiterte Rundung/Fase kann den Ausgangskörper in OCCT beschädigen (Flächen fehlen danach): dann den Stand davor neu rechnen
+  const safeEdgeOp = (owner: Feature, k: number, type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra?: Partial<Origin>) => {
+    try { return edgeOp(type, id, A, nA, edges, r, extra); }
+    catch (e) {
+      const prev = buildBody(features.slice(0, features.indexOf(owner)), imports), kept = prev.bodies.get(k);
+      if (prev.body && prev.bodies.size > 1) prev.body.delete();
+      for (const [n, b] of prev.bodies) if (n !== k) b.delete();
+      A.delete();
+      if (kept) { bodies.set(k, kept); names.set(k, prev.names.get(k) ?? []); } else { bodies.delete(k); names.delete(k); }
+      throw e;
+    }
+  };
   const anchor = <T extends { patch?: Record<string, unknown>; sure: boolean; confirm?: Record<string, unknown> }>(id: number, a: T) => {
     if (a.patch) fixes.set(id, { ...fixes.get(id), ...a.patch });
     if (!a.sure) unsure.push(id);
@@ -152,7 +164,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       if (f.type === 'fillet' || f.type === 'chamfer') {
         if (!body) continue;
         const nm = names.get(k) ?? [];
-        done(...edgeOp(f.type, f.id, body, nm, anchor(f.id, anchorEdges(f, body, nm)).edges, f.r));
+        done(...safeEdgeOp(f, k, f.type, f.id, body, nm, anchor(f.id, anchorEdges(f, body, nm)).edges, f.r));
         continue;
       }
       if (f.type === 'pattern') { // Kopien der Quellskizzen in ihrer aktuellen (vielleicht gewanderten) Lage; flache Skizzen ergeben nichts
@@ -183,7 +195,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
             const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o;
             for (const e of ops) {
               const fp = e.edge!.fp, nm = names.get(kk) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } };
-              put(...edgeOp(e.type, e.id, b!, nm, anchorEdges({ at: P.pt(e.at), edge }, b!, nm).edges, e.r, { at }));
+              put(...safeEdgeOp(f, kk, e.type, e.id, b!, nm, anchorEdges({ at: P.pt(e.at), edge }, b!, nm).edges, e.r, { at }));
             }
           }
         }
@@ -457,6 +469,8 @@ function dimSVG(d: Dim, P: number[][], R: number, t: string, arrow: (x: number, 
 
 // 3MF (T7.1): ZIP ohne Kompression mit einem Objekt je Körper (Z-oben, mm). Gleiche Eckpunkte werden zusammengelegt,
 // sonst hat das Netz offene Kanten (OCCT vernetzt je Fläche) und Slicer melden Fehler
+// Körper, die OCCTs Prüfung nicht bestehen (z. B. aus einer fehlerhaften STEP-Datei); Grundlage der Warnung vor dem Export
+export const invalidBodies = (bodies: Map<number, Shape3D>) => [...bodies].filter(([, s]) => !isValid(s.wrapped)).map(([id]) => id);
 export function to3MF(shapes: Shape3D[]): Uint8Array<ArrayBuffer> {
   const objs = shapes.map((sh, i) => {
     const s = forExport(sh), m = s.mesh({ tolerance: 0.01, angularTolerance: 0.1 }), idx = new Map<string, number>(), vs: string[] = [], tris: string[] = [];

@@ -165,7 +165,7 @@ export function nameLoft(id: number, A: Extrude, B: Extrude, s: Shape3D): Named 
 }
 
 // OCCTs Gültigkeitsprüfung (Topologie und Geometrie); teuer, deshalb nur nach Operationen, die bekanntermaßen Kaputtes liefern können
-function isValid(shape: any) {
+export function isValid(shape: any) {
   const check = new (getOC() as any).BRepCheck_Analyzer(shape, true, false), ok = check.IsValid();
   check.delete();
   return ok;
@@ -211,7 +211,9 @@ export function shell(id: number, A: Shape3D, nA: Named, open: Face[], t: number
       const gen = nA.flatMap(({ face, o }) => list(b.Generated(face.wrapped)).map(g => [g, { f: id, tag: 'shell', of: o }] as [any, Origin]));
       const out = carry(b, nA, gen);
       gen.forEach(([g]) => g.delete());
-      if (Math.abs(measureVolume(out[0]) - v0) > 1e-6 * v0) return out;
+      const v1 = measureVolume(out[0]);
+      if (t > 0 && v1 > v0) { out[0].delete(); why ||= 'Schale ergibt keinen brauchbaren Körper (Wand zu dick oder Form zu verwinkelt?)'; continue; } // OCCT meldet teils Erfolg mit unendlichem Volumen
+      if (Math.abs(v1 - v0) > 1e-6 * v0) return out;
       out[0].delete();
       throw new Error('Schale bleibt ohne Wirkung: Diese gekrümmten Flächen kann der Kern nicht aushöhlen'); // Intersection braucht hier 10 s und scheitert auch, bei jedem Lauf
     } finally { L.delete(); b.delete(); }
@@ -274,6 +276,7 @@ export function boolean(op: 'fuse' | 'cut' | 'common', A: Shape3D, nA: Named, B:
     b.Build();
     if (!b.IsDone()) throw new Error('Boolesche Operation fehlgeschlagen');
     b.SimplifyResult(true, true, 1e-3);
+    if (!isValid(b.Shape())) throw new Error('Boolesche Operation ergibt keinen gültigen Körper'); // nie still kaputt weiterrechnen oder exportieren
     return carry(b, [...nA, ...nB]);
   } finally { b.delete(); }
 }

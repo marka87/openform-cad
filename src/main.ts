@@ -286,6 +286,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   } else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
+  else if (data.invalid?.length) { if (confirm(`Körper ${data.invalid.map(b => `#${b}`).join(', ')} ist ungültig, die Datei kann Löcher haben und sich nicht fertigen lassen. Trotzdem exportieren?`)) send({ type: 'export', format: data.format, force: true }); }
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
