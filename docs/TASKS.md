@@ -359,6 +359,14 @@ Der Nutzer nennt als größte Störer: Pfeile zu klein, Werkzeugleiste links.
 
 ## Log
 (neueste oben)
+- 2026-10-30 Fix (0.3.1, Rückmeldung Nutzer „kann Muster nicht als Loch
+  durchschieben“): Ziehen an einer Kopie startet das Hineindrücken der
+  Quelle (Mesh trägt userData.src); Flächen schon gebohrter Kopien findet
+  patternGrip, indem der Klickpunkt um den Versatz zurückgeschoben und
+  bei der Quelle gesucht wird. Im Browser: flache Kopie gezogen → 20
+  Bohrungen à 14 mm; Boden einer Kopie gezogen → Quelle −5 → −13 mm, kein
+  neuer Schritt, Volumen stimmt. Kern-Test: keiner (Bedienung; Kern-Seite
+  über T6.5 getestet).
 - 2026-10-30 T10.12: Werkzeugleiste in Gruppen (Skizze, Hilfen, Körper,
   Prüfen; Text zu Skizze, Schale zu Körper). Untermenü-Pfeil ▸ wurde ein
   umrandeter ▾-Knopf (≈ 22 × 18 px), Rechtsklick auf das Werkzeug öffnet

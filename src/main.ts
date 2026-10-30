@@ -288,7 +288,7 @@ function rebuild() {
         if (!src || !isExtrude(src) || src.hidden || noFace(src) || !isFlat(src) && !on) continue;
         for (const t of patternOffsets(f)) {
           const o = buildMesh(movedCopy(src, f.id, t), isFlat(src) ? 'sketch' : 'outline');
-          delete o.userData.id; o.userData.pat = f.id;
+          delete o.userData.id; o.userData.pat = f.id; o.userData.src = src.id;
           o.matrix.premultiply(M); // buildMesh setzt die Lage schon in die Matrix
           group.add(o);
         }
@@ -532,7 +532,7 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[]; pat?: number }; // pat = Kopie aus diesem Muster // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[]; pat?: number; patSrc?: number }; // pat = Kopie aus diesem Muster, patSrc = ihre Quellskizze // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
 let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
 // Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
@@ -570,9 +570,9 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
-    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray());
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray()) ?? patternGrip(fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
-    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat };
+    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat, patSrc: fh.object.userData.src };
   }
   if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
     const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
@@ -581,6 +581,16 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
     edge = { at: at.toArray() as Vec, dir: b.sub(a).normalize().toArray() as Vec, body: eh.object.parent?.userData.body };
   }
   return { face, edge };
+}
+// Fläche einer Muster-Kopie im Körper: zurück auf die Quelle schieben und dort suchen, damit Ziehen die Quelle (und alle Kopien) ändert
+function patternGrip(P: number[], n: number[]): Grip | null {
+  const L = live();
+  for (const p of L) if (p.type === 'pattern' && !p.hidden)
+    for (const t of patternOffsets(p)) {
+      const g = ownerOf(L.filter(f => p.src.includes(f.id)), P.map((x, i) => x - t[i]), n);
+      if (g) return g;
+    }
+  return null;
 }
 function planeHit(pl: Frame) {
   const P = new THREE.Plane().setFromNormalAndCoplanarPoint(V(pl.n), V(pl.o));
@@ -1007,7 +1017,14 @@ function onDown(e: PointerEvent) {
     return showHint(pathHint());
   }
   if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
-  if (tool === 'select' && h?.pat !== undefined && !hp) { if (e.ctrlKey || e.shiftKey) toggleSel(h.pat); else { clearSel(); selId = h.pat; } detachGizmo(); return refresh(); }
+  if (tool === 'select' && h?.pat !== undefined && !hp) { // Kopie eines Musters: wählt das Muster; ziehen drückt die Quelle hinein, alle Kopien folgen
+    if (e.ctrlKey || e.shiftKey) { toggleSel(h.pat); return refresh(); }
+    clearSel(); selId = h.pat; detachGizmo(); refresh();
+    const src = getById(h.patSrc!);
+    if (!src || !isExtrude(src)) return;
+    drag = { kind: 'push', f: src, f0: structuredClone(src), part: 'end', k: 1, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
+    controls.enabled = false; el.setPointerCapture(e.pointerId); return;
+  }
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
     if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };

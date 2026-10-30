@@ -9,6 +9,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.3.1 — 2026-10-30
+
+- **Muster-Kopien lassen sich hineindrücken:** Ziehen an einer Kopie
+  (flache Skizze oder schon gebohrtes Loch) ändert die Quelle, alle Kopien
+  folgen. Vorher ließ sich nur die Quelle selbst ziehen, am Boden einer
+  kopierten Bohrung entstand ein eigener „Fläche versetzen“-Schritt.
+
 ## 0.3.0 — 2026-10-30
 
 ### Muster
