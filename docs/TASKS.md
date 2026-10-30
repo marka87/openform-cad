@@ -37,7 +37,7 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.6.2 gebaut, nicht installiert)
+      STL, 3MF, Zeichnung (0.7.0 gebaut, nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -57,8 +57,6 @@ bricht „Fläche löschen“. Danach voller Testlauf.
 
 ## Zurückgestellt
 Nur anfassen, wenn ein echtes Teil es verlangt.
-- Tempo beim Ziehen: Jeder Lauf rechnet alle Schritte neu (30 Einzelbohrungen 1,2 s + Netz).
-  Hebel wäre, den Stand vor dem gezogenen Schritt im Worker zu behalten
 - Schale, die eine Fläche neben einer Rundung öffnet, bleibt rot (Kern schafft es nicht)
 - Rundung an einer Muster-Quelle, die erst nach dem Muster angelegt wird (Umweg:
   Rundung vor das Muster legen)
@@ -104,6 +102,8 @@ Datenverlust = sofort ein Paket.
   (Wiederholung eingebaut, nicht gegen Groq geprüft)
 
 ### Teil 2: (Name, Datum, wofür)
+- [Teil 2?] Wollte: Kante abrunden an einem Teil mit vielen Mustern und Löchern | Passiert: dauerte
+  einige Zeit | Umweg: gewartet (behoben in 0.7.0, am Teil des Nutzers noch nicht bestätigt)
 
 ### Teil 3: (Name, Datum, wofür)
 
@@ -111,6 +111,8 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.7.0** Neue Oberfläche nach Vorlage des Nutzers; Würfel: Doppelklick, Drehknöpfe ±90°; Ändern
+  und Ziehen rechnet nur noch ab dem geänderten Schritt
 - **0.6.2** Leiste auf dem Modell entfernt; Muster und Spiegeln als eigene Ansicht
 - **0.6.1** Großes Lochraster stürzt nicht mehr ab und rechnet ein Vielfaches schneller
 - **0.6.0** Bohrung und Tasche „Durch alles“
@@ -126,6 +128,13 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-30 Rückmeldung am echten Teil (0.7.0). Tempo: Der Worker behält den Stand vor dem zuletzt
+  geänderten Schritt und den Stand nach dem letzten; Test vergleicht jeden Schritt mit vollem
+  Neurechnen. Rundung an Platte mit 100 Löchern ziehen: Kern 63 ms statt rund 1,5 s, dazu Netz 0,65 s
+  (unverändert). Eine gescheiterte Rundung verwirft den Stand (OCCT beschädigt sonst die geteilte
+  Geometrie), dann wird einmal voll gerechnet. Oberfläche nach den Bildern des Nutzers; nicht gebaut:
+  die symmetrischen Knöpfe neben ⇄ in der Vorlage, das Modell kennt das nicht. Drehknöpfe drehen um
+  die Hochachse, weil OrbitControls kein Rollen kann; in der Draufsicht dreht das den Grundriss.
 - 2026-10-30 Rückmeldung des Nutzers (0.6.2): Muster/Spiegeln/Löschen erschienen zu oft, vor
   allem auf dem Modell; das Muster-Feld soll besser und separat sein. Leiste auf dem Modell und
   Knopfreihe entfernt, Muster und Spiegeln öffnen über die Leiste links oder das Kontextmenü eine

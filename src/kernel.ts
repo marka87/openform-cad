@@ -89,7 +89,17 @@ function thruDepth(f: Extrude, b: Shape3D) {
   const min = Math.min(...[lo[0], hi[0]].flatMap(x => [lo[1], hi[1]].flatMap(y => [lo[2], hi[2]].map(z => dot(x, y, z)))));
   return Math.round(Math.max(0, dot(f.o[0], f.o[1], f.o[2]) - min) * 1e6) / 1e6;
 }
-export function buildBody(features: Feature[], imports = new Map<number, Shape3D>()) {
+// Stand vor dem zuletzt geänderten Schritt: Beim Ziehen und Nachtragen von Bezügen muss nur ab dort neu gerechnet werden.
+// end = Stand nach dem letzten Schritt, für einen neu angehängten Schritt.
+// Hält Kopien der Körper-Hüllen (gleiche OCCT-Geometrie), deshalb verwirft ihn eine gescheiterte Rundung (siehe safeEdgeOp)
+export interface BuildCache { keys: string[]; at: number; st: ReturnType<typeof snapshotOf> | null; end: ReturnType<typeof snapshotOf> | null }
+const newCache = (): BuildCache => ({ keys: [], at: 0, st: null, end: null });
+function snapshotOf(bodies: Map<number, Shape3D>, names: Map<number, Named>, alias: Map<number, number>, failed: number[], errors: Map<number, string>, fixes: Map<number, Record<string, unknown>>, unsure: number[], confirm: Map<number, Record<string, unknown>>, moved: Map<number, Extrude>) {
+  return { bodies: new Map([...bodies].map(([k, s]) => [k, s.clone() as Shape3D])), names: new Map(names), alias: new Map(alias), failed: [...failed], errors: new Map(errors), fixes: new Map(fixes), unsure: [...unsure], confirm: new Map(confirm), moved: new Map(moved) };
+}
+const dropCache = (c: BuildCache) => { c.st?.bodies.forEach(s => s.delete()); c.end?.bodies.forEach(s => s.delete()); c.st = c.end = null; };
+export { newCache };
+export function buildBody(features: Feature[], imports = new Map<number, Shape3D>(), cache?: BuildCache) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
   // Eine gescheiterte Rundung/Fase kann den Ausgangskörper in OCCT beschädigen (Flächen fehlen danach): dann den Stand davor neu rechnen
@@ -100,6 +110,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       if (prev.body && prev.bodies.size > 1) prev.body.delete();
       for (const [n, b] of prev.bodies) if (n !== k) b.delete();
       A.delete();
+      if (cache) dropCache(cache);
       if (kept) { bodies.set(k, kept); names.set(k, prev.names.get(k) ?? []); } else { bodies.delete(k); names.delete(k); }
       throw e;
     }
@@ -111,7 +122,28 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
     return a;
   };
   const key = (b: number) => { while (alias.has(b)) b = alias.get(b)!; return b; }; // verrechnete Körper leben in a weiter
-  for (const f of features) {
+  const keys = cache ? features.map(f => f.type === 'import' ? `${f.id}:${f.name}:${f.hidden}` : JSON.stringify(f)) : [];
+  let changed = 0, start = 0;
+  if (cache) {
+    while (changed < keys.length && keys[changed] === cache.keys[changed]) changed++;
+    const tail = cache.end && changed >= cache.keys.length && cache.keys.length > 0, c = tail ? cache.end : cache.st && cache.at <= changed ? cache.st : null;
+    if (c) {
+      c.bodies.forEach((s, k) => bodies.set(k, s.clone() as Shape3D));
+      c.names.forEach((v, k) => names.set(k, v)); c.alias.forEach((v, k) => alias.set(k, v));
+      failed.push(...c.failed); unsure.push(...c.unsure);
+      c.errors.forEach((v, k) => errors.set(k, v)); c.fixes.forEach((v, k) => fixes.set(k, v));
+      c.confirm.forEach((v, k) => confirm.set(k, v)); c.moved.forEach((v, k) => moved.set(k, v));
+      start = tail ? cache.keys.length : cache.at;
+    } else dropCache(cache);
+    cache.keys = keys;
+  }
+  for (let fi = start; fi < features.length; fi++) {
+    if (cache && fi === changed && !(cache.st && cache.at === changed)) {
+      cache.st?.bodies.forEach(s => s.delete());
+      cache.st = snapshotOf(bodies, names, alias, failed, errors, fixes, unsure, confirm, moved);
+      cache.at = changed;
+    }
+    const f = features[fi];
     if (f.hidden || f.type === 'plane') continue;
     try {
       if (f.type === 'combine') {
@@ -288,6 +320,10 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       failed.push(f.id);
       errors.set(f.id, e instanceof Error ? e.message : String(e));
     }
+  }
+  if (cache) {
+    cache.end?.bodies.forEach(s => s.delete());
+    cache.end = snapshotOf(bodies, names, alias, failed, errors, fixes, unsure, confirm, moved);
   }
   const all = [...bodies.values()];
   const body = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei

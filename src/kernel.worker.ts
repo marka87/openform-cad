@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
+import { newCache, buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
@@ -42,6 +42,7 @@ const free = (r: { body: Shape3D | null; bodies: Map<number, Shape3D> }) => {
   for (const s of r.bodies.values()) s.delete();
 };
 
+const buildCache = newCache();
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
   if (data.type === 'build') {
@@ -52,7 +53,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
     if (body && bodies.size > 1) body.delete(); // Verbund; ein einzelner Körper wird unten mit gelöscht
     for (const s of bodies.values()) s.delete();
-    const r = buildBody(data.features, imports);
+    const r = buildBody(data.features, imports, buildCache);
     body = r.body; bodies = r.bodies; names = r.names;
     const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
       const m = s.mesh(MESH), e = s.meshEdges(MESH);

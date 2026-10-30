@@ -3,7 +3,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, measureVolume, setOC } from 'replicad';
-import { buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
+import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { GROUND, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -343,6 +343,25 @@ test('Großes Lochraster: 300 Löcher in einem Schnitt, überlappende Kopien wei
   const r = 2, a = 2 * r * r * Math.acos(3 / 4) - 1.5 * Math.sqrt(16 - 9);    // Schnittfläche zweier Kreise
   expect(measureVolume(lap.body!)).toBeCloseTo(600000 - (2 * Math.PI * 4 - a) * 10, 1);
 }, 30000);
+
+test('Wiederverwendeter Stand liefert genau dasselbe wie volles Neurechnen', () => {
+  const sig = (r: ReturnType<typeof buildBody>) => JSON.stringify({ v: r.body ? +measureVolume(r.body).toFixed(4) : null, n: r.bodies.size, e: [...r.errors], f: r.failed, u: r.unsure, x: [...r.fixes], m: [...r.names].map(([k, a]) => [k, a.map(x => `${x.o.f}:${x.o.tag}:${x.o.i ?? ''}:${x.o.at ?? ''}`).sort()]) });
+  const cache = newCache();
+  let fs = settle(gehaeuse()).fs;
+  const set = (id: number, p: Record<string, unknown>) => { fs = fs.map(f => f.id === id ? { ...f, ...p } as Feature : f); };
+  const pat = (fs.find(f => f.id === 9) as Pattern);
+  const steps: (() => void)[] = [
+    () => {}, () => set(10, { d: -1 }), () => set(10, { d: -2 }), () => set(10, { p: { cx: 30, cy: 12, r: 5 } }), () => set(9, { a: { ...pat.a, n: 3, d: 30 } }), () => set(6, { t: 3 }),
+    () => set(2, { r: 7 }), () => set(2, { r: 40 }), () => set(2, { r: 5 }), () => set(1, { d: 40 }), () => set(8, { hidden: true }), () => set(8, { hidden: false }),
+    () => { fs = fs.filter(f => f.id !== 10); }, () => { fs = [...fs, circle(top(40), [40, 25], 3, 11, -5)]; }, () => { fs = [...fs, edge('chamfer', 12, [40, 40, -25 + 3], [0, 0, 1], 0.5)]; }, () => set(11, { d: -6 }), () => { fs = settle(gehaeuse()).fs; }, () => { fs = [fs[1], fs[0], ...fs.slice(2)]; },
+  ];
+  for (const [i, step] of steps.entries()) {
+    step();
+    const c = buildBody(fs, undefined, cache), a = sig(c), b = sig(buildBody(fs));
+    expect([i, a]).toEqual([i, b]);
+    if (c.body) expect(valid(c.body)).toBe(valid(buildBody(fs).body!));
+  }
+}, 60000);
 
 test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
   const { r } = settle([rect(GROUND, [-60, 20], [15, 30], 1, 18.5, false), circle(top(18.5), [-20, 20], 4, 2, -9.5)]);
