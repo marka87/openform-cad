@@ -16,6 +16,9 @@ geliefert — ein Muster, das aus dem Modell lief, und ein Muster, das nur
 einen Kreis erwischte. Beide standen auf keiner Wunschliste. Vermutungen
 liefern Plausibles, echte Teile liefern Wahres.
 
+Vom Nutzer aufgehoben (2026-10-30) für T10.13, T10.14, T10.15. Für alles
+andere gilt die Sperre weiter (T6.9, T6.10).
+
 Sicherung gegen stilles Umgehen: Solange T0.3 offen ist (weniger als
 drei echte Teile gebaut), darf kein Paket begonnen werden, das nur aus
 einer Vermutung stammt. Ausgenommen sind Fehler, Abbrüche und
@@ -431,7 +434,7 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
       über Kante „ziehen = runden, hinein = fasen“, über Skizzenpunkt
       „ziehen = verschieben“, ins Leere „ziehen = Rahmen“). Die heutige
       Vollhilfe (drei Zeilen Fließtext) per „?“ oder F1 erreichbar.
-- [ ] T10.14 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Feld rechts aufräumen: oben nur die Maße der Auswahl,
+- [x] T10.14 DONE (VERMUTUNG, Sperre vom Nutzer aufgehoben) — Feld rechts aufräumen: oben nur die Maße der Auswahl,
       darunter eine Zeile mit den 3–4 häufigsten Aktionen als Knöpfe,
       Seltenes (Versatz, Drehen um, Zug, Übergang, Senkung) zugeklappt
       unter „Mehr“. Heute zeigt eine Skizze rund 13 Felder und Knöpfe
@@ -443,6 +446,13 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T10.14 Seitenfeld der Skizze: oben Maße (Gewinde, Abhängigkeiten,
+  bei Drehkörper auch die Achse), dann Knöpfe Muster, Spiegeln, Löschen, darunter
+  „Mehr“ mit Versatz, Drehen um, Zug, Übergang-Hinweis, Senkung. „Mehr“ bleibt
+  offen beim Neuzeichnen. Muster und Spiegeln öffnen die vorhandenen Einstellungen
+  (Spiegeln braucht eine Achse, sofort ausführen wäre Raten). Im Browser geprüft.
+  Kein Kern-Test, reine Anordnung, Griffe und Felder unverändert. Der Körper-Bereich
+  ist unverändert, der war nicht das Problem.
 - 2026-10-30 Halter von Hand im Browser (0.4.4): Fund: Kreis r 5 auf 10 mm
   schmaler Oberseite, flacher Blick, Druck auf die Kreismitte → Fase #3 statt
   Bohrung, weil der Fangbereich der Kante (6 px) über der Skizze lag. Regel in

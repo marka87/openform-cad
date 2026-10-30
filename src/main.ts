@@ -444,6 +444,7 @@ function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');
+let moreOpen = false; // „Mehr“ im Seitenfeld bleibt über Neuzeichnen hinweg offen
 let bodyTotal: { v: number; a: number } | null = null; // Volumen und Oberfläche aller Körper, vom Kern gemeldet
 // Schritte mit Problemen, vom Kern gemeldet: bad = nicht berechnet, sonst Bezug nur unsicher gefunden
 let problems = new Map<number, { bad: boolean; why: string }>();
@@ -1462,17 +1463,21 @@ function renderFeaturePanel() {
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
   const name = nameOf(f);
   const other = multi.size === 1 ? getById([...multi][0]) : undefined, loftTo = isFlat(f) && other && isExtrude(other) && isFlat(other) ? other : null;
+  const revHtml = `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option><option value="edge">Kante anklicken …</option></select></label>`;
+  // Seltenes zugeklappt (T10.14)
+  const more = (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="${uval(2)}" class="off"></label><button class="act addOff">Versatz anlegen</button>` : '') +
+    (isFlat(f) && !f.rev ? revHtml : '') +
+    (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
+    (!loftTo && isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
+    (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '');
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
-    (isFlat(f) && !f.and && !f.smooth ? `<label>Versatz <input type="number" step="0.5" value="${uval(2)}" class="off"></label><button class="addOff">Versatz anlegen</button>` : '') +
-    (isFlat(f) || f.rev ? `<label>Drehen um <select class="revAx"><option value="">–</option><option value="u">x-Achse der Skizze</option><option value="v">y-Achse der Skizze</option><option value="edge">Kante anklicken …</option></select></label>` : '') +
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
-    (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
-    (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
-    (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>
-      <button class="act cb">Senkung anlegen</button>` : '') +
-    (f.rev ? `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
+    (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
+    (f.rev ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
+    (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
+    `<div class="quick"><button class="qPat">Muster</button><button class="qMir">Spiegeln</button><button class="del">Löschen</button></div>` +
     `<details><summary>Muster / Spiegeln</summary>
       <label>Achse <select class="ax"><option value="u" selected>x der Skizze (in der Fläche)</option><option value="v">y der Skizze (in der Fläche)</option><option>X</option><option>Y</option><option>Z</option>${patRef ? `<option value="ref" selected>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>
       <label>Anzahl <input class="cnt" type="number" min="2" value="3"></label>
@@ -1482,8 +1487,12 @@ function renderFeaturePanel() {
       <label>Abstand quer <input class="dist2" type="number" step="0.5" value="${uval(20)}"></label>${multi.size ? `<p style="color:var(--muted);margin:4px 0">wirkt auf alle ${multi.size + 1} ausgewählten Skizzen</p>` : ''}
       <button class="lin">Reihe entlang Achse</button><button class="rot">Kreis um Achse</button><button class="mir">Spiegeln (Ebene ⟂ Achse)</button>
     </details>` +
-    `<button class="del">Löschen</button>`;
-  panel.querySelector('.lin')?.closest('details')?.classList.add('pat');
+    (more ? `<details class="more"${moreOpen ? ' open' : ''}><summary>Mehr</summary>${more}</details>` : '');
+  const patD = panel.querySelector('.lin')!.closest('details')!;
+  patD.classList.add('pat');
+  panel.querySelector<HTMLButtonElement>('.qPat')!.onclick = () => { patD.open = true; panel.querySelector<HTMLInputElement>('.cnt')!.focus(); };
+  panel.querySelector<HTMLButtonElement>('.qMir')!.onclick = () => { patD.open = true; panel.querySelector<HTMLButtonElement>('.mir')!.focus(); };
+  panel.querySelector<HTMLDetailsElement>('details.more')?.addEventListener('toggle', e => moreOpen = (e.target as HTMLDetailsElement).open);
   // Muster und Spiegeln im Raum; Achsen wie in der Exportdatei (Z oben = Szene +Y), Kreis und Spiegelebene durch den Ursprung
   // Bezug: Achse durch den Ursprung oder angeklickte Kante (Richtung, durch die Kante) bzw. Fläche (Normale, durch den Klickpunkt;
   // beim Spiegeln = Spiegelebene). Rundungen/Fasen an den Flächen des Features werden mitkopiert.
@@ -1842,7 +1851,7 @@ function openCtx(e: PointerEvent) {
     const b = sel.type === 'move' ? sel.body : sel.type !== 'combine' && sel.type !== 'plane' ? bodyOf(sel) : null;
     if (b !== null && bodyIds.includes(b)) items.push([`Körper #${b} auswählen`, () => { clearSel(); selBody = b; refresh(); }]);
     if (isExtrude(sel)) items.push([`Alle ${KINDS[sel.type]} (${sel.d ? 'Körper' : 'Skizzen'}) auswählen`, () => showNotice(`${selectWhere(f => f.type === sel.type && !f.d === !sel.d)} ausgewählt`)]);
-    if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details:not(.cons)'); if (d) d.open = true; }]);
+    if (isExtrude(sel)) items.push(['Muster / Spiegeln …', () => { const d = panel.querySelector<HTMLDetailsElement>('details.pat'); if (d) d.open = true; }]);
     items.push(null);
   } else if (edge) items.push(['Kante runden / fasen …', () => { clearSel(); edgeSel = [edge]; refresh(); }], null);
   if (h) { // Fläche löschen; mit Shift zur gewählten Löschung dazu
