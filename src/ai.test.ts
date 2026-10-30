@@ -40,3 +40,17 @@ test('KI-Ablauf: ein Aufruf je Antwort, Fehler werden korrigiert, Ende mit Text 
   expect([r.made, r.fs.length, r.reply, r.problems]).toEqual([2, 2, 'Fertig.', []]); // Platte ohne x/y = Ursprung, falsche Bohrung korrigiert
   expect(seen).toBe(2 + 3 * 2);                                                        // jede Runde: Antwort + Ergebnis zurück
 });
+
+test('KI-Ablauf: Kernfehler gehen höchstens zweimal zurück, nur eigene Schritte entfernbar (T8.6)', async () => {
+  const call = (name: string, args: Record<string, unknown>): ToolCall => ({ id: name + Math.random(), name, args, raw: '' });
+  const old = { id: 1, type: 'rect', d: 5 } as never; // Schritt des Nutzers, darf nicht entfernt werden
+  const answers = [[call('skizze_kreis', { radius: 5, hoehe: 3 })], [], [call('schritt_entfernen', { schritt: 1 }), call('schritt_entfernen', { schritt: 2 }), call('skizze_kreis', { radius: 4, hoehe: 3 })], [], []];
+  const sent: string[] = [];
+  let checks = 0;
+  const r = await runRequest(async m => { sent.push(String(m.at(-1)!.content)); const a = answers.shift()!; return { content: a.length ? null : 'fertig', toolCalls: a, message: { role: 'assistant', content: null } }; },
+    [old], 2, 'mm', 'Zylinder', undefined, async fs => { checks++; return fs.map(f => [f.id, 'zu groß'] as [number, string]); }); // Kern lehnt alles ab, auch Schritt 1
+  expect(sent[2]).toBe('Der CAD-Kern lehnt ab: Schritt 2: zu groß. Korrigiere das (schritt_entfernen und neu anlegen, oder extrudieren mit anderer Höhe), dann antworte mit „fertig“.'); // Schritt 1 ist nicht von der KI
+  expect(r.problems).toEqual(['Schritt 1 wurde nicht in diesem Auftrag angelegt']);
+  expect(r.fs.map(f => f.id)).toEqual([1, 3]);
+  expect(checks).toBe(2);                                                              // danach Schluss, der Fehler bleibt sichtbar
+});

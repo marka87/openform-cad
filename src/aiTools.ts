@@ -14,6 +14,7 @@ export const TOOLS: Tool[] = [
     { auf_schritt: auf, x: num('mm, Standard 0'), y: num('mm, Standard 0'), breite: num('Länge in x, mm'), tiefe: num('Länge in y, mm (nicht die Dicke)'), hoehe: num('Dicke bzw. Höhe nach oben, mm; negativ = in den Körper hinein') }, ['breite', 'tiefe']),
   fn('skizze_kreis', 'Kreis skizzieren, optional gleich extrudiert (hoehe).',
     { auf_schritt: auf, x: num('Mitte, mm, Standard 0'), y: num('Mitte, mm, Standard 0'), radius: num('mm'), hoehe: num('mm, optional; negativ = in den Körper hinein') }, ['radius']),
+  fn('schritt_entfernen', 'Einen in diesem Auftrag angelegten Schritt wieder entfernen, z. B. weil der CAD-Kern ihn ablehnt.', { schritt: { type: 'integer' } }, ['schritt']),
   fn('extrudieren', 'Vorhandene Skizze auf eine Höhe ziehen (negativ = hineindrücken).', { schritt: { type: 'integer' }, hoehe: num('mm') }, ['schritt', 'hoehe']),
   fn('bohrung', 'Runde Bohrung in eine Fläche: Durchmesser oder metrisches Gewinde (Kernloch), Tiefe in mm oder durch.',
     { schritt: { type: 'integer', description: 'Nummer des Schritts, in dessen Oberseite gebohrt wird' }, x: num('Mitte, mm'), y: num('Mitte, mm'), durchmesser: num('mm, wenn kein Gewinde'),
@@ -46,8 +47,9 @@ const len = (v: unknown, what: string, min = 0.01) => {
 };
 const coord = (v: unknown, what: string) => { if (typeof v !== 'number' || !isFinite(v) || Math.abs(v) > MAX) throw new Error(`${what}: Zahl erwartet`); return v; };
 
-// Werkzeugaufrufe auf eine Kopie der Schritte anwenden. Jeder Aufruf einzeln: ein fehlerhafter ändert nichts, die anderen gelten
-export function applyCalls(features: Feature[], calls: ToolCall[], nextId: number): { fs: Feature[]; nextId: number; results: Result[] } {
+// Werkzeugaufrufe auf eine Kopie der Schritte anwenden. Jeder Aufruf einzeln: ein fehlerhafter ändert nichts, die anderen gelten.
+// firstId: ab dieser Nummer hat die KI die Schritte in diesem Auftrag selbst angelegt, nur die darf sie entfernen
+export function applyCalls(features: Feature[], calls: ToolCall[], nextId: number, firstId = nextId): { fs: Feature[]; nextId: number; results: Result[] } {
   const fs = structuredClone(features), results: Result[] = [];
   const sketch = (id: unknown) => {
     const f = fs.find(g => g.id === id);
@@ -83,6 +85,12 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
       } else if (c.name === 'skizze_kreis') {
         const where = plane(a.auf_schritt), x = coord(a.x ?? 0, 'x'), y = coord(a.y ?? 0, 'y');
         f = place(sketchFeature('circle', where.pl, [x, y], [x + len(a.radius, 'radius'), y], nextId, where.onFace), where, a.hoehe);
+      } else if (c.name === 'schritt_entfernen') {
+        const i = fs.findIndex(g => g.id === a.schritt);
+        if (i < 0 || fs[i].id < firstId) throw new Error(`Schritt ${a.schritt} wurde nicht in diesem Auftrag angelegt`);
+        fs.splice(i, 1);
+        results.push({ id: c.id, ok: true, text: `ok, Schritt ${a.schritt} entfernt` });
+        continue;
       } else if (c.name === 'extrudieren') {
         f = sketch(a.schritt);
         const d = len(a.hoehe, 'hoehe');
@@ -106,18 +114,31 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
 }
 
 // Eine Anfrage bis zum Ende: die KI darf mehrere Runden lang Werkzeuge aufrufen (kleine Modelle schicken oft einen Aufruf je Antwort),
-// jedes Ergebnis geht zurück. Schluss, wenn sie ohne Werkzeug antwortet, nach 12 Runden oder nach 3 Runden mit Fehlern hintereinander
+// jedes Ergebnis geht zurück. Schluss, wenn sie ohne Werkzeug antwortet, nach 12 Runden oder nach 3 Runden mit Fehlern hintereinander.
+// check (T8.6): rechnet den Stand im Kern; scheitern dabei Schritte dieses Auftrags, geht der Grund höchstens zweimal an die KI zurück
 export async function runRequest(ask: (m: Msg[]) => Promise<{ content: string | null; toolCalls: ToolCall[]; message: Msg }>,
-  features: Feature[], nextId: number, unit: 'mm' | 'in', text: string, status: (t: string) => void = () => {}) {
+  features: Feature[], nextId: number, unit: 'mm' | 'in', text: string, status: (t: string) => void = () => {},
+  check?: (fs: Feature[]) => Promise<[number, string][]>) {
   const msgs: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: `Kontext: ${aiContext(features, nextId, unit)}
 
 Auftrag: ${text}` }];
-  let fs = features, made = 0, failing = 0, reply = '', problems: string[] = [];
+  const firstId = nextId, before = new Map(features.map(f => [f.id, JSON.stringify(f)]));
+  let fs = features, made = 0, failing = 0, reply = '', problems: string[] = [], kernelTries = 0;
+  const touched = (id: number) => before.get(id) !== JSON.stringify(fs.find(f => f.id === id)); // neu oder von der KI geändert
   for (let round = 0; round < 12 && failing < 3; round++) {
     status(round ? `KI arbeitet … (${made} angelegt)` : 'KI arbeitet …');
     const r = await ask(msgs);
-    if (!r.toolCalls.length) { reply = r.content ?? ''; break; }
-    const out = applyCalls(fs, r.toolCalls, nextId), bad = out.results.filter(x => !x.ok);
+    if (!r.toolCalls.length) {
+      reply = r.content ?? '';
+      if (!made || !check || kernelTries === 2) break;
+      status('CAD-Kern prüft …');
+      const bad = (await check(fs)).filter(([id]) => touched(id));
+      if (!bad.length) break;
+      kernelTries++;
+      msgs.push(r.message, { role: 'user', content: `Der CAD-Kern lehnt ab: ${bad.map(([id, why]) => `Schritt ${id}: ${why}`).join('; ')}. Korrigiere das (schritt_entfernen und neu anlegen, oder extrudieren mit anderer Höhe), dann antworte mit „fertig“.` });
+      continue;
+    }
+    const out = applyCalls(fs, r.toolCalls, nextId, firstId), bad = out.results.filter(x => !x.ok);
     fs = out.fs; nextId = out.nextId; made += out.results.length - bad.length;
     problems = bad.map(x => x.text);
     failing = bad.length ? failing + 1 : 0;

@@ -265,7 +265,8 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       for (const [id, p] of data.fixes) { const f = features.find(g => g.id === id); if (f) Object.assign(f, p); }
       rebuild(); save();
     } else if (pending) requestBuild();
-  } else if (data.type === 'sheet') showSheet(data);
+  } else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
+  else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
@@ -1868,14 +1869,16 @@ function svgToDXF(svg: string) {
 }
 // Sichtbare Körper als OBJ, Z oben wie STEP/STL
 // KI (T8.3, ADR 0002): Werkzeugaufrufe prüfen und als ein Rückgängig-Schritt einfügen; Ablauf und Korrekturrunden in runRequest
-// shortcut: Fehler des Kerns (z. B. Rundung zu groß) gehen noch nicht an die KI zurück → T8.6
+// Fehler des Kerns gehen über kernelCheck zurück an die KI (T8.6); es läuft immer nur eine KI-Anfrage, daher ein einzelner Rückruf
+let checked: ((e: [number, string][]) => void) | null = null;
+const kernelCheck = (fs: Feature[]) => new Promise<[number, string][]>(ok => { checked = ok; send({ type: 'check', features: fs }); });
 function askAi() {
   if (!loadSettings().on) return openAiSettings();
   openAiPrompt(async text => {
     if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
     const s = loadSettings();
     let r: Awaited<ReturnType<typeof runRequest>>;
-    try { r = await runRequest(m => chat(s, m, TOOLS), features, nextId, display.unit, text, aiStatus); }
+    try { r = await runRequest(m => chat(s, m, TOOLS), features, nextId, display.unit, text, aiStatus, kernelCheck); }
     catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
     const left = r.problems.length ? ` (nicht umgesetzt: ${r.problems.join(' · ')})` : '';
     if (!r.made) return aiStatus(`Nichts angelegt${left || (r.reply ? `: ${r.reply}` : '')}`);

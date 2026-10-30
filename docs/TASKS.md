@@ -261,7 +261,7 @@ aus.
       („Wand 2 mm dicker").
 - [ ] T8.5 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
       zu beheben ist.
-- [ ] T8.6 TODO — Kernfehler an die KI zurückgeben (ADR 0002, Abschnitt 4):
+- [x] T8.6 DONE — Kernfehler an die KI zurückgeben (ADR 0002, Abschnitt 4):
       scheitert ein KI-Schritt erst im Kern (z. B. Rundung zu groß), den
       Grund bis zu zweimal zurückschicken. Braucht ein Warten auf das
       Ergebnis des Kernlaufs (inkl. zweitem Lauf nach Bezugsnachträgen).
@@ -330,6 +330,15 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.6: Sagt die KI „fertig“, rechnet der Worker den Stand
+  einmal still (Nachricht `check`, inkl. zweitem Lauf nach nachgetragenen
+  Bezügen, Anzeige bleibt). Scheitern dabei Schritte, die die KI in diesem
+  Auftrag angelegt oder geändert hat, geht der Grund als Nutzer-Nachricht
+  zurück, höchstens zweimal; danach bleibt der Fehler im Baum sichtbar.
+  Fehler an älteren Schritten des Nutzers werden nicht gemeldet. Neues
+  Werkzeug `schritt_entfernen`, nur für Schritte dieses Auftrags (ab
+  firstId), damit die KI einen abgelehnten Schritt ersetzen kann. Mit
+  echtem Modell noch nicht geprüft (kein LLM auf diesem Rechner).
 - 2026-10-29 T8.3 mit echtem Modell (Ollama qwen2.5:7b, RTX 4070): erst
   0 von 1 – das Modell verschachtelte „ebene“ falsch, schickte einen Aufruf
   je Antwort, ließ x/y weg und schrieb ein JSON-Beispiel aus der Anweisung

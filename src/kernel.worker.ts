@@ -11,12 +11,14 @@ export type ToWorker =
   | { type: 'build'; features: Feature[] }
   | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[] }
   | { type: 'sheet'; info: SheetInfo; dims: Dim[] } // Blatt für den Maß-Editor
-  | { type: 'project'; body: number; pl: Frame }; // Kanten eines Körpers in eine Ebene projizieren (P)
+  | { type: 'project'; body: number; pl: Frame } // Kanten eines Körpers in eine Ebene projizieren (P)
+  | { type: 'check'; features: Feature[] }; // nur rechnen, Fehler zurück, Anzeige bleibt (KI-Korrekturrunde, T8.6)
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null }
   | { type: 'error'; message: string }
+  | { type: 'checked'; errors: [number, string][] }
   | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
   | { type: 'sheet'; svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][] }; // geo: id, Punkte, Kreisradius auf dem Blatt
@@ -34,6 +36,11 @@ const ready = opencascade({ locateFile: () => wasmUrl }).then(async oc => {
   await loadFont(fontUrl).catch(e => console.warn('Schrift nicht geladen', e));
   post({ type: 'ready' });
 }, e => post({ type: 'error', message: String(e) }));
+
+const free = (r: { body: Shape3D | null; bodies: Map<number, Shape3D> }) => {
+  if (r.body && r.bodies.size > 1) r.body.delete();
+  for (const s of r.bodies.values()) s.delete();
+};
 
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
@@ -57,6 +64,15 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     let area = 0;
     for (const s of bodies.values()) area += measureArea(s);
     post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], confirm: [...r.confirm], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
+  } else if (data.type === 'check') {
+    // wie in main.ts: nachgetragene Bezüge übernehmen und ein zweites Mal rechnen, erst dann zählen die Fehler
+    let fs = data.features, r = buildBody(fs, imports);
+    if (r.fixes.size) {
+      fs = fs.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f);
+      free(r); r = buildBody(fs, imports);
+    }
+    free(r);
+    post({ type: 'checked', errors: [...r.errors] });
   } else if (data.type === 'project') {
     const s = bodies.get(data.body);
     post({ type: 'projected', lines: s ? projectBody(s, names.get(data.body) ?? [], data.pl) : [] });
