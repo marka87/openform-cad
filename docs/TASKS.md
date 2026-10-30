@@ -37,11 +37,10 @@ Log.
    zusammen mit Punkt 1.
 3. T5.17 — Messen: erst klären, ob T10.7 das Problem erledigt hat
    (siehe dort), sonst Fehlerbild aus Teil 2 oder 3.
-4. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
-5. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
+4. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
-6. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
-7. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
+5. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+6. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -250,8 +249,15 @@ Shapr3D.
       das bestehende Muster um, Kopien folgen der Quelle.
 - [x] T6.6 DONE — Muster-Griffe: Pfeile je Richtung am letzten Exemplar
       ziehen = Abstand, mit Vorschau; Zahl danach im Feld.
-- [ ] T6.7 TODO — Kreis-Muster und Spiegeln ebenfalls als Muster-Schritt
-      (heute noch Einzelkopien).
+- [x] T6.7 DONE — Kreis-Muster und Spiegeln sind Muster-Schritte
+      (Pattern.rot / Pattern.mir, Anzahl beim Kreis aus a.n). Eine
+      Funktion patternCopies liefert je Kopie Schlüssel, Kopie und
+      Punkt-/Richtungsabbildung hin und zurück; Kern, Anzeige und
+      Zurückschieben beim Ziehen (patternGrip) nutzen sie. addCopies
+      (Einzelkopien samt kopierter Rundungen) ist weg, die Rundungen
+      macht der Kern (T6.8). KI-Lochkreis ist jetzt Bohrung +
+      Kreis-Muster. Test in kernel.test.ts, im Browser geprüft (Spiegeln
+      2,02 cm³, Kreis-Muster 3 → 4 zählt mit, nichts rot).
 - [ ] T6.9 TODO — Rundung/Fase an einer Muster-Quelle, die nach dem
       Muster angelegt wird: vor das Muster einsortieren (dann gehen die
       Kopien mit) oder nachfragen? Erst entscheiden, wenn ein echtes Teil
@@ -425,6 +431,12 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T6.7: Kreis-Muster und Spiegeln als Muster-Schritt, alte
+  Einzelkopien bleiben in alten Dateien Einzelkopien (keine Migration
+  nötig, sie sind normale Skizzen). Weltachsen X/Y/Z drehen bzw.
+  spiegeln weiterhin durch den Ursprung (wie vorher) — liegt das Teil
+  nicht dort, landen die Kopien daneben; besser „x/y der Skizze“ oder
+  eine Kante wählen. Nicht gebaut: Griffe zum Ziehen für Kreis-Muster.
 - 2026-10-30 T6.8: Muster-Kopien mit eigenem Origin-Feld `at`
   („Quelle:Spalte:Reihe“ statt laufender Nummer, damit Bezüge beim Ändern
   der Anzahl nicht auf eine andere Kopie springen). Rundungen/Fasen der

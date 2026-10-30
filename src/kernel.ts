@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { assembleWire, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, makeCompound, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, bulge3, isCut, isExtrude, isFlat, movedCopy, noFace, patternOffsets, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
+import { bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -156,7 +156,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         continue;
       }
       if (f.type === 'pattern') { // Kopien der Quellskizzen in ihrer aktuellen (vielleicht gewanderten) Lage; flache Skizzen ergeben nichts
-        const na = Math.max(1, Math.round(f.a.n)), here = features.indexOf(f);
+        const here = features.indexOf(f);
         for (const id of f.src) {
           const S = moved.get(id) ?? features.find(g => g.id === id);
           if (!S || !isExtrude(S) || S.hidden) throw new Error('Skizze für das Muster fehlt');
@@ -164,9 +164,9 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           // Rundungen/Fasen an der Quelle (vor dem Muster, gelungen) gehen mit: ihr Kantenbezug auf die Kopie umgeschrieben
           const ops = features.slice(0, here).filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !e.hidden && !!e.edge
             && !failed.includes(e.id) && (e.edge.a.f === id || e.edge.b.f === id));
-          patternOffsets(f).forEach((t, n) => {
-            const at = `${id}:${(n + 1) % na}:${Math.floor((n + 1) / na)}`, c = movedCopy(S, f.id, t);
-            if (isCut(c) && !body) return;
+          for (const P of patternCopies(f)) {
+            const at = `${id}:${P.key}`, c = P.copy(S, f.id);
+            if (isCut(c) && !body) continue;
             const s = solidOf(c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
             if (!body) { body = s; bodies.set(k, s); names.set(k, nS); }
             else {
@@ -174,13 +174,13 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
               body = bodies.get(k)!;
               s.delete();
             }
-            const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o, mv = (p: Vec) => p.map((x, i) => x + t[i]) as Vec;
+            const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o;
             for (const e of ops) {
-              const nm = names.get(k) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...e.edge!.fp, c: mv(e.edge!.fp.c) } };
-              done(...edgeOp(e.type, e.id, body!, nm, anchorEdges({ at: mv(e.at), edge }, body!, nm).edges, e.r, { at }));
+              const fp = e.edge!.fp, nm = names.get(k) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } };
+              done(...edgeOp(e.type, e.id, body!, nm, anchorEdges({ at: P.pt(e.at), edge }, body!, nm).edges, e.r, { at }));
               body = bodies.get(k)!;
             }
-          });
+          }
         }
         continue;
       }

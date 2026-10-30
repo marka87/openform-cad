@@ -80,18 +80,38 @@ export const MATERIALS: Record<string, number> = { Stahl: 7.85, Edelstahl: 8.0, 
 export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v: Vec; off: number; hidden?: boolean }
 // Muster (Reihe oder Raster): die Skizzen src werden je Richtung n-mal im Abstand d entlang ax kopiert (d < 0 = Gegenrichtung),
 // mit b zusätzlich quer dazu (n × b.n Exemplare). Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der Quelle neu
-// Rundungen/Fasen an der Quelle gehen mit (T6.8). shortcut: Kreis-Muster und Spiegeln legen noch Einzelkopien an → T6.7
+// Rundungen/Fasen an der Quelle gehen mit (T6.8). rot: Kreis-Muster um die Achse ax durch c, a.n Exemplare auf 360° (a.ax/a.d unbenutzt);
+// mir: Spiegelbild an der Ebene durch c mit Normale ax (ein Exemplar, a unbenutzt)
 export interface PatternDir { ax: Vec; n: number; d: number }
-export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; body?: number; hidden?: boolean }
+export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
-// Versatz aller Exemplare eines Musters außer dem Original (0, 0), Reihe für Reihe
-export const patternOffsets = (p: Pattern): Vec[] => {
-  const out: Vec[] = [], nb = p.b ? Math.max(1, Math.round(p.b.n)) : 1;
-  for (let j = 0; j < nb; j++) for (let i = 0; i < Math.max(1, Math.round(p.a.n)); i++)
-    if (i || j) out.push([0, 1, 2].map(k => p.a.ax[k] * p.a.d * i + (p.b ? p.b.ax[k] * p.b.d * j : 0)) as Vec);
+// Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
+// copy legt die Kopie einer Quellskizze an, pt/dir bilden Punkte und Richtungen der Quelle auf die Kopie ab, back zurück
+export type PatternCopy = { key: string; copy: (f: Extrude, id: number) => Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec; back: (p: Vec) => Vec; backDir: (d: Vec) => Vec };
+export function patternCopies(p: Pattern): PatternCopy[] {
+  const O: Vec = [0, 0, 0], same = (d: Vec) => d;
+  if (p.mir) {
+    const { ax, c } = p.mir, pt = (q: Vec) => mirrorPt(q, ax, c), dir = (d: Vec) => mirrorDir(d, ax);
+    return [{ key: 'm', copy: (f, id) => mirroredCopy(f, id, ax, c), pt, dir, back: pt, backDir: dir }];
+  }
+  const n = Math.max(1, Math.round(p.a.n));
+  if (p.rot) {
+    const { ax, c } = p.rot;
+    return Array.from({ length: n - 1 }, (_, k) => {
+      const a = 2 * Math.PI * (k + 1) / n;
+      return { key: `r${k + 1}`, copy: (f, id) => movedCopy(f, id, O, ax, a, c), pt: q => movePt(q, O, ax, a, c), dir: d => rotDir(d, ax, a),
+        back: q => movePt(q, O, ax, -a, c), backDir: d => rotDir(d, ax, -a) };
+    });
+  }
+  const out: PatternCopy[] = [], nb = p.b ? Math.max(1, Math.round(p.b.n)) : 1;
+  for (let j = 0; j < nb; j++) for (let i = 0; i < n; i++) {
+    if (!i && !j) continue;
+    const t = [0, 1, 2].map(k => p.a.ax[k] * p.a.d * i + (p.b ? p.b.ax[k] * p.b.d * j : 0)) as Vec;
+    out.push({ key: `${i}:${j}`, copy: (f, id) => movedCopy(f, id, t), pt: q => q.map((x, k) => x + t[k]) as Vec, dir: same, back: q => q.map((x, k) => x - t[k]) as Vec, backDir: same });
+  }
   return out;
-};
+}
 // Kernlochdurchmesser für metrische Regelgewinde in mm
 export const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';

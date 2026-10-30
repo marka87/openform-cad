@@ -25,6 +25,10 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **Muster nimmt Rundungen und Fasen der Quelle mit** (wenn sie vor dem
   Muster angelegt wurden). Jede Kopie hat eigene Flächennamen, Skizzen
   auf einer bestimmten Kopie bleiben dort.
+- **Kreis-Muster und Spiegeln sind jetzt ein Muster-Schritt** wie die
+  Reihe: „Kreis-Muster 6“ bzw. „Spiegeln“ im Baum, Anzahl nachträglich
+  änderbar, Kopien folgen der Quelle. Der Lochkreis der KI nutzt das
+  ebenfalls.
 
 ## 0.3.3 — 2026-10-30
 

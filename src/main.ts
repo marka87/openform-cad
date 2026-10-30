@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternOffsets } from './model';
+import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -286,8 +286,8 @@ function rebuild() {
       const on = f.id === selId || multi.has(f.id);
       for (const src of f.src.map(id => L.find(g => g.id === id))) {
         if (!src || !isExtrude(src) || src.hidden || noFace(src) || !isFlat(src) && !on) continue;
-        for (const t of patternOffsets(f)) {
-          const o = buildMesh(movedCopy(src, f.id, t), isFlat(src) ? 'sketch' : 'outline');
+        for (const P of patternCopies(f)) {
+          const o = buildMesh(P.copy(src, f.id), isFlat(src) ? 'sketch' : 'outline');
           delete o.userData.id; o.userData.pat = f.id; o.userData.src = src.id;
           o.matrix.premultiply(M); // buildMesh setzt die Lage schon in die Matrix
           group.add(o);
@@ -323,7 +323,7 @@ function rebuild() {
   });
   // Muster: Pfeil je Richtung am letzten Exemplar, ziehen = Abstand (T6.6)
   const src = s?.type === 'pattern' ? getById(s.src[0]) : undefined;
-  if (s?.type === 'pattern' && src && isExtrude(src)) for (const k of ['a', 'b'] as const) {
+  if (s?.type === 'pattern' && !s.rot && !s.mir && src && isExtrude(src)) for (const k of ['a', 'b'] as const) {
     const d = s[k];
     if (!d || d.n < 2) continue;
     const c = src.type === 'circle' ? [src.p.cx, src.p.cy] : src.type === 'rect' ? [src.p.x + src.p.w / 2, src.p.y + src.p.h / 2] : [0, 0];
@@ -458,7 +458,7 @@ function nameOf(f: Feature) {
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'loft') return 'Übergang';
-  if (f.type === 'pattern') return `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
+  if (f.type === 'pattern') return f.mir ? 'Spiegeln' : f.rot ? `Kreis-Muster ${f.a.n}` : `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
   if (f.type === 'offset') return 'Fläche versetzen';
   if (f.type === 'remove') return 'Fläche löschen';
@@ -586,8 +586,8 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
 function patternGrip(P: number[], n: number[]): Grip | null {
   const L = live();
   for (const p of L) if (p.type === 'pattern' && !p.hidden)
-    for (const t of patternOffsets(p)) {
-      const g = ownerOf(L.filter(f => p.src.includes(f.id)), P.map((x, i) => x - t[i]), n);
+    for (const C of patternCopies(p)) {
+      const g = ownerOf(L.filter(f => p.src.includes(f.id)), C.back(P as Vec), C.backDir(n as Vec));
       if (g) return g;
     }
   return null;
@@ -1492,34 +1492,18 @@ function renderFeaturePanel() {
   panel.querySelector<HTMLButtonElement>('.flip')!.onclick = () => { const d = panel.querySelector<HTMLInputElement>('.dist')!; d.value = String(-parseFloat(d.value)); };
   // Mehrfachauswahl: jede ausgewählte Skizze wird gleich vervielfältigt (z. B. eine Lochreihe zur vollen Fläche)
   const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
-  const addCopies = (make: (n: number, g: Extrude) => { g: Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec }[]) => {
-    pushHistory();
-    let last = f.id;
-    for (const src of targets) {
-      const edgesOf = features.filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !!e.edge && (e.edge.a.f === src.id || e.edge.b.f === src.id));
-      for (const { g, pt, dir } of make(Math.max(2, Math.round(num('.cnt')) || 2), src)) {
-        add(g); last = g.id;
-        for (const e of edgesOf) { const c = structuredClone(e); delete c.edge; add({ ...c, id: nextId++, at: pt(e.at), dir: dir(e.dir), body: g.body }); } // Kante findet der Kern neu
-      }
-    }
-    clearSel(); selId = last; refresh();
-  };
   panel.querySelectorAll<HTMLButtonElement>('.toPat').forEach(b => b.onclick = () => { clearSel(); selId = +b.dataset.id!; refresh(); });
-  // Reihe/Raster = ein Muster-Schritt (bleibt bearbeitbar), quer dazu in der Ebene der Skizze
-  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => {
-    const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax: ref().ax, n: Math.max(2, Math.round(num('.cnt')) || 2), d: num('.dist') * U() }, body: bodyOf(f) };
+  // Reihe/Raster, Kreis-Muster und Spiegeln = ein Muster-Schritt (bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit), quer dazu in der Ebene der Skizze
+  const addPattern = (kind?: 'rot' | 'mir') => {
+    const { ax, c } = ref();
+    const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax, n: Math.max(2, Math.round(num('.cnt')) || 2), d: num('.dist') * U() }, body: bodyOf(f), ...kind && { [kind]: { ax, c } } };
     const n2 = Math.round(num('.cnt2'));
-    if (n2 > 1) p.b = { ax: crossDir(p), n: n2, d: num('.dist2') * U() };
+    if (n2 > 1 && !p.rot && !p.mir) p.b = { ax: crossDir(p), n: n2, d: num('.dist2') * U() };
     pushHistory(); add(p); clearSel(); selId = p.id; refresh();
   };
-  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addCopies((n, src) => Array.from({ length: n - 1 }, (_, i) => {
-    const { ax, c } = ref(), a = 2 * Math.PI * (i + 1) / n;
-    return { g: movedCopy(src, nextId++, [0, 0, 0], ax, a, c), pt: p => movePt(p, [0, 0, 0], ax, a, c), dir: d => rotDir(d, ax, a) };
-  }));
-  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addCopies((_, src) => {
-    const { ax, c } = ref();
-    return [{ g: mirroredCopy(src, nextId++, ax, c), pt: p => mirrorPt(p, ax, c), dir: d => mirrorDir(d, ax) }];
-  });
+  panel.querySelector<HTMLButtonElement>('.lin')!.onclick = () => addPattern();
+  panel.querySelector<HTMLButtonElement>('.rot')!.onclick = () => addPattern('rot');
+  panel.querySelector<HTMLButtonElement>('.mir')!.onclick = () => addPattern('mir');
   if (f.type === 'poly' && !f.smooth) bindCons(f);
   const revAx = panel.querySelector<HTMLSelectElement>('.revAx');
   if (revAx) { // Skizze zum Drehkörper machen bzw. Achse wechseln; „–“ = wieder flache Skizze
@@ -1747,6 +1731,13 @@ function crossDir(p: Pattern): Vec {
 }
 // Muster bearbeiten: je Richtung Anzahl, Abstand und ⇄ (dreht dieses Muster um, legt kein zweites an)
 function renderPatternPanel(f: Pattern) {
+  if (f.rot || f.mir) { // Kreis-Muster: nur die Anzahl; Spiegeln: nichts einzustellen
+    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
+      + (f.rot ? `<label>Anzahl (360°) <input class="na" type="number" min="2" value="${f.a.n}"></label>` : '') + `<button class="del">Löschen</button>`;
+    const na = panel.querySelector<HTMLInputElement>('.na');
+    if (na) na.onchange = () => { const v = Math.round(parseFloat(na.value)); if (v >= 2) { pushHistory(); f.a.n = v; refresh(); } };
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   const row = (k: 'a' | 'b', label: string) => { const d = f[k] ?? { n: 1, d: 20 };
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
       <label>Abstand <input class="d${k}" type="number" step="0.5" value="${uval(d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };

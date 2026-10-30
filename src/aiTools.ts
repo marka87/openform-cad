@@ -179,7 +179,7 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
         if (a.schritt === undefined) throw new Error('schritt fehlt: in welchen Schritt wird gebohrt?');
         f = hole(plane(a.schritt, a.seite), a, coord(a.x, 'x'), coord(a.y, 'y'));
       } else if (c.name === 'lochmuster') {
-        // Reihe/Raster: erste Bohrung + Muster-Schritt (bleibt im Baum bearbeitbar); Lochkreis: Einzelbohrungen (Kreis-Muster fehlt noch, T6.7)
+        // erste Bohrung + Muster-Schritt (bleibt im Baum bearbeitbar): Reihe/Raster oder Kreis-Muster um die Flächennormale
         a.tiefe ??= 'durch';
         const where = plane(a.schritt, a.seite), b = where.box, n = Math.round(len(a.anzahl, 'anzahl', 1)), rows = Math.round(a.reihen === undefined ? 1 : len(a.reihen, 'reihen', 1));
         if (n < 1 || rows < 1 || n * rows > 400) throw new Error('anzahl und reihen: 1 bis 400 Löcher');
@@ -188,9 +188,11 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
         const fs0 = fs.length, id0 = nextId;
         try {
           if (a.lochkreis_radius !== undefined) {
-            const R = len(a.lochkreis_radius, 'lochkreis_radius');
-            for (let i = 0; i < n; i++) hole(where, a, mx + R * Math.cos(2 * Math.PI * i / n), my + R * Math.sin(2 * Math.PI * i / n));
-            results.push({ id: c.id, ok: true, text: `ok, Lochkreis R ${R} mit ${n} Bohrungen, Schritte ${id0}–${nextId - 1}` });
+            const R = len(a.lochkreis_radius, 'lochkreis_radius'), { o, u, v, n: ax } = where.pl;
+            for (let i = 1; i < n; i++) inside(where, mx + R * Math.cos(2 * Math.PI * i / n), my + R * Math.sin(2 * Math.PI * i / n));
+            const first = hole(where, a, mx + R, my);
+            if (n > 1) fs.push({ id: nextId++, type: 'pattern', src: [first.id], a: { ax, n, d: 0 }, rot: { ax, c: o.map((x, i) => x + u[i] * mx + v[i] * my) as Vec }, body: where.body });
+            results.push({ id: c.id, ok: true, text: `ok, Bohrung Schritt ${first.id}${n > 1 ? ` und Kreis-Muster Schritt ${nextId - 1}` : ''}: ${n} Löcher auf R ${R}` });
             continue;
           }
           // ohne Abstand: gleich große Lücken zwischen Rand und Loch und zwischen den Löchern

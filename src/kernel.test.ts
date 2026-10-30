@@ -738,15 +738,15 @@ test('KI: Bohrungen in die Seitenwände eines Gehäuses, „durch“ nur durch d
   expect(measureVolume(shell.body!) - measureVolume(b.body!)).toBeCloseTo(4 * Math.PI * 9 * 2, 0); // je ein Loch durch eine 2-mm-Wand
 });
 
-test('KI: lochmuster – Lagen rechnet die App, Reihe/Raster als Muster-Schritt, Lochkreis einzeln (T8.7)', () => {
+test('KI: lochmuster – Lagen rechnet die App, Reihe/Raster/Lochkreis als Muster-Schritt (T8.7, T6.7)', () => {
   const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
   const fs = [...box, { id: 2, type: 'shell', at: [40, 30, -25], t: 2 } as Feature];
   const lm = (args: Record<string, unknown>) => ({ id: String(Math.random()), name: 'lochmuster', raw: '', args: { schritt: 1, durchmesser: 5, tiefe: 'durch', ...args } });
   const r = applyCalls(fs, [lm({ seite: 'vorne', anzahl: 3 }), lm({ seite: 'hinten', anzahl: 4, reihen: 2, abstand: 12, abstand_reihen: 10 }),
     lm({ seite: 'links', anzahl: 6, lochkreis_radius: 8 }), lm({ seite: 'rechts', anzahl: 5, abstand: 20 })], 3);
   expect(r.results.map(x => x.text)).toEqual(['ok, Bohrung Schritt 3 und Muster Schritt 4: 3, Abstand 20 mm', 'ok, Bohrung Schritt 5 und Muster Schritt 6: 4 × 2, Abstand 12 / 10 mm',
-    'ok, Lochkreis R 8 mit 6 Bohrungen, Schritte 7–12', 'Mitte -15, 15 liegt nicht auf der Fläche (x 0–50, y 0–30)']); // 5 × 20 mm passt nicht auf 50 mm
-  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);        // abgelehntes Muster hinterlässt nichts
+    'ok, Bohrung Schritt 7 und Kreis-Muster Schritt 8: 6 Löcher auf R 8', 'Mitte -15, 15 liegt nicht auf der Fläche (x 0–50, y 0–30)']); // 5 × 20 mm passt nicht auf 50 mm
+  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);        // abgelehntes Muster hinterlässt nichts
   expect([(r.fs[2] as Extrude).p.cx, (r.fs[2] as Extrude).p.cy]).toEqual([20, 15]);     // 80 mm, 3 Löcher: gleiche Lücken von 20 mm, halbe Höhe
   const b = buildBody(r.fs), v0 = measureVolume(buildBody(fs).body!);
   expect(b.failed).toEqual([]);
@@ -1045,6 +1045,21 @@ test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, fla
   expect([r.errors.size, Math.round(measureVolume(r.body!))]).toEqual([0, 2000]); // flache Skizze: nur Anzeige in main.ts
   r = buildBody([box(), p]);
   expect(r.errors.get(3)).toBe('Skizze für das Muster fehlt');
+});
+
+test('Kreis-Muster und Spiegeln als Muster-Schritt, Rundung der Quelle geht mit (T6.7)', () => {
+  const boss = { ...sketchFeature('rect', TOP, [-1, 2], [1, 4], 2, true)!, d: 3 };      // Zapfen 2 × 2 × 3 neben der Mitte, Welt x 6–8
+  const fil: EdgeOp = { id: 3, type: 'fillet', at: [8, 11.5, -6], dir: [0, 1, 0], r: 0.5 };
+  const fil2 = { ...fil, ...buildBody([box(), boss, fil]).fixes.get(3) } as EdgeOp;
+  const one = 12 - (1 - Math.PI / 4) * 0.25 * 3;                                          // gerundeter Zapfen
+  const rot: Pattern = { id: 4, type: 'pattern', src: [2], a: { ax: [0, 1, 0], n: 4, d: 0 }, rot: { ax: [0, 1, 0], c: [10, 10, -5] } };
+  const mir: Pattern = { id: 4, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 2, d: 0 }, mir: { ax: [1, 0, 0], c: [10, 10, -5] } };
+  for (const [p, n, keys] of [[rot, 4, ['2:r1', '2:r2', '2:r3']], [mir, 2, ['2:m']]] as const) {
+    const r = buildBody([box(), boss, fil2, p]);
+    expect(r.errors.size).toBe(0);
+    expect(measureVolume(r.body!)).toBeCloseTo(2000 + n * one, 2);
+    expect(r.names.get(1)!.filter(x => x.o.f === 3 && x.o.at).map(x => x.o.at).sort()).toEqual(keys); // Rundung je Kopie, eindeutig benannt
+  }
 });
 
 test('Muster: Rundung an der Quelle geht mit, jede Kopie hat eigene Flächennamen (T6.8)', () => {

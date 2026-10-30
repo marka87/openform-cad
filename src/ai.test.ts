@@ -53,8 +53,8 @@ test('KI-Ablauf: null = nicht angegeben, Wiederholungen und doppelte Bohrungen a
   const sent: string[][] = [];
   const r = await runRequest(async m => { sent.push(m.filter(x => x.role === 'tool').map(x => String(x.content))); const a = answers.shift()!;
     return { content: a.length ? null : 'fertig', toolCalls: a, message: { role: 'assistant', content: null } }; }, [], 1, 'mm', 'Lochkreis');
-  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5]);                                // Platte + 4 Bohrungen, nichts doppelt
-  expect(sent[2].slice(-2)).toEqual(['ok, Lochkreis R 10 mit 4 Bohrungen, Schritte 2–5', 'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“']);
+  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3]);                                      // Platte + Bohrung + Kreis-Muster, nichts doppelt
+  expect(sent[2].slice(-2)).toEqual(['ok, Bohrung Schritt 2 und Kreis-Muster Schritt 3: 4 Löcher auf R 10', 'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“']);
   expect(sent[3].slice(-2)).toEqual(['An dieser Stelle gibt es schon diese Bohrung (Schritt 2) – nicht wiederholen', // M3-Kernloch = 2,5 mm, gleiche Stelle
     'schon angelegt, nicht wiederholen – wenn alles da ist, antworte mit „fertig“']);    // neue Aufrufe zuerst, Zuordnung über die id
 });
