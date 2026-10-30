@@ -725,6 +725,19 @@ test('KI: Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken aus Werkzeugaufrufen
     .toContain('nur nach oben');                                             // Wertebereich geprüft, nicht geraten
 });
 
+test('KI: Bohrungen in die Seitenwände eines Gehäuses, „durch“ nur durch die Wand (T8.8)', () => {
+  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { x: 10, y: 20, breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
+  const fs = [...box, { id: 2, type: 'shell', at: [50, 30, -45], t: 2 } as Feature];
+  const hole = (seite: string, x: number) => ({ id: seite, name: 'bohrung', raw: '', args: { schritt: 1, seite, x, y: 15, durchmesser: 6, tiefe: 'durch' } });
+  const r = applyCalls(fs, [hole('vorne', 40), hole('hinten', 40), hole('links', 25), hole('rechts', 25), hole('vorne', 85)], 3);
+  expect(r.results.map(x => x.ok)).toEqual([true, true, true, true, false]);           // x 85 liegt neben der 80 mm breiten Vorderseite
+  const mid = r.fs.slice(2).map(f => (f as Extrude).o.map((o, i) => o + (f as Extrude).u[i] * (f as Extrude).p.cx + (f as Extrude).v[i] * (f as Extrude).p.cy).map(Math.round));
+  expect(mid).toEqual([[50, 15, -20], [50, 15, -70], [10, 15, -45], [90, 15, -45]]);    // Mitte jeder Seite, 15 mm hoch (Welt: Y oben, Skizzen-y = −Z)
+  const b = buildBody(r.fs), shell = buildBody(fs);
+  expect(b.failed).toEqual([]);
+  expect(measureVolume(shell.body!) - measureVolume(b.body!)).toBeCloseTo(4 * Math.PI * 9 * 2, 0); // je ein Loch durch eine 2-mm-Wand
+});
+
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {
   const aux: Extrude = { id: 7, ...GROUND, type: 'poly', p: {}, pts: [[0, 0], [10, 0], [10, 10]], d: 0, aux: true, open: true };
   expect(keyPoints(aux).length).toBe(2 * (3 + 2));                     // 3 Ecken + 2 Mitten (kein Schlusssegment), je unten/oben

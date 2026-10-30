@@ -9,6 +9,13 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.4.0 — 2026-10-30
+
+- **KI auf Seitenwänden:** Rechteck, Kreis und Bohrung lassen sich auf
+  die Seiten eines Rechteck-Schritts legen (vorne, hinten, links,
+  rechts), z. B. Löcher in die Wand eines Gehäuses. „durch“ geht bei
+  einer Schale nur durch die Wand.
+
 ## 0.3.3 — 2026-10-30
 
 - **Ende-Taste** bei einer zu schmalen Form: Die Form bleibt an der Maus

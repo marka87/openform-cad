@@ -304,8 +304,15 @@ aus.
 - [ ] T8.7 TODO — KI-Werkzeug `lochmuster` (Reihe/Raster und Lochkreis):
       Positionen rechnet die App, nicht das Modell (Feldnotiz Gehäuse:
       kleine Modelle scheitern an Trigonometrie und vielen Einzelaufrufen).
-- [ ] T8.8 TODO — KI auf Seitenflächen: auf_schritt kennt nur die
-      Oberseite; Seitenwände (Gehäuse) braucht Fläche + Ebene aus dem Kern.
+- [x] T8.8 DONE — KI auf Seitenflächen: skizze_rechteck, skizze_kreis
+      und bohrung haben `seite` (oben/vorne/hinten/links/rechts). Nur bei
+      Rechteck-Schritten; die Ebenen ergeben sich aus Rechteck und Höhe,
+      ohne Kern (Gehäuse = Rechteck + Schale). x/y auf der Seite ab der von
+      außen gesehen linken unteren Ecke; „durch“ bei einer Schale = durch
+      die Wand. Lage der Bohrung wird gegen die Seitenfläche geprüft.
+      Test in kernel.test.ts. Andere Schritt-Arten (Kreis, Vieleck,
+      gedrehte Körper) brauchen die Fläche aus dem Kern — erst, wenn ein
+      echtes Teil es braucht.
 - [x] T8.9 DONE — 429 bei Groq-Gratis-Stufe (Feldnotiz Gehäuse): chat
       wartet einmal die Zeit aus retry-after ab (fehlt sie: 10 s; über
       60 s = Tageskontingent, kein Warten) und wiederholt; die Leiste zeigt
@@ -405,6 +412,15 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.8: KI auf Seitenflächen von Rechteck-Schritten. Live mit
+  qwen2.5:7b, 3 Läufe „3 Löcher ⌀5 vorne in die Gehäusewand, halbe Höhe,
+  gleichmäßig“: Seite immer richtig (vorne, nur durch die 2-mm-Wand),
+  aber jedes Mal nur 2 Löcher bei x 10/30, y 20 statt 15 — Positionen
+  rechnen kann das kleine Modell nicht, genau das löst T8.7 (lochmuster).
+  Gelernt: Welt ist Y oben, Skizzen-y = −Z; „vorne“ = kleinstes Skizzen-y
+  = Seite, die man in der Vorderansicht sieht. Aufgefallen, nicht
+  behoben: eine Skizze auf einer Fläche, die es nicht mehr gibt (z. B.
+  von der Schale geöffnet), schneidet still nichts, ohne gelb/rot.
 - 2026-10-30 T8.9: 429 einmal nach retry-after wiederholt, Abbruch
   mitten im Auftrag behält Angelegtes (vorher ging bei einem Fehler in
   Runde 5 alles aus Runde 1–4 verloren — das war der eigentliche
