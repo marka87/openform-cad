@@ -33,7 +33,7 @@ Log.
 1. T0.3 — Teil 2 und Teil 3 bauen, Feldnotizen führen, auswerten.
    SPERRE: Bis das erledigt ist, keine Pakete mit VERMUTUNG beginnen.
    Danach ordnet sich alles darunter neu.
-2. T4.3 — aktuellen Installer (0.4.3 gebaut 2026-10-30; noch nicht installiert und durchgeklickt) durchklicken. Läuft
+2. T4.3 — aktuellen Installer (0.4.4 gebaut 2026-10-30; noch nicht installiert und durchgeklickt) durchklicken. Läuft
    zusammen mit Punkt 1.
 3. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
    Erst nach Punkt 1.
@@ -443,6 +443,13 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 Halter von Hand im Browser (0.4.4): Fund: Kreis r 5 auf 10 mm
+  schmaler Oberseite, flacher Blick, Druck auf die Kreismitte → Fase #3 statt
+  Bohrung, weil der Fangbereich der Kante (6 px) über der Skizze lag. Regel in
+  pick(): nur im Auswählen-Werkzeug ohne laufende Bezugswahl schlägt die flache
+  Skizze die Kante. Kein Kern-Test, reine Bedienung. Kein Fehler, nur Prüf-Fallen:
+  Screenshots hinken der Seite um ein Bild nach (sah aus wie Esc ohne Wirkung);
+  Vite lädt nach Code-Änderung neu, dann ist der Rückgängig-Verlauf weg.
 - 2026-10-30 Zufallsprobe, Fix 0.4.4: 180 zufällige Änderungsketten (Schritt
   verschieben, löschen, ausblenden, Maß × 0,3–4) an Halter, Gehäuse, Flansch,
   geprüft auf Absturz, ungültigen Körper, Lauf über 8 s, Schritt ohne Wirkung.

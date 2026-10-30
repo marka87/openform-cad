@@ -15,6 +15,10 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   Körper nicht“: Der Schritt wird rot, die treffenden Löcher bleiben.
   Trifft keine Kopie, schneidet das Muster nichts und meldet auch das.
   Vorher fehlten diese Löcher ohne jeden Hinweis.
+- **Skizze greifen statt Kante erwischen:** Ein Druck auf eine flache Skizze
+  griff bei flachem Blick oder kleinem Modell die Kante daneben, statt einer
+  Bohrung entstand eine Fase. Über einer flachen Skizze gilt jetzt die Skizze;
+  die Kante greift man neben ihr.
 
 ## 0.4.3 — 2026-10-30
 

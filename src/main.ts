@@ -564,8 +564,11 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   ray.params.Line.threshold = 6 * px;
   const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
   auxPick = hs.find(h => h.object.userData.aux)?.object.userData.aux ?? null; // Hilfslinie unter der Maus (keine Körperkante)
-  const faces = hs.filter(h => h.face), eh = hs.find(h => !h.face && !h.object.userData.aux);
+  const faces = hs.filter(h => h.face);
   const fh = faces.find(h => (h.object.userData.id || h.object.userData.pat) && h.distance < faces[0].distance + 0.05) ?? faces[0];
+  // Beim Greifen schlägt eine flache Skizze unter der Maus die Kante: Bei flachem Blick liegt deren Fangbereich sonst über der Skizze, statt einer Bohrung entstand eine Fase
+  const sf = features.find(f => f.id === fh?.object.userData.id), onSketch = tool === 'select' && !poly && !xfPick && axisFor === null && patPickFor === null && patPickBody === null && !!sf && isExtrude(sf) && isFlat(sf);
+  const eh = onSketch ? undefined : hs.find(h => !h.face && !h.object.userData.aux);
   let face: Hit | null = null, edge: EdgeHit | null = null;
   lastPick = { fh, eh: eh && (!fh || eh.distance < fh.distance + 12 * px) ? eh : undefined };
   if (fh) {
