@@ -2,7 +2,7 @@
 
 Ein 3D-CAD-Programm, so intuitiv wie Shapr3D und so frei wie FreeCAD — mit optionaler KI-Unterstützung.
 
-**Status:** Modellieren, Skizzieren mit Abhängigkeiten, stabile Flächenbezüge, Zeichnungen mit Einzelbemaßung, Desktop-App und ein erster KI-Assistent sind da. Was neu ist: [docs/CHANGELOG.md](docs/CHANGELOG.md). Arbeitsstand: [docs/TASKS.md](docs/TASKS.md), Vision: [docs/PLAN.md](docs/PLAN.md).
+**Status:** Modellieren, Skizzieren mit Abhängigkeiten, stabile Flächenbezüge, Zeichnungen mit Einzelbemaßung, Desktop-App und ein erster KI-Assistent sind da. Plan, Stand und Änderungen: [docs/TASKS.md](docs/TASKS.md).
 
 ## Starten
 

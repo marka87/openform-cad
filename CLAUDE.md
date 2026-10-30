@@ -37,23 +37,9 @@ Werkzeugsuche, Schatten, Schnittansicht, Messen (Länge, Winkel, Masse).
 Zeichnung: Blatt mit 3 Ansichten + Iso, Gesamtmaße, Schriftfeld;
 SVG, PDF, DXF.
 
-## Hinweis zu docs/PLAN.md
-PLAN.md ist das Visionsdokument und in Teilen überholt: M1–M3 sind
-umgesetzt, Zeichnungsableitung ist entgegen der Nicht-Ziele bereits
-gebaut. PLAN.md nicht als Aufgabenliste lesen und nicht eigenmächtig
-umschreiben. Aktueller Arbeitsstand steht ausschließlich in
-docs/TASKS.md.
-
-## Offene Lücken, in dieser Reihenfolge
-1. Persistente topologische Referenzen — Skizzen und Features hängen
-   nicht stabil an Flächen/Kanten. Verschiebt sich eine Fläche, wandert
-   die Skizze darauf nicht mit. Das ist Architektur, kein Feature.
-2. Sweep entlang Pfad, mit Vorschau beim Ziehen.
-3. Einzelbemaßung in Zeichnungen (Durchmesser, Radius, Winkel,
-   Toleranzen), nicht nur Gesamtmaße.
-4. Desktop-App über Tauri: Doppelklick-Start, kein `npm run dev`.
-5. KI-Assistent (M6 in docs/ROADMAP.md) — erst danach, und nur mit eigenem API-Schlüssel,
-   abschaltbar, Ausgabe als bearbeitbare Features statt Meshes.
+## Plan
+Ziel, Plan, Feldnotizen, Versionen und Log stehen ausschließlich in docs/TASKS.md.
+KI wird derzeit nicht weiter ausgebaut.
 
 ## Nicht-Ziele
 FEM, CAM, Baugruppen mit Gelenken, Rendering, Kollaboration,
@@ -74,7 +60,7 @@ Bei jedem Start und nach jedem fertigen Paket:
 3. Umsetzen, Kern-Tests schreiben und grün machen.
 4. Commit mit aussagekräftiger Nachricht, Paket auf DONE. Versionsnummer
    (package.json und src-tauri/Cargo.toml) nach der Regel in
-   docs/CHANGELOG.md heben und dort eintragen: Fehlerbehebung = PATCH,
+   docs/TASKS.md heben und dort eintragen: Fehlerbehebung = PATCH,
    neue Funktion = MINOR. Mehrere Pakete eines Tages dürfen eine Nummer
    teilen; spätestens vor jedem Installer-Bau muss sie neu sein.
 5. Zeile unter "Log": was geändert, was gelernt, was dadurch neu nötig
