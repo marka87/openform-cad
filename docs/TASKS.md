@@ -429,7 +429,7 @@ Aus dem eigenen Bedien-Durchgang (2026-10-30), Reihenfolge = Empfehlung.
 Verwandt und schon erfasst: Kreis-Muster/Spiegeln als Schritt (T6.7),
 Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 (T8.7, T8.8).
-- [ ] T10.13 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Hinweis unten kurz und situativ: ein Satz zur Lage
+- [x] T10.13 DONE (VERMUTUNG, Sperre vom Nutzer aufgehoben) — Hinweis unten kurz und situativ: ein Satz zur Lage
       unter der Maus (über Fläche „ziehen = hochziehen/hineindrücken“,
       über Kante „ziehen = runden, hinein = fasen“, über Skizzenpunkt
       „ziehen = verschieben“, ins Leere „ziehen = Rahmen“). Die heutige
@@ -446,6 +446,16 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 
 ## Log
 (neueste oben)
+- 2026-10-30 T10.13: hoverHint in main.ts, nur im Auswählen-Werkzeug und nur solange
+  der Grundtext steht (hintAuto), Meldungen und Fehler bleiben also stehen. F1/?
+  schaltet die Vollhilfe. Im Browser geprüft: Rahmen, Kante, Höhe, Seite, Radius,
+  Meldung bleibt, Werkzeughinweis unverändert. Nicht geprüft: Griffpunkt-Text.
+- 2026-10-30 Fix (0.5.0, gefunden bei T10.14 im Browser): Fase 7,5 mm an einer Kante,
+  die eine Bohrung unterbricht: BRepCheck ungültig, Netz mit 70 offenen Kanten, nur
+  gelb angezeigt. edgeOp prüft jetzt wie Schale und Zug. Die Zufallsprobe hatte das
+  nicht gefunden, weil keine Bohrung auf einer Kante saß. Offene Frage dazu: andere
+  Fälle von ungültig fängt nur die Prüfung je Operation; eine Prüfung des Endkörpers
+  vor dem Export gibt es nicht.
 - 2026-10-30 T10.14 Seitenfeld der Skizze: oben Maße (Gewinde, Abhängigkeiten,
   bei Drehkörper auch die Achse), dann Knöpfe Muster, Spiegeln, Löschen, darunter
   „Mehr“ mit Versatz, Drehen um, Zug, Übergang-Hinweis, Senkung. „Mehr“ bleibt

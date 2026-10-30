@@ -22,7 +22,7 @@ type Tool = 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
-  select: 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen · Strg/Shift+Klick = einzeln dazu/weg · Strg+A = alles · rechts ziehen = drehen · Mitte ziehen = verschieben',
+  select: 'Ziehen oder anklicken · F1 = alle Bedienhinweise',
   rect:   'Klicken = Anfang, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei „20x10“ tippen + Enter = genaues Maß · Ende = an der Maus fertig',
   circle: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
   ngon:   'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
@@ -140,7 +140,25 @@ function save() {
   try { localStorage.setItem('openform', snapshot()); saveWarning = ''; }
   catch { saveWarning = ' · ⚠ Automatisches Speichern fehlgeschlagen (Modell zu groß), bitte „Speichern“ benutzen'; }
 }
-function showHint(text: string) { $('hint').textContent = text + saveWarning; }
+let hintAuto = false; // Hinweis zeigt nur den Grundtext: Lage unter der Maus darf ihn ersetzen, Meldungen nicht
+function showHint(text: string) { hintAuto = text === HINTS[tool]; $('hint').textContent = text + saveWarning; }
+const HELP = 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen = runden, hineinschieben = fasen · Punkte einer ausgewählten Skizze ziehen · Linksziehen ins Leere = Rahmen auswählen · Strg/Shift+Klick = einzeln dazu/weg · Strg+A = alles · rechts ziehen = drehen · Mitte ziehen = verschieben';
+// Ein Satz zur Lage unter der Maus (T10.13)
+function hoverHint(h: { face: Hit | null; edge: EdgeHit | null }) {
+  if (!hintAuto || drag) return;
+  const g = h.face?.grip, f = g && g.f;
+  const text = ray.intersectObjects(handles.children)[0] ? 'ziehen = Punkt verschieben'
+    : h.edge ? 'ziehen = runden · hinein = fasen'
+    : !h.face ? 'ziehen = Rahmen auswählen · rechts ziehen = drehen'
+    : !g || g.part === 'import' ? 'ziehen = Fläche versetzen'
+    : f && isExtrude(f) && isFlat(f) ? 'ziehen = hochziehen oder hineindrücken'
+    : g.part === 'edge' ? 'ziehen = Maß der Rundung oder Fase ändern'
+    : g.part === 'plane' ? 'ziehen = Abstand der Ebene ändern'
+    : g.part === 'r' ? 'ziehen = Radius ändern'
+    : g.part === 'end' ? 'ziehen = Höhe ändern'
+    : 'ziehen = Seite verschieben';
+  $('hint').textContent = text + saveWarning;
+}
 // Warnung, die auch die nächste Kern-Meldung überdauert
 let notice = '';
 function showNotice(text: string) { notice = text; showHint(text); }
@@ -1166,6 +1184,7 @@ function onMove(e: PointerEvent) {
   if (!drag) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
     setHover(!!h && (tool !== 'shell' || !!h.face));
+    if (h && tool === 'select') hoverHint(h);
     el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
     if (tool === 'measure' && measureMode !== 'obj') { // Einrastpunkt fürs Messen schon vor dem Klick zeigen
       const s = measurePoint();
@@ -2058,6 +2077,7 @@ addEventListener('keydown', e => {
   else if ((k === 'enter' || k === 'end') && poly) finishPoly(!endOpen()); // Linie, Zug-Pfad und Hilfslinie: Enter/Ende = offen fertig
   else if (k === 'end' && drag?.kind === 'sketch') { if (!finishSketch()) return showHint(TOO_THIN); drag = null; hud.style.display = 'none'; controls.enabled = true; refresh(); } // Form an der Maus fertig
   else if (k === 'delete' || k === 'backspace') deleteSel();
+  else if (k === 'f1' || e.key === '?') { e.preventDefault(); showHint($('hint').textContent === HELP + saveWarning ? HINTS[tool] : tool === 'select' ? HELP : HINTS[tool]); }
   else if (k === 'escape') escapeStep();
 });
 

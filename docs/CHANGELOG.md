@@ -9,6 +9,17 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
 - **MAJOR** (→ 1.0.0): erst, wenn das Dateiformat `.ofc` als stabil gilt
   und alte Dateien garantiert aufgehen
 
+## 0.5.0 — 2026-10-30
+
+- **Rundung oder Fase, die einen kaputten Körper ergäbe, wird rot.** Eine Fase,
+  die in eine Bohrung lief, ergab einen ungültigen Körper mit fehlenden Flächen
+  (man schaute hinein, STL und 3MF hatten Löcher), angezeigt nur als gelbe
+  Warnung. Jetzt bleibt der Körper davor erhalten und der Schritt meldet es.
+- **Seitenfeld der Skizze aufgeräumt:** oben die Maße, dann Muster, Spiegeln,
+  Löschen, alles Seltene unter „Mehr“.
+- **Hinweis unten kurz und passend zur Maus:** ein Satz zu dem, was Ziehen an
+  dieser Stelle tut. Die ganze Hilfe zeigt F1 oder ?.
+
 ## 0.4.4 — 2026-10-30
 
 - **Muster meldet Kopien neben dem Körper.** „2 von 4 Kopien treffen den

@@ -302,6 +302,7 @@ export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: N
     edges.forEach(e => b.Add(r, e.wrapped));
     b.Build(new oc.Message_ProgressRange());
     if (!b.IsDone()) throw new Error(type === 'fillet' ? 'Rundung fehlgeschlagen' : 'Fase fehlgeschlagen');
+    if (!isValid(b.Shape())) throw new Error(`${type === 'fillet' ? 'Rundung' : 'Fase'} ergibt keinen gültigen Körper (Maß zu groß oder an einer Bohrung?)`); // sonst Netz mit Löchern, STL und 3MF unbrauchbar
     const gen = edges.flatMap(e => list(b.Generated(e.wrapped))).map(t => [t, { f: id, tag: type, ...extra }] as [any, Origin]);
     const out = carry(b, nA, gen);
     gen.forEach(([t]) => t.delete());

@@ -290,3 +290,14 @@ test('Muster, dessen Kopien neben dem Körper liegen, meldet das statt still nic
   expect(measureVolume(part.body!)).toBeCloseTo(v1 - 2 * Math.PI * 9 * 6, 1);   // die treffenden bleiben
   expect(all(100, 2).errors.get(3)).toMatch(/Keine Kopie/);
 });
+
+test('Fase, die in eine Bohrung läuft und einen ungültigen Körper ergäbe, wird rot, der Körper davor bleibt', () => {
+  const plate = rect(GROUND, [-60, 20], [15, 30], 1, 18.5, false);
+  const hole = { ...circle(top(18.5), [-20, 20], 4, 2, -9.5) };      // Bohrung sitzt auf der Vorderkante und öffnet die Wand
+  const fase = edge('chamfer', 3, [-42.5, 18.5, -20], [1, 0, 0], 7.5);
+  const { r } = settle([plate, hole, fase]);
+  expect(r.errors.get(3)).toMatch(/gültigen Körper/);
+  expect(valid(r.body!)).toBe(true);
+  const m = closed(to3MF([...r.bodies.values()]));
+  expect([m.dup, m.open]).toEqual([0, 0]);
+});
