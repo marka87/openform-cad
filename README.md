@@ -33,13 +33,13 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Rechteck / Kreis skizzieren | `R` / `C`, auf Boden oder Fläche ziehen |
 | Vieleck (n-Eck) / Langloch | `N` (beim Ziehen `+`/`-` = Ecken) / `O` (Rechteck aufziehen) |
 | Maße eintippen | Beim Aufziehen oder Linienzeichnen Zahl tippen, `Enter`: Rechteck/Langloch `20x10`, Kreis/n-Eck Radius, Linie Länge in Mausrichtung |
-| Vieleck skizzieren | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
+| Freies Vieleck | `L`, Punkte klicken; Klick auf den ersten Punkt oder `Enter` schließt, `Esc` bricht ab |
 | Bogen | Im Linien-Werkzeug vom letzten Punkt aus ziehen statt klicken (schließt tangential an) – oder `A`: Anfang, Ende, Punkt auf dem Bogen klicken; `L`/`A` wechseln mitten in der Form |
 | Ellipse | `I`, vom Mittelpunkt aus ziehen; Halbachsen im Seitenfeld |
 | Spline | `S`, Punkte klicken – die Kurve läuft glatt hindurch; Klick auf den ersten Punkt oder `Enter` schließt |
 | Bereiche | Überschneiden sich flache Skizzen, zieht man nur den angeklickten Bereich (z. B. die Schnittmenge) |
 | Versatz | Flache Skizze anklicken, im Seitenfeld Abstand eingeben (minus = nach innen) → „Versatz anlegen“ |
-| Muster / Spiegeln | Skizze oder Körper-Feature anklicken → Seitenfeld „Muster / Spiegeln“: Reihe entlang X/Y/Z, Kreis um eine Achse oder Spiegeln (Ebene durch den Ursprung) |
+| Muster / Spiegeln | Skizze anklicken (Strg+Klick = mehrere) → Seitenfeld „Muster / Spiegeln“: Achse (x/y der Skizze = in der Fläche, oder X/Y/Z), Anzahl, Abstand, ⇄ Richtung, „quer dazu“ für ein Raster → „Reihe entlang Achse“ legt einen Schritt „Muster“ an. Ausgewähltes Muster: Anzahl/Abstand ändern, orange Pfeile ziehen = Abstand; Kopien folgen der Quelle, Ziehen an einer Kopie drückt alle hinein. Kreis um Achse und Spiegeln legen Einzelkopien an |
 | Punkte verschieben | Vieleck oder Spline anklicken (auch als Körper) – die Punkte erscheinen und lassen sich ziehen |
 | Einrasten | Beim Skizzieren zeigt ein Punkt am Zeiger, wo der Klick landet: blau Raster, orange Endpunkt/Mitte/Schnitt/Ursprung, gelb auf Linie; liegt ein Flächenraster, rasten auch Flächenmitte, Ecken, Kantenmitten und Bohrungsmitten ein (weiße Punkte); `Shift` = frei. Raster unten links „Auto“ passt sich dem Zoom an |
 | Text | Werkzeug „Text“: Punkt auf Boden oder Fläche klicken; auf einer Fläche graviert, sonst erhaben; Text, Schrifthöhe, Höhe im Seitenfeld. Schrift DejaVu Sans (freie Lizenz, `vendor/fonts`) |
@@ -58,7 +58,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Schale | `H`, Fläche des Körpers anklicken, die offen bleiben soll; nochmal `H` + Shift+Klick = weitere offene Fläche; Wandstärke im Seitenfeld |
 | Werkzeugsuche | `Strg+K`, tippen, `Enter` |
 | Ansichten | Kasten unten links oder Tasten `0` Iso, `1` Vorne, `2` Oben, `3` Rechts, `F` Einpassen |
-| Messen | `M`, zwei Punkte anklicken (Ecken rasten ein): Abstand und ΔX/ΔY/ΔZ, bei zwei Flächen auch deren Winkel; Volumen und Oberfläche stehen über der Schrittliste |
+| Messen | `M`, Art über ▾ oder Rechtsklick: Objekt (Kante = Länge, Kreis = ⌀/R/Umfang, Fläche = Inhalt), Punkt zu Punkt (Abstand, ΔX/ΔY/ΔZ), Winkel über drei Punkte; Volumen und Oberfläche stehen über der Schrittliste |
 | Darstellung | Kasten unten links: Draht, Transparent, Kanten, Schnitt (aus → X → Y → Z; Regler verschiebt die Ebene, Schnittfläche gefüllt), Render, Farbe, Einheit mm/Zoll |
 | Mehrere Körper | Skizze auf dem Boden = neuer Körper, auf einer Fläche = gehört zu deren Körper. Körper in der Liste „Körper“ anklicken → Seitenfeld: Verschieben/Drehen mit Griffen oder genau per Zahl, mit anderem Körper vereinigen, abziehen, Schnittmenge; Name, Farbe, Werkstoff (→ Masse), skalieren, an einer Hilfsebene teilen; `●`/`○` blendet aus |
 | Maße und Abhängigkeiten | Vieleck anklicken → Seitenfeld „Maße und Abhängigkeiten“: Länge je Seite eintippen (festgelegt = orange), `—` waagrecht, `\|` senkrecht, zwei Seiten ∥ parallel / ⟂ rechtwinklig / = gleich lang; ✕ entfernt. Die Skizze hält die Abhängigkeiten auch beim Ziehen |

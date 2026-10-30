@@ -5,34 +5,49 @@ Regel: DONE nur mit grünem Test oder benanntem Beleg im Log. Ein Paket,
 das nur teilweise erledigt ist, bleibt TODO; der fertige Teil wird im
 Text des Pakets beschrieben, nicht durch ein Häkchen.
 
-Zweite Regel (seit 2026-10-29): Neue Funktionswünsche kommen aus
-docs/FELDNOTIZEN.md, nicht aus Vermutungen. Was beim Bauen echter Teile
-dreimal stört, wird ein Paket. Was einmal stört, bleibt Notiz. Die
-Pakete T5.7 bis T5.18 sind vor dieser Regel entstanden und daher
-Vermutungen — sie gelten, bis die Feldnotizen etwas anderes zeigen.
+Zweite Regel (seit 2026-10-29, geschärft 2026-10-30): Neue
+Funktionswünsche kommen aus docs/FELDNOTIZEN.md, nicht aus Vermutungen.
+Was beim Bauen echter Teile stört, wird ein Paket. Was aus einem
+Gespräch, einem Interview oder einem Shapr3D-Vergleich stammt, ist eine
+Vermutung und wird als solche gekennzeichnet.
+
+Warum das zählt: Teil 1 (Gehäuse) hat am 2026-10-30 zwei echte Fehler
+geliefert — ein Muster, das aus dem Modell lief, und ein Muster, das nur
+einen Kreis erwischte. Beide standen auf keiner Wunschliste. Vermutungen
+liefern Plausibles, echte Teile liefern Wahres.
+
+Sicherung gegen stilles Umgehen: Solange T0.3 offen ist (weniger als
+drei echte Teile gebaut), darf kein Paket begonnen werden, das nur aus
+einer Vermutung stammt. Ausgenommen sind Fehler, Abbrüche und
+Datenverlust — die gehen immer vor. Vermutungs-Pakete sind unten mit
+VERMUTUNG markiert.
 
 ## Arbeitsreihenfolge
 Oben abarbeiten, dann nach unten. Die Epics darunter sind die fachliche
 Ordnung, diese Liste ist die zeitliche.
 
-1. T0.2, T4.3 — Installer installieren und dabei ein echtes Teil bauen,
-   Stolperstellen mitschreiben. Erledigt beides in einem Durchlauf.
-2. T0.3 — zwei weitere echte Teile, dann Feldnotizen auswerten.
-   DANACH kann sich alles darunter ändern.
-3. T5.7, T5.8 — kleine Fehler aus dem Weg räumen
-4. T5.17 — Messen, sobald das Fehlerbild aus den Feldnotizen da ist
-5. T5.9 — Ansicht auf die Fläche
-6. T5.10 — sichtbarer Punkt und Auto-Raster
-7. T5.11 — Flächenpunkte und Fluchtlinien
-8. T5.12 — Linienkette, Weg A, mit eigenem Linientyp
-9. T5.18 — Körper an einer Linie teilen
-10. T5.6 — echte Bögen im Löser
-11. T5.13, T5.14 — Fänge, gerade zuerst, tangential nach T5.6
-12. T5.15, T5.16 — Winkel tippen, Esc stufenweise
-13. Epic 10 (Werkzeuge wie Shapr3D, Wunsch des Nutzers 2026-10-29):
-    T10.2, T10.6, T10.7, T10.1, T10.3 (erledigt T6.4 mit), T10.5, T10.4
-14. T1.14, T2.5, T3.6, T5.5, T3.5 — restliche Nacharbeiten (erledigt 2026-10-29)
-15. Epic 7 (Pflege), Epic 8 (KI-Assistent), Epic 9 (Weg B)
+Stand 2026-10-30: Die Liste vom 2026-10-29 war komplett abgearbeitet und
+ist hier ersetzt. Erledigtes steht nicht mehr drin — der Verlauf liegt im
+Log.
+
+1. T0.3 — Teil 2 und Teil 3 bauen, Feldnotizen führen, auswerten.
+   SPERRE: Bis das erledigt ist, keine Pakete mit VERMUTUNG beginnen.
+   Danach ordnet sich alles darunter neu.
+2. T4.3 — aktuellen Installer (0.3.1; 0.3.2 noch ungebaut) durchklicken. Läuft
+   zusammen mit Punkt 1.
+3. T5.17 — Messen: erst klären, ob T10.7 das Problem erledigt hat
+   (siehe dort), sonst Fehlerbild aus Teil 2 oder 3.
+4. T8.9 — 429 bei Groq. Aus Feldnotiz Teil 1, hat den Nutzer zum
+   Handzeichnen gezwungen.
+5. T8.8, T8.7 — KI auf Seitenflächen, Werkzeug `lochmuster`. Beide aus
+   Feldnotiz Teil 1.
+6. T6.8 — Flächen der Musterkopien eindeutig benennen. Mehrdeutige
+   Bezüge sind ein Risiko für Epic 1, deshalb vor T6.7.
+7. T6.7 — Kreis-Muster und Spiegeln als Muster-Schritt.
+8. T10.14, T10.13, T10.15 — VERMUTUNG, aus dem eigenen Bedien-Durchgang 2026-10-30.
+   Erst nach Punkt 1.
+9. T7.2 (Pflege), T4.4 (macOS/Linux), Epic 9 (Weg B) — alles ohne Eile.
+10. T1.11 — BLOCKED, wartet auf Vieleck-Punkte.
 
 ## Epic 0: Hygiene und Anforderungen
 
@@ -43,20 +58,23 @@ Ordnung, diese Liste ist die zeitliche.
       replicad steht in package.json auf 1.2.0, die offene Frage dazu
       ist damit erledigt.
 
-- [ ] T0.2 TODO — docs/FELDNOTIZEN.md anlegen und beim Bauen des ersten
-      echten Teils führen. Eine Zeile je Stolperstelle: was wolltest du
-      tun, was ist passiert, wie lange dauerte der Umweg.
-      WICHTIG: keine Lösungsvorschläge notieren. „Wollte an der
-      Bohrungsmitte anfangen, musste Koordinaten im Kopf rechnen" ist
-      brauchbar; „brauche Hilfspunkte" ist schon eine Lösung und
-      verdeckt, was sonst geholfen hätte.
-      Läuft zusammen mit T4.3 in einem Durchlauf.
-- [ ] T0.3 TODO — Zwei weitere echte Teile bauen (zusammen mit dem aus
-      T0.2: ein Halter, ein Gehäuse, ein Adapter — Dinge, die der Nutzer
-      wirklich gebraucht hat, nichts Erfundenes). Danach Feldnotizen
-      auswerten: Was dreimal vorkommt, wird ein Paket und bestimmt die
-      Arbeitsreihenfolge neu. Was einmal vorkommt, bleibt Notiz.
-      Die drei Teile wandern anschließend als Regressionstest ins Repo.
+- [x] T0.2 DONE — docs/FELDNOTIZEN.md angelegt und beim ersten echten
+      Teil geführt (Gehäuse mit Lochraster in der Seitenwand,
+      2026-10-30). Drei Stolperstellen notiert, zwei davon am selben Tag
+      behoben (Muster lief aus dem Modell; Muster wirkte nur auf einen
+      Kreis), die dritte ist T8.9 (429 bei Groq).
+
+- [ ] T0.3 TODO — Teil 2 und Teil 3 bauen. Teil 1 (Gehäuse) steht.
+      Fehlen: ein Halter und ein Adapter, oder was der Nutzer sonst
+      wirklich braucht — nichts Erfundenes.
+      Danach Feldnotizen auswerten und die Arbeitsreihenfolge danach neu
+      ordnen. Die drei Teile wandern anschließend als Regressionstest
+      ins Repo, mitsamt der Zeile „wofür brauchst du es", damit sie in
+      einem halben Jahr noch verständlich sind.
+      SPERRE: Solange dieses Paket offen ist, werden keine
+      VERMUTUNG-Pakete begonnen (siehe Regel oben). Teil 1 hat zwei
+      Fehler aufgedeckt, die auf keiner Wunschliste standen; zwei
+      weitere Teile sind wahrscheinlich ähnlich ergiebig.
 
 ## Epic 1: Persistente topologische Referenzen
 
@@ -126,12 +144,14 @@ Notlösung bei importierter STEP-Geometrie ohne Historie.
 - [x] T4.1 DONE — Tauri-Shell, WASM lädt im Build korrekt.
 - [x] T4.2 DONE — Öffnen/Speichern über System-Dialog, `.ofc` verknüpft.
 
-- [ ] T4.3 TODO — Installer ist neu gebaut (Stand T10.8, 7,99 MB,
-      src-tauri/target/release/bundle/nsis/) und startet jetzt auch ohne
-      LLVM-MinGW auf dem Rechner (siehe Log 2026-10-29 T4.3).
-      Offen beim Nutzer: installieren und durchklicken — Öffnen,
-      Speichern, Doppelklick auf eine `.ofc`-Datei, STEP- und
-      STL-Export, Zeichnung. Dabei gleich T0.2 mitführen.
+- [ ] T4.3 TODO — Installiert und im Einsatz: Der Nutzer hat mit der
+      Desktop-App gearbeitet und daraus Rückmeldungen geliefert
+      (T10.9 bis T10.11, Feldnotiz Teil 1). Der Grundzweck ist damit
+      erfüllt.
+      Offen bleibt der systematische Durchlauf am aktuellen Stand
+      (0.3.1, 9,9 MB, src-tauri/target/release/bundle/nsis/; 0.3.2 noch ungebaut): Öffnen,
+      Speichern, Doppelklick auf eine `.ofc`-Datei, STEP-, STL- und
+      3MF-Export, Zeichnung. Läuft zusammen mit T0.3.
 - [ ] T4.4 TODO — macOS- und Linux-Build über GitHub Actions. Der Weg
       ist erprobt (.github/workflows/opencascade.yml läuft bereits), es
       fehlt nur die Entscheidung, ob es sich lohnt. Erst sinnvoll, wenn
@@ -166,11 +186,14 @@ gegen die Notizen prüfen und gegebenenfalls umsortieren oder streichen.
 - [x] T5.8 DONE — Rechtsklick während des Zeichnens beendet den Zug wie
       Enter, statt das Kontextmenü zu öffnen. Ergibt der Zug keine
       Fläche, bleiben die Punkte stehen (Hinweis), statt zu verschwinden.
-- [ ] T5.17 TODO — Messen überarbeiten. Der Nutzer meldet, dass es nicht
-      richtig funktioniert; das genaue Fehlerbild steht noch aus und
-      soll aus T0.2 kommen. Erst reproduzieren und beschreiben, dann
-      umsetzen. Messen gehört zu den am häufigsten benutzten Werkzeugen
-      des Nutzers, deshalb vorgezogen.
+- [ ] T5.17 TODO — Messen überarbeiten. Der Nutzer meldete am
+      2026-10-29, dass es nicht richtig funktioniert; ein genaues
+      Fehlerbild gibt es bis heute nicht.
+      ZUERST KLÄREN: T10.7 hat Messen inzwischen in drei Arten neu
+      gebaut (Objekt, Punkt zu Punkt, Winkel über drei Punkte). Möglich, dass das Problem
+      damit erledigt ist. Einmal ausprobieren und das Paket entweder
+      schließen (mit Verweis auf T10.7) oder mit einem konkreten
+      Fehlerbild aus Teil 2 oder 3 füllen. Kein Umbau ohne Fehlerbild.
 - [x] T5.9 DONE — Ansicht auf die Fläche: Leertaste bei liegendem Raster
       fliegt die Kamera senkrecht auf die Fläche (Bauteil füllt das Bild),
       nochmal Leertaste = zurück. Über einer anderen Fläche setzt die
@@ -260,7 +283,7 @@ die Zustimmung zur Nutzung der Daten fürs Training — bei CAD-Geometrie
 inakzeptabel als Standard. KI bleibt abschaltbar und ist standardmäßig
 aus.
 
-- [x] T8.1 DONE (Freigabe offen, siehe docs/adr/0002-ki-assistent.md) — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
+- [x] T8.1 DONE (vom Nutzer freigegeben 2026-10-29, siehe docs/adr/0002-ki-assistent.md) — Entwurf, nur docs/, kein Code: Die KI erzeugt Features
       im bestehenden Datenmodell über Tool-Calls mit festem Schema,
       niemals replicad-Code, der ausgeführt wird, und niemals Meshes.
       Jeder Schritt landet im Baum, ist nachbearbeitbar und rückgängig.
@@ -303,6 +326,8 @@ Baulinie, dafür genügt Weg A.
       Datei sichtbar nach Weg B überführen, nie still beim Laden.
 
 ## Epic 10: Werkzeuge wie Shapr3D (Wunsch des Nutzers, 2026-10-29)
+Herkunft: Wunschliste und Interview, nicht Feldnotizen. Offene Pakete
+hier sind mit VERMUTUNG markiert und warten auf T0.3.
 Vom Nutzer mit Screenshots aus Shapr3D gewünscht und freigegeben
 (Reihenfolge und Umsetzung nach eigenem Ermessen, „sie sollen am Ende
 funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
@@ -361,23 +386,31 @@ Aus dem eigenen Bedien-Durchgang (2026-10-30), Reihenfolge = Empfehlung.
 Verwandt und schon erfasst: Kreis-Muster/Spiegeln als Schritt (T6.7),
 Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 (T8.7, T8.8).
-- [ ] T10.13 TODO — Hinweis unten kurz und situativ: ein Satz zur Lage
+- [ ] T10.13 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Hinweis unten kurz und situativ: ein Satz zur Lage
       unter der Maus (über Fläche „ziehen = hochziehen/hineindrücken“,
       über Kante „ziehen = runden, hinein = fasen“, über Skizzenpunkt
       „ziehen = verschieben“, ins Leere „ziehen = Rahmen“). Die heutige
       Vollhilfe (drei Zeilen Fließtext) per „?“ oder F1 erreichbar.
-- [ ] T10.14 TODO — Feld rechts aufräumen: oben nur die Maße der Auswahl,
+- [ ] T10.14 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Feld rechts aufräumen: oben nur die Maße der Auswahl,
       darunter eine Zeile mit den 3–4 häufigsten Aktionen als Knöpfe,
       Seltenes (Versatz, Drehen um, Zug, Übergang, Senkung) zugeklappt
       unter „Mehr“. Heute zeigt eine Skizze rund 13 Felder und Knöpfe
       gleichzeitig.
-- [ ] T10.15 TODO — Aktionen an der Auswahl wie Shapr3D: kleine Leiste
+- [ ] T10.15 TODO (VERMUTUNG, eigener Bedien-Durchgang 2026-10-30) — Aktionen an der Auswahl wie Shapr3D: kleine Leiste
       neben der ausgewählten Skizze, Fläche oder Kante (z. B. Muster,
       Spiegeln, Bohrung, Löschen), damit der Weg zur Leiste links
       entfällt. Größerer Umbau, erst nach T10.14 (gleiche Aktionen).
 
 ## Log
 (neueste oben)
+- 2026-10-30 Abgleich docs gegen Code: alle 76 DONE-Pakete haben Code,
+  keines widerspricht ihm. Belegslücken: T3.2 (Maß verschieben) ohne Test
+  und ohne eigenen Log-Beleg; T1.3b ohne eigenen Test (nur indirekt über
+  T1.5 und den Fasen-Test); T1.10 ohne Migrationscode (Resolver trägt
+  Bezüge beim Laden nach); viele Oberflächen-Pakete nur im Browser
+  belegt. Korrigiert: Installer-Stand (0.3.1 statt T10.8), Messarten
+  (Winkel statt „frei“), Herkunft T10.13–T10.15 (eigener Durchgang statt
+  Interview), T8.1 als freigegeben; README: Vieleck-Taste N, Muster-Zeile.
 - 2026-10-30 Eigener Bedien-Durchgang im Browser (Nutzerwunsch: Mängel
   finden, bevor er drüberstolpert). Gefunden und behoben: (1) Rechteck mit
   zwei Klicks bei Schrägsicht → eine Seite nach Einrasten 0 → toolFeature
@@ -1071,7 +1104,9 @@ Messen (T5.17, Fehlerbild fehlt), KI-Lochmuster und Seitenflächen
 ## Offene Fragen
 - 2026-10-29 Messen (T5.17): Was genau geht schief? Rastet der Klick
   nicht auf den gewünschten Punkt, kommt ein falscher Wert, oder
-  reagiert es gar nicht? Antwort soll aus den Feldnotizen (T0.2) kommen.
+  reagiert es gar nicht? Seit einem Tag unbeantwortet, das Paket hängt
+  daran. Vor einer Antwort zuerst prüfen, ob T10.7 (Messen in drei
+  Arten) das Problem schon erledigt hat.
 - 2026-10-29 macOS- und Linux-Builds (T4.4): bauen oder weglassen? Der
   Weg über GitHub Actions ist durch .github/workflows/opencascade.yml
   schon erprobt, es kostet also vor allem Zeit, nicht Risiko. Ohne

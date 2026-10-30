@@ -50,17 +50,20 @@ Notizen:
 - [Gehäuse] Wollte: Lochraster per Muster auf der Seitenwand |
   Passiert: Muster lief aus dem Modell hinaus, wenn die erste Bohrung
   nicht in der passenden Ecke saß | Umweg: in genau der richtigen Ecke
-  anfangen (behoben 2026-10-30, siehe Log)
+  anfangen (behoben 2026-10-30, siehe Log → T6.5)
 - [Gehäuse] Wollte: die untere Reihe (4 Kreise) auf einmal nach oben
   vervielfältigen | Passiert: Muster wirkte nur auf einen Kreis |
   Umweg: Kreise einzeln vervielfältigen, viele Klicks (behoben
-  2026-10-30, siehe Log)
+  2026-10-30, siehe Log → T6.5)
 - [Gehäuse] Wollte: Lochraster per KI („Both sides along the X-axis,
   circular hole pattern full, equal spacing and size“), Groq
   gpt-oss-20b | Passiert: „Zu viele Anfragen oder Kontingent erschöpft
-  (429)“ | Umweg: von Hand gezeichnet
+  (429)“ | Umweg: von Hand gezeichnet → T8.9, dazu T8.7 (lochmuster)
+  und T8.8 (KI auf Seitenflächen)
 
 ## Teil 2: (Name, Datum)
+Offen — siehe T0.3. Solange Teil 2 und 3 fehlen, sind alle neuen
+Funktionswünsche Vermutungen.
 
 Was ist es, wofür brauchst du es:
 

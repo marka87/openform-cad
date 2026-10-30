@@ -118,7 +118,7 @@ Desktop-App liest sie dort) und in `src-tauri/Cargo.toml`:
   Herkunft). Das ist behoben.
 
 ### Noch offen
-- Echte Teile bauen und Stolperstellen in [FELDNOTIZEN.md](FELDNOTIZEN.md)
-  sammeln (T0.2, T0.3). Danach ordnet sich die Reihenfolge neu.
-- KI: Runden/Fasen, Muster und Werte ändern (T8.4), Fehler erklären (T8.5),
-  Kernfehler an die KI zurückgeben (T8.6).
+Dieser Abschnitt ist überholt; der aktuelle Stand steht in
+[TASKS.md](TASKS.md). Zum Zeitpunkt von 0.1.0 offen: Feldnotizen
+sammeln (T0.2, T0.3) sowie die KI-Pakete T8.4 bis T8.6. T0.2, T8.4,
+T8.5 und T8.6 sind inzwischen erledigt (siehe 0.2.0 und 0.3.x).
