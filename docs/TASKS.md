@@ -259,7 +259,7 @@ aus.
       „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken".
 - [x] T8.4 DONE — Ändern per Text an bestehender Auswahl
       („Wand 2 mm dicker").
-- [ ] T8.5 TODO — Fehler erklären: warum eine Fase scheitert und wie sie
+- [x] T8.5 DONE — Fehler erklären: warum eine Fase scheitert und wie sie
       zu beheben ist.
 - [x] T8.6 DONE — Kernfehler an die KI zurückgeben (ADR 0002, Abschnitt 4):
       scheitert ein KI-Schritt erst im Kern (z. B. Rundung zu groß), den
@@ -330,6 +330,16 @@ funktionieren“). Nach T0.3 gegen die Feldnotizen prüfen.
 
 ## Log
 (neueste oben)
+- 2026-10-30 T8.5: Roter Schritt bekommt im Baum einen Knopf „?“, wenn
+  die KI eingeschaltet ist. Gesendet werden Meldung des Kerns, der Schritt
+  und bis zu 3 Schritte davor und 1 danach mit Maßen (explainMsgs), ohne
+  Werkzeuge; die Antwort steht in der KI-Zeile, lange Texte in eigener
+  Zeile über der Eingabe (#aiBar.long). Die Zeile bleibt danach für einen
+  Auftrag offen („Rundung kleiner machen“ geht über aendern aus T8.4).
+  Gelernt: die Meldungen des Kerns sind knapp („Rundung fehlgeschlagen“),
+  die KI muss den Grund aus den Maßen der Nachbarn ableiten. Im Browser
+  geprüft (Knopf erscheint, Anfrage läuft, Fehlermeldung bei nicht
+  erreichbarem Anbieter); mit echtem Sprachmodell noch nicht geprüft.
 - 2026-10-30 Fix Installer-Bau auf frischem Checkout: tauri.conf.json
   verlangt target/release/WebView2Loader.dll als Ressource, die legt aber
   niemand dort ab (webview2-com-sys kopiert sie nur in sein OUT_DIR); auf

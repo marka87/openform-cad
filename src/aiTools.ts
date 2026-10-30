@@ -144,6 +144,16 @@ export function applyCalls(features: Feature[], calls: ToolCall[], nextId: numbe
   return { fs, nextId, results };
 }
 
+// Fehler erklären (T8.5, ADR 0002 Abschnitt 6): der rote Schritt, die Meldung des Kerns und die Nachbarschritte; Antwort nur Text
+export function explainMsgs(fs: Feature[], id: number, why: string, unit: 'mm' | 'in'): Msg[] {
+  const i = fs.findIndex(f => f.id === id);
+  const near = fs.slice(Math.max(0, i - 3), i + 2).filter(f => !f.hidden).map(f => ({ schritt: f.id, art: f.type, ...masse(f) }));
+  return [{ role: 'system', content: `Du erklärst Fehler im CAD-Programm OpenForm. Antworte auf Deutsch in höchstens drei kurzen Sätzen ohne
+Aufzählung: warum der Schritt scheitert und was der Nutzer ändern kann, mit konkreten Werten, wenn möglich. Maße in mm, der Nutzer
+arbeitet in ${unit === 'in' ? 'Zoll' : 'mm'}. Du kannst nichts am Modell ändern.` },
+  { role: 'user', content: `Schritt ${id} scheitert mit der Meldung „${why}“. Schritte drumherum: ${JSON.stringify(near)}` }];
+}
+
 // Eine Anfrage bis zum Ende: die KI darf mehrere Runden lang Werkzeuge aufrufen (kleine Modelle schicken oft einen Aufruf je Antwort),
 // jedes Ergebnis geht zurück. Schluss, wenn sie ohne Werkzeug antwortet, nach 12 Runden oder nach 3 Runden mit Fehlern hintereinander.
 // check (T8.6): rechnet den Stand im Kern; scheitern dabei Schritte dieses Auftrags, geht der Grund höchstens zweimal an die KI zurück

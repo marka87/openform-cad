@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { chat, type AiSettings, type ToolCall } from './ai';
-import { aiContext, applyCalls, runRequest } from './aiTools';
+import { aiContext, applyCalls, explainMsgs, runRequest } from './aiTools';
 
 const S: AiSettings = { on: true, base: 'https://example.test/v1/', model: 'm', key: 'k' };
 const reply = (status: number, body: unknown) => async () => new Response(JSON.stringify(body), { status });
@@ -69,4 +69,12 @@ test('KI ändert vorhandene Schritte über aendern, Auswahl steht im Kontext (T8
   const [p, sh, fi] = r.fs as never as [{ p: { w: number; h: number }; d: number }, { t: number }, { r: number }];
   expect([p.p.w, p.p.h, p.d, sh.t, fi.r]).toEqual([120, 60, 8, 5, 4]);
   expect((fs[1] as { t: number }).t).toBe(3);                                         // Original unverändert (Kopie)
+});
+
+test('Fehler erklären: roter Schritt, Meldung und Nachbarn, ohne Werkzeuge (T8.5)', () => {
+  const fs = [1, 2, 3, 4, 5, 6, 7].map(id => ({ id, type: 'fillet', at: [0, 0, 0], dir: [1, 0, 0], r: id })) as never[];
+  const m = explainMsgs(fs, 5, 'Rundung fehlgeschlagen', 'in');
+  expect(m[0].content).toContain('Zoll');
+  expect(m[1].content).toContain('Schritt 5 scheitert mit der Meldung „Rundung fehlgeschlagen“');
+  expect(JSON.parse(m[1].content!.split('drumherum: ')[1]).map((s: { schritt: number }) => s.schritt)).toEqual([2, 3, 4, 5, 6]); // 3 davor, 1 danach
 });

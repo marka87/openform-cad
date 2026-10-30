@@ -10,7 +10,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
-import { runRequest, TOOLS } from './aiTools';
+import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
 import { THREADS, cutParam, extendOpen, trimOpen, movePt, mirrorPt, rotDir, mirrorDir, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, mirroredCopy, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
@@ -447,11 +447,13 @@ function nameOf(f: Feature) {
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
 function renderTree() {
+  const aiOn = loadSettings().on;
   tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
     `<h3>Schritte${bodyInfo}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
     `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}${problems.has(f.id) ? problems.get(f.id)!.bad ? ' bad' : ' unsure' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
+    (problems.get(f.id)?.bad && aiOn ? '<button data-a="why" title="KI erklärt, warum der Schritt scheitert">?</button>' : '') +
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
   tree.querySelector<HTMLButtonElement>('.rollEnd')?.addEventListener('click', () => { pushHistory(); roll = null; refresh(); });
@@ -484,6 +486,7 @@ function renderTree() {
   tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => row.onclick = ev => {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
     if ((ev.target as HTMLElement).isContentEditable) return;
+    if (a === 'why') return askAi(f.id);
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
     else if (a === 'roll') { pushHistory(); roll = i + 1 >= features.length ? null : i + 1; }
     else if (ev.shiftKey || ev.ctrlKey) toggleSel(f.id);
@@ -1831,7 +1834,7 @@ $('bSvg').onclick = e => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   showMenu(r.left, r.bottom + 4, [['Zeichnung bemaßen …', editSheet], null, ['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
     ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
-    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => send({ type: 'export', format: '3mf' })], null, ['KI fragen …', askAi], ['KI-Assistent einrichten …', openAiSettings]]);
+    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => send({ type: 'export', format: '3mf' })], null, ['KI fragen …', () => askAi()], ['KI-Assistent einrichten …', openAiSettings]]);
 };
 // Drucken über einen unsichtbaren Rahmen; „Als PDF speichern“ im Druckdialog ergibt die PDF-Datei
 function printSVG(svg: string) {
@@ -1872,8 +1875,10 @@ function svgToDXF(svg: string) {
 // Fehler des Kerns gehen über kernelCheck zurück an die KI (T8.6); es läuft immer nur eine KI-Anfrage, daher ein einzelner Rückruf
 let checked: ((e: [number, string][]) => void) | null = null;
 const kernelCheck = (fs: Feature[]) => new Promise<[number, string][]>(ok => { checked = ok; send({ type: 'check', features: fs }); });
-function askAi() {
-  if (!loadSettings().on) return openAiSettings();
+// explain: Schritt-ID eines roten Schritts → die KI erklärt nur (T8.5), die Eingabezeile steht danach für einen Auftrag bereit
+function askAi(explain?: number) {
+  const s0 = loadSettings();
+  if (!s0.on) return openAiSettings();
   openAiPrompt(async text => {
     if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
     const s = loadSettings(), sel = selId === null ? [] : [selId, ...multi];
@@ -1886,6 +1891,10 @@ function askAi() {
     pushHistory(); features = r.fs; nextId = r.nextId; clearSel(); refresh();
     aiStatus(`${n ? `${n} Schritt${n > 1 ? 'e' : ''} angelegt` : 'Geändert'}${left}`, undo);
   });
+  if (explain === undefined) return;
+  aiStatus('KI erklärt …');
+  chat(s0, explainMsgs(features, explain, problems.get(explain)?.why ?? '', display.unit))
+    .then(r => aiStatus(r.content?.trim() || 'Keine Antwort'), e => aiStatus(`✗ ${e instanceof Error ? e.message : e}`));
 }
 function exportOBJ() {
   const g = new THREE.Group();

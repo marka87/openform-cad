@@ -126,6 +126,7 @@ export function openAiPrompt(submit: (text: string) => void) {
 export function aiStatus(text: string, discard?: () => void) {
   if (!bar) return;
   bar.querySelector('.res')!.textContent = text;
+  bar.classList.toggle('long', text.length > 80); // Erklärung (T8.5): Text in eigener Zeile über der Eingabe
   const ok = bar.querySelector<HTMLButtonElement>('.ok')!, no = bar.querySelector<HTMLButtonElement>('.no')!;
   ok.style.display = no.style.display = discard ? '' : 'none';
   ok.onclick = () => { aiStatus('übernommen'); bar!.querySelector('input')!.value = ''; };
