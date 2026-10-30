@@ -9,7 +9,7 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
   canvas { display:block; }
-  #toolbar { position:fixed; left:12px; top:120px; max-height:calc(100% - 270px); overflow-y:auto; display:flex; flex-direction:column; gap:1px; /* nur so hoch wie die Werkzeuge, bei kleinen Fenstern scrollen */
+  #toolbar { position:fixed; left:12px; top:120px; max-height:calc(100% - 350px); overflow-y:auto; display:flex; flex-direction:column; gap:1px; /* nur so hoch wie die Werkzeuge, bei kleinen Fenstern scrollen */
     background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
@@ -17,7 +17,7 @@
   #toolbar button { padding:1px 10px; } /* 18 Einträge + 4 Gruppen: passt so ohne Scrollen in 768 px Fensterhöhe */
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
   #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
-  #top { position:fixed; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:4px;
+  #top { position:fixed; top:12px; left:150px; right:320px; width:fit-content; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:center; gap:4px;
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:4px; }
   #panel { position:fixed; right:12px; top:12px; width:220px; background:var(--panel); border:1px solid var(--line);
     border-radius:14px; padding:12px; display:none; }
@@ -78,9 +78,9 @@
   #palette input { width:100%; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
   #palette div div { padding:5px 9px; border-radius:6px; cursor:pointer; }
   #palette div div:hover, #palette div div.first { background:#353a42; }
-  #views { position:fixed; left:12px; bottom:14px; width:250px; display:flex; flex-wrap:wrap; gap:4px; background:var(--panel);
+  #views { position:fixed; left:12px; bottom:14px; width:290px; display:flex; flex-wrap:wrap; gap:4px; background:var(--panel);
     border:1px solid var(--line); border-radius:12px; padding:5px; }
-  #views button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:8px; padding:4px 7px; cursor:pointer; font:inherit; }
+  #views button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:8px; padding:2px 7px; cursor:pointer; font:inherit; }
   #views button:hover { background:#353a42; }
   #views label { color:var(--muted); font-size:12px; display:inline-flex; align-items:center; gap:3px; }
   #views select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
@@ -95,7 +95,8 @@
   #toolbar .dd { float:right; margin:0 -6px 0 8px; min-width:22px; padding:0 4px; text-align:center; font-size:15px; line-height:16px;
     border:1px solid var(--line); border-radius:6px; background:#2b2f36; color:var(--text); }
   #toolbar .dd:hover { background:#4a515c; border-color:var(--accent); }
-  #toolbar .grp { color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px 0; line-height:10px; }
+  #toolbar .grp { color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px 0; line-height:10px; display:flex; align-items:center; gap:8px; }
+  #toolbar .grp::after { content:""; flex:1; height:1px; background:var(--line); }
   #toolbar small.mode { color:var(--muted); font-size:11px; margin-left:3px; }
   #snapMenu { position:fixed; display:none; z-index:20; left:270px; bottom:14px; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 12px; flex-direction:column; gap:5px; }
   #snapMenu b { margin-top:4px; color:var(--muted); font-weight:600; }
@@ -111,6 +112,25 @@
   #ctx button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
   #ctx button:hover { background:#353a42; }
   #ctx hr { border:0; border-top:1px solid var(--line); margin:3px 0; }
+  #cubeTurn { position:fixed; left:110px; top:30px; display:flex; flex-direction:column; gap:4px; }
+  #cubeTurn button { width:28px; height:28px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:16px; line-height:1; padding:0; }
+  #cubeTurn button:hover { background:#353a42; }
+  #top .sep { width:1px; margin:4px 3px; background:var(--line); }
+  #top button { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; padding:6px 7px; }
+  #top svg, #views svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linejoin:round; stroke-linecap:round; }
+  #top svg.ac { stroke:var(--accent); }
+  #views svg { vertical-align:-3px; margin-right:5px; }
+  #views .vg { width:100%; color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:5px 4px 0; border-top:1px solid var(--line); margin-top:2px; }
+  #views .vg:first-child { border-top:0; margin-top:0; padding-top:1px; }
+  #panel.wide { width:290px; }
+  #panel.wide select { max-width:165px; }
+  #panel h3 .x { float:right; background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; }
+  #panel fieldset { border:1px solid var(--line); border-radius:8px; margin:8px 0; padding:2px 8px 8px; display:flex; gap:8px; }
+  #panel legend { color:var(--muted); font-size:10px; letter-spacing:.05em; text-transform:uppercase; padding:0 4px; }
+  #panel fieldset .f { flex:1; min-width:0; color:var(--muted); font-size:12px; }
+  #panel fieldset .r { display:flex; gap:2px; margin-top:3px; align-items:center; }
+  #panel fieldset input { width:100%; min-width:0; flex:1; }
+  #panel fieldset .r button { flex:none; width:24px; height:26px; background:#353a42; color:var(--text); border:0; border-radius:5px; cursor:pointer; padding:0; font:inherit; }
   #cube { position:fixed; left:12px; top:12px; width:96px; height:96px; }
   #cube .face { width:56px; height:56px; display:flex; align-items:center; justify-content:center; font:600 10px system-ui; color:var(--text);
     background:rgba(53,58,66,.92); border:1px solid #5a606b; box-sizing:border-box; cursor:pointer; user-select:none; }
@@ -166,12 +186,15 @@
 </div>
 <div id="top">
   <button id="bNew" title="Neues, leeres Modell">Neu</button>
-  <button id="bUndo" title="Rückgängig (Strg+Z)">↶ Rückgängig</button>
-  <button id="bRedo" title="Wiederholen (Strg+Y)">↷ Wiederholen</button>
-  <button id="bSave" title="Modell als .ofc speichern (Strg+S, Strg+Umschalt+S = unter neuem Namen)">Speichern</button>
   <button id="bOpen" title=".ofc öffnen oder .step/.stp importieren (Strg+O)">Öffnen</button>
+  <button id="bSave" title="Modell als .ofc speichern (Strg+S, Strg+Umschalt+S = unter neuem Namen)">Speichern</button>
+  <span class="sep"></span>
+  <button id="bUndo" title="Rückgängig (Strg+Z)">Rückgängig</button>
+  <button id="bRedo" title="Wiederholen (Strg+Y)">Wiederholen</button>
+  <span class="sep"></span>
   <button id="bStl" title="Für den 3D-Druck">STL-Export</button>
   <button id="bStep" title="Für CAD und Fertigung">STEP-Export</button>
+  <span class="sep"></span>
   <button id="bSvg" title="Zeichnungsblatt (SVG, PDF), DXF, OBJ">Zeichnung / mehr ▾</button>
   <input id="fileIn" type="file" accept=".ofc,.json,.step,.stp" hidden>
 </div>
@@ -195,17 +218,23 @@
   <label title="Rastergröße beim Skizzieren">Raster <select id="gridStep"><option value="0">Auto</option><option>0.1</option><option>0.5</option><option selected>1</option><option>5</option><option>10</option></select> <span id="gridUnit">mm</span></label>
   <small>Shift beim Zeichnen = frei, ohne Einrasten</small>
 </div>
-<div id="cube"></div>
+<div id="cube" title="Doppelklick = Standardansicht"></div>
+<div id="cubeTurn"><button data-turn="1" title="Ansicht um 90° nach links drehen">↺</button><button data-turn="-1" title="Ansicht um 90° nach rechts drehen">↻</button></div>
 <div id="tree"></div>
 <div id="dims"></div>
 <div id="views">
+  <div class="vg">Kameraperspektiven</div>
   <button data-view="iso" title="Taste 0">Iso</button><button data-view="top" title="Taste 2">Oben</button>
   <button data-view="front" title="Taste 1">Vorne</button><button data-view="right" title="Taste 3">Rechts</button>
+  <div class="vg">Darstellungsmodi</div>
   <button data-view="fit" title="Taste F">Einpassen</button>
-  <button data-show="wire">Draht</button><button data-show="glass">Transparent</button><button data-show="edges" class="on">Kanten</button>
+  <button data-show="wire">Draht</button><button data-show="glass">Transparent</button>
+  <div class="vg">Struktur &amp; Rendering</div>
+  <button data-show="edges" class="on">Kanten</button>
   <button data-show="section" title="Schnitt durch die Mitte: aus → X → Y → Z">Schnitt</button><button data-show="render">Render</button>
-  <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
   <label title="Farbe des Körpers"><input type="color" id="bodyColor" value="#c9ced6"></label>
+  <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
+  <div class="vg">Systemeinstellungen</div>
   <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
   <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
 </div>

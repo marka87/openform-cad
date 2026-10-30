@@ -1422,6 +1422,7 @@ function renderPanel() {
 }
 function renderFeaturePanel() {
   const f = getSel();
+  panel.classList.remove('wide');
   if (patView && patView.key !== (f && selBody === null ? `s${f.id}` : `b${selBody}`)) patView = null; // Auswahl gewechselt
   if (edgeSel.length) { panel.style.display = 'block'; return renderEdgeSetPanel(); }
   if (!f && selBody !== null) { panel.style.display = 'block'; return renderBodyPanel(selBody); }
@@ -2100,15 +2101,18 @@ let patView: { mode: PatMode; key: string } | null = null;
 const patVals = { ax: '', cnt: 3, dist: 20, cnt2: 1, dist2: 20 }; // Abstände in mm; bleiben beim Wechsel der Art und nach dem Anklicken eines Bezugs erhalten
 const WORLD_AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }; // wie in der Exportdatei (Z oben = Szene +Y), durch den Ursprung
 function renderPatView(title: string, axes: [string, string][], cross: boolean, note: string, pick: () => void, run: (mode: PatMode, axis: string) => void) {
-  const m = patView!.mode, lab = { lin: 'Richtung', rot: 'Drehachse', mir: 'Senkrecht zur Ebene' }[m];
+  const m = patView!.mode, lab = { lin: 'Basis-Richtung', rot: 'Drehachse', mir: 'Senkrecht zur Ebene' }[m];
   const tab = (k: PatMode, t: string) => `<button data-m="${k}"${k === m ? ' class="on"' : ''}>${t}</button>`;
-  panel.innerHTML = `<h3>${title}</h3><div class="seg">${tab('lin', 'Reihe')}${tab('rot', 'Kreis')}${tab('mir', 'Spiegeln')}</div>
+  const num = (cls: string, v: number) => `<div class="f">Anzahl<div class="r"><input class="${cls}" type="number" min="1" value="${v}"><button class="st" data-c="${cls}" data-d="-1">−</button><button class="st" data-c="${cls}" data-d="1">+</button></div></div>`;
+  const dist = (cls: string, v: number, flip: string) => `<div class="f">Abstand (${display.unit})<div class="r"><input class="${cls}" type="number" step="0.5" value="${uval(v)}"><button class="${flip}" title="Richtung umkehren">⇄</button></div></div>`;
+  panel.classList.add('wide');
+  panel.innerHTML = `<h3>${title}<button class="x" title="Schließen (Esc)">✕</button></h3><div class="seg">${tab('lin', 'Reihe')}${tab('rot', 'Kreis')}${tab('mir', 'Spiegeln')}</div>
     <label>${lab} <select class="ax">${axes.map(([v, t]) => `<option value="${v}"${v === patVals.ax ? ' selected' : ''}>${t}</option>`).join('')}${patRef ? `<option value="ref"${patVals.ax === 'ref' ? ' selected' : ''}>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>` +
-    (m !== 'mir' ? `<label>${m === 'rot' ? 'Anzahl auf 360°' : 'Anzahl'} <input class="cnt" type="number" min="2" value="${patVals.cnt}"></label>` : '') +
-    (m === 'lin' ? `<label>Abstand <span class="row2"><button class="flip" title="Richtung umkehren">⇄</button><input class="dist" type="number" step="0.5" value="${uval(patVals.dist)}"></span></label>` : '') +
-    (m === 'lin' && cross ? `<label>Reihen quer dazu <input class="cnt2" type="number" min="1" value="${patVals.cnt2}"></label><label>Abstand quer <input class="dist2" type="number" step="0.5" value="${uval(patVals.dist2)}"></label>` : '') +
+    (m === 'lin' ? `<fieldset><legend>Richtung 1 (längs)</legend>${num('cnt', patVals.cnt)}${dist('dist', patVals.dist, 'flip')}</fieldset>` : '') +
+    (m === 'lin' && cross ? `<fieldset><legend>Richtung 2 (quer)</legend>${num('cnt2', patVals.cnt2)}${dist('dist2', patVals.dist2, 'flip2')}</fieldset>` : '') +
+    (m === 'rot' ? `<fieldset><legend>Auf 360° verteilt</legend>${num('cnt', patVals.cnt)}</fieldset>` : '') +
     (note ? `<p style="color:var(--muted);margin:4px 0">${note}</p>` : '') +
-    `<button class="act run">${{ lin: 'Reihe anlegen', rot: 'Kreis anlegen', mir: 'Spiegeln' }[m]}</button><button class="act back">Zurück</button>`;
+    `<button class="act run">${{ lin: 'Muster erstellen', rot: 'Kreis erstellen', mir: 'Spiegeln' }[m]}</button><button class="act back">Abbrechen</button>`;
   const q = <T extends HTMLElement>(c: string) => panel.querySelector<T>(c);
   const keep = () => {
     const n = (c: string) => parseFloat(q<HTMLInputElement>(c)?.value ?? '');
@@ -2124,14 +2128,15 @@ function renderPatView(title: string, axes: [string, string][], cross: boolean, 
     if (ax.value === 'pick') { pick(); return showHint('Kante (Richtung) oder ebene Fläche (Normale/Spiegelebene) anklicken · Esc = abbrechen'); }
     patVals.ax = ax.value;
   };
-  q<HTMLButtonElement>('.flip')?.addEventListener('click', e => { e.preventDefault(); const d = q<HTMLInputElement>('.dist')!; d.value = String(-parseFloat(d.value)); });
+  for (const [btn, inp] of [['.flip', '.dist'], ['.flip2', '.dist2']]) q<HTMLButtonElement>(btn)?.addEventListener('click', () => { const d = q<HTMLInputElement>(inp)!; d.value = String(-parseFloat(d.value)); });
+  panel.querySelectorAll<HTMLButtonElement>('.st').forEach(b => b.onclick = () => { const i = q<HTMLInputElement>('.' + b.dataset.c)!; i.value = String(Math.max(b.dataset.c === 'cnt' ? 2 : 1, (parseInt(i.value) || 1) + +b.dataset.d!)); });
   q<HTMLButtonElement>('.run')!.onclick = () => { keep(); const mode = patView!.mode; patView = null; run(mode, patVals.ax); };
-  q<HTMLButtonElement>('.back')!.onclick = () => { patView = null; patRef = null; renderPanel(); };
+  for (const c of ['.back', '.x']) q<HTMLButtonElement>(c)!.onclick = () => { patView = null; patRef = null; renderPanel(); };
 }
 // Skizze: ein Muster-Schritt, bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit. Mehrfachauswahl wird gemeinsam vervielfältigt
 function renderSketchPat(f: Extrude) {
   const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
-  renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [['u', 'x der Skizze'], ['v', 'y der Skizze'], ['X', 'X'], ['Y', 'Y'], ['Z', 'Z']], true,
+  renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [['u', 'X-Achse der Skizze'], ['v', 'Y-Achse der Skizze'], ['X', 'Welt X'], ['Y', 'Welt Y'], ['Z', 'Welt Z']], true,
     multi.size ? `Wirkt auf alle ${multi.size + 1} ausgewählten Skizzen` : '', () => { patPickFor = f.id; }, (mode, a) => {
       // u/v liegen in der Fläche der Skizze (Seitenwand ohne Raten der Weltachse), Kreis dann um den Skizzenursprung
       const { ax, c } = a === 'ref' && patRef ? patRef : a === 'u' || a === 'v' ? { ax: f[a], c: f.o } : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec };
@@ -2284,17 +2289,25 @@ function showMeasure() {
 // ---------- Ansichten ----------
 const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], bottom: [0, -1, 1e-4], front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0] };
 // Kamera weich zu neuer Lage fahren (300 ms), statt zu springen
-let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number } | null = null;
+let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number; spin?: number } | null = null;
 function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
   fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now() };
 }
 function stepFly() {
   if (!fly) return;
   const t = Math.min(1, (performance.now() - fly.start) / 300), s = t * t * (3 - 2 * t);
-  camera.position.lerpVectors(fly.p0, fly.p1, s);
+  if (fly.spin) camera.position.copy(fly.p0).sub(fly.t0).applyAxisAngle(new THREE.Vector3(0, 1, 0), fly.spin * s).add(fly.t0); // auf dem Kreis, sonst ginge der Abstand unterwegs verloren
+  else camera.position.lerpVectors(fly.p0, fly.p1, s);
   controls.target.lerpVectors(fly.t0, fly.t1, s);
   if (t === 1) fly = null;
 }
+// Ansicht um die Hochachse drehen; in der Draufsicht dreht das den Grundriss im Bild
+function turnView(dir: number) {
+  if (fly) return;
+  flyTo(camera.position.clone(), controls.target.clone());
+  fly!.spin = dir * Math.PI / 2;
+}
+document.querySelectorAll<HTMLButtonElement>('#cubeTurn button').forEach(b => b.onclick = () => turnView(+b.dataset.turn!));
 function setView(name: string) {
   if (name === 'fit') return fitView();
   const dist = camera.position.distanceTo(controls.target);
@@ -2355,6 +2368,10 @@ for (const [view, label, rot] of [['front', 'VORNE', [0, 0, 0]], ['back', 'HINTE
   o.position.copy(V(VIEWS[view]).normalize().multiplyScalar(28));
   cubeScene.add(o);
 }
+$('cube').ondblclick = () => { // Standardansicht: Iso, Modell im Bild
+  fitView();
+  if (fly) fly.p1 = fly.t1.clone().addScaledVector(V(VIEWS.iso).normalize(), fly.p1.distanceTo(fly.t1));
+};
 function renderCube() {
   cubeCam.position.copy(camera.position).sub(controls.target).normalize().multiplyScalar(220);
   cubeCam.quaternion.copy(camera.quaternion);
@@ -2402,7 +2419,7 @@ function applyDisplay() {
   document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => {
     const v = display[b.dataset.show as 'wire'];
     b.classList.toggle('on', !!v);
-    if (b.dataset.show === 'section') b.textContent = display.section ? `Schnitt ${'XYZ'[display.section - 1]}` : 'Schnitt';
+    if (b.dataset.show === 'section') b.lastChild!.textContent = display.section ? `Schnitt ${'XYZ'[display.section - 1]}` : 'Schnitt';
   });
   $<HTMLInputElement>('bodyColor').value = display.color;
   $('secOff').style.display = display.section ? '' : 'none';
@@ -2430,11 +2447,27 @@ const ICONS: Partial<Record<Tool, string>> = {
   select: '<path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z"/>', rect: '<rect x="2" y="4" width="12" height="8"/>', circle: '<circle cx="8" cy="8" r="5.5"/>',
   ngon: '<path d="M8 2l5.2 3v6L8 14l-5.2-3V5z"/>', slot: '<rect x="1.5" y="5" width="13" height="6" rx="3"/>', line: '<path d="M2 13L6 4l8 5"/><circle cx="6" cy="4" r="1"/>',
   spline: '<path d="M2 12c3-9 6 3 12-8"/>', ellipse: '<ellipse cx="8" cy="8" rx="6.5" ry="4"/>', arc: '<path d="M2 12A7 7 0 0 1 14 12"/><circle cx="8" cy="5" r="1"/>', plane: '<path d="M1.5 12l4-8h9l-4 8z"/>', shell: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M5 6.5l3 1.5 3-1.5"/>', measure: '<path d="M2 11L11 2l3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/>',
+  text: '<path d="M3 4V2.5h10V4 M8 2.5v11 M6 13.5h4"/>', aux: '<path d="M1.5 8h2 M6 8h2 M10.5 8h2" stroke-dasharray="none"/>', trim: '<circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><path d="M5.5 5.5L14 12 M5.5 10.5L14 4"/>',
 };
+const ICONS2: Record<string, string> = {
+  move: '<path d="M8 1.5v13 M1.5 8h13 M8 1.5L6.5 3 M8 1.5L9.5 3 M8 14.5L6.5 13 M8 14.5L9.5 13 M1.5 8L3 6.5 M1.5 8L3 9.5 M14.5 8L13 6.5 M14.5 8L13 9.5"/>',
+  pattern: '<circle cx="3.5" cy="3.5" r="1"/><circle cx="8" cy="3.5" r="1"/><circle cx="12.5" cy="3.5" r="1"/><circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/><circle cx="3.5" cy="12.5" r="1"/><circle cx="8" cy="12.5" r="1"/><circle cx="12.5" cy="12.5" r="1"/>',
+  mirror: '<path d="M8 1.5v13 M6 4L1.5 12H6z M10 4l4.5 8H10z"/>',
+  bNew: '<path d="M4 1.5h5.5L12.5 4.5v10H4z M9.5 1.5v3h3 M13 1v3 M11.5 2.5h3"/>', bOpen: '<path d="M1.5 13V3.5h4.5l1.5 1.5h5.5V7 M1.5 13l2.5-6h10.5l-2.5 6z"/>', bSave: '<path d="M2.5 2.5h9l2 2v9h-11z M5 2.5v4h5v-4 M5 13.5v-4.5h6v4.5"/>',
+  bUndo: '<path d="M6 3L2.5 6.5 6 10 M2.5 6.5H10a3.5 3.5 0 0 1 0 7H7"/>', bRedo: '<path d="M10 3l3.5 3.5L10 10 M13.5 6.5H6a3.5 3.5 0 0 0 0 7h3"/>',
+  bStl: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M2 5l6 3 6-3 M8 8v6"/>', bStep: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M2 5l6 3 6-3 M8 8v6"/>', bSvg: '<path d="M2 14V3l11 11z M5 11V8.5L7.5 11z M4 14v-1.5 M7 14v-1.5 M10 14v-1.5"/>',
+  iso: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M2 5l6 3 6-3 M8 8v6"/>', top: '<path d="M2 5l6-3 6 3-6 3z M2 5v6l6 3 6-3V5 M8 8v6"/>', front: '<rect x="3" y="5" width="8.5" height="8.5"/><path d="M3 5l2.5-2.5H14v8.5l-2.5 2.5 M11.5 5L14 2.5"/>', right: '<rect x="4.5" y="2.5" width="8.5" height="8.5"/><path d="M4.5 2.5L2 5v8.5h8.5l2.5-2.5 M2 13.5L4.5 11"/>',
+  fit: '<path d="M2 6V2h4 M10 2h4v4 M14 10v4h-4 M6 14H2v-4 M2 2l4 4 M14 2l-4 4 M14 14l-4-4 M2 14l4-4"/>', wire: '<path d="M2 2h12v12H2z M6 2v12 M10 2v12 M2 6h12 M2 10h12"/>', glass: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M2 5l6 3 6-3 M8 8v6" stroke-dasharray="1.5 1.5"/>',
+  edges: '<rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M2.5 13.5L13.5 2.5"/>', section: '<path d="M3 5l4-3v9l-4 3z M9 5l4-3v9l-4 3z" stroke-dasharray="1.5 1.5"/>', render: '<circle cx="8" cy="8" r="6"/><path d="M5 5.5a3.5 3.5 0 0 1 3-1.5"/>',
+  bSnap: '<path d="M3 2.5v6a5 5 0 0 0 10 0v-6h-3v6a2 2 0 0 1-4 0v-6z M3 5h3 M10 5h3"/>',
+};
+const svgOf = (k: string, cls = '') => `<svg class="${cls}" viewBox="0 0 16 16">${ICONS2[k] ?? ''}</svg>`;
+document.querySelectorAll<HTMLButtonElement>('#top button').forEach(b => b.insertAdjacentHTML('afterbegin', svgOf(b.id, ['bOpen', 'bStl', 'bStep', 'bSvg'].includes(b.id) ? 'ac' : '')));
+document.querySelectorAll<HTMLButtonElement>('#views button').forEach(b => b.insertAdjacentHTML('afterbegin', svgOf(b.dataset.view ?? b.dataset.show ?? b.id)));
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => {
   const t = b.dataset.tool as Tool;
-  b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 16 16">${ICONS[t] ?? ''}</svg>`);
-  b.title = HINTS[t];
+  b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 16 16">${ICONS[t] ?? ICONS2[b.dataset.act!] ?? ''}</svg>`);
+  if (t) b.title = HINTS[t];
 });
 document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => b.onclick = () => {
   const k = b.dataset.show as 'wire' | 'glass' | 'edges' | 'render' | 'section';
