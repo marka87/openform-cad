@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea } from './model';
+import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -317,10 +317,10 @@ function rebuild() {
       return;
     }
     const o =f.type === 'sweep' ? (f.id === selId ? pathLine(f) : null)
-      : !isExtrude(f) ? ('at' in f && f.id === selId ? edgeMarker(f) : null)
+      : !isExtrude(f) ? ('at' in f && (f.id === selId || multi.has(f.id)) ? edgeMarker(f) : null)
       : noFace(f) ? auxLine(f)
       : isFlat(f) ? buildMesh(f, 'sketch')
-      : drag?.kind === 'push' && drag.started && drag.f === f ? buildMesh(f, isCut(f) ? 'cut' : 'add')
+      : drag?.kind === 'push' && drag.started && (drag.f === f || drag.more?.some((o: { f: Feature }) => o.f === f)) ? buildMesh(f, isCut(f) ? 'cut' : 'add')
       : f.id === selId || multi.has(f.id) ? buildMesh(f, 'outline') : null;
     if (!o) return;
     if (o.matrixAutoUpdate) o.updateMatrix();
@@ -820,6 +820,7 @@ function applyTyped() {
     const m = pushTo(drag.part, drag.f0, v[0]);
     if (m === null) return showNotice('Für diese Fläche gibt es kein eintippbares Maß');
     applyPush(drag.f, drag.f0, drag.part, drag.k, m * drag.k, drag.i);
+    for (const o of drag.more ?? []) applyPush(o.f, o.f0, 'end', drag.k, pushTo('end', o.f0, v[0])! * drag.k); // alle auf dasselbe Maß
     if (drag.part === 'seg' && !constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.f.pts = drag.f0.pts;
     drag = null; controls.enabled = true; refresh();
   } else if (drag?.kind === 'sketch') {
@@ -1158,7 +1159,8 @@ function onDown(e: PointerEvent) {
     if (!h.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; }
     const g = h.grip;
     if (e.shiftKey || e.ctrlKey) { toggleSel(g.f.id); refresh(); return; }
-    if (!multi.has(g.f.id)) multi.clear();
+    if (!multi.has(g.f.id)) { if (g.f.id !== selId) multi.clear(); }
+    else if (selId !== null) { multi.delete(g.f.id); multi.add(selId); } // Griff an einer markierten Skizze: die anderen bleiben markiert
     selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
     if (g.part === 'import') return; // Import ohne Körpernummer: nur auswählen
     if (g.part === 'plane') { drag = { kind: 'plane', f: g.f, off0: g.f.off, P0: h.point, D: V(g.f.n), sx: e.clientX, sy: e.clientY, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; }
@@ -1245,6 +1247,12 @@ function onMove(e: PointerEvent) {
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.started = true; pushHistory(); el.style.cursor = 'grabbing';
+      if (drag.kind === 'push') drag.more = pullTogether(drag.f, drag.part, [...multi].map(getById)).map(g => {
+        // shortcut: Vieleck geht ohne eigenen Bereich mit, die Mitte seines Quaders liegt nicht sicher in der Form
+        const q = isFlat(g) && g.type !== 'poly' && regionFeature(features, g, bounds(g).map(([lo, hi]) => (lo + hi) / 2), nextId);
+        if (q) { nextId++; add(q); multi.delete(g.id); multi.add(q.id); }
+        return { f: q || g, f0: structuredClone(q || g) };
+      });
       const r = drag.kind === 'push' && Math.abs(drag.f.d) < 1e-6 && regionFeature(features, drag.f, drag.P0.toArray(), nextId);
       if (r) { nextId++; add(r); drag.f = r; drag.f0 = structuredClone(r); selId = r.id; } // nur den Bereich ziehen
     }
@@ -1263,8 +1271,14 @@ function onMove(e: PointerEvent) {
         const inward = b && (b.x - a.x) * (e.clientX - drag.sx) - (b.y - a.y) * (e.clientY - drag.sy) < 0;
         drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         add(drag.f); selId = drag.f.id;
+        // Gezogene Kante gehört zur Markierung: alle markierten Kanten gleich mitrunden
+        const others = edgeSel.some(a => sameEdge(a, drag.edge, 4 * pxSize())) ? edgeSel.filter(a => !sameEdge(a, drag.edge, 4 * pxSize())) : [];
+        multi.clear(); edgeSel = [];
+        drag.more = others.map(a => { const g: EdgeOp = { id: nextId++, type: drag.f.type, at: a.at, dir: a.dir, r: 1, body: a.body }; add(g); multi.add(g.id); return g; });
       }
+      drag.more ??= [...multi].map(getById).filter(isEdgeOp);
       drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, pullStep()));
+      for (const o of drag.more) o.r = drag.f.r;
       rebuild();
       return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${len(drag.f.r)}`);
     }
@@ -1300,6 +1314,7 @@ function onMove(e: PointerEvent) {
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
     const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, pullStep()), drag.i);
+    for (const o of drag.more ?? []) applyPush(o.f, o.f0, 'end', drag.k, snap(s, e, pullStep()));
     if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
@@ -1319,7 +1334,7 @@ el.addEventListener('pointerup', e => {
   if (drag.kind === 'sketch' && !finishSketch()) { drag.armed = true; controls.enabled = true; return showHud(e, TOO_THIN); }
   if (drag.kind === 'box') boxSelect(drag);
   if (drag.kind === 'edge' && !drag.started && !drag.f) {
-    const near = (a: { at: Vec }) => V(a.at).distanceTo(V(drag.edge.at)) < 4 * pxSize();
+    const near = (a: { at: Vec; dir: Vec }) => sameEdge(a, drag.edge, 4 * pxSize());
     edgeSel = e.shiftKey || e.ctrlKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
     selId = selBody = null; multi.clear();
   }
@@ -1332,7 +1347,7 @@ el.addEventListener('pointerup', e => {
   if (drag.kind === 'line' && drag.arc && !drag.started && poly && tool === 'line' && !poly.smooth) { drag = null; controls.enabled = true; return finishPoly(false); } // Klick auf den letzten Punkt
   hideSnap();
   const wasLine = drag.kind === 'line';
-  if (drag.kind === 'push' && drag.f.and && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f); // flacher Bereich bringt nichts
+  if (drag.kind === 'push') for (const o of [drag, ...drag.more ?? []]) if (o.f.and && Math.abs(o.f.d) < 1e-6) { features = features.filter(f => f !== o.f); multi.delete(o.f.id); } // flacher Bereich bringt nichts
   if (drag.kind === 'offset' && drag.f && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f);  // Versatz 0 bringt nichts
   drag = null;
   controls.enabled = true;
@@ -1743,18 +1758,20 @@ function renderImportPanel(f: Import) {
   panel.querySelector('p')!.textContent = f.name; // Dateiname nicht als HTML einsetzen
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
+const isEdgeOp = (g?: Feature): g is EdgeOp => g?.type === 'fillet' || g?.type === 'chamfer';
 function renderEdgePanel(f: EdgeOp) {
-  panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}</h3>
+  const more = [...multi].map(getById).filter(isEdgeOp); // markierte Rundungen und Fasen ändern sich mit
+  panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}${more.length ? ` + ${more.length} weitere` : ''}</h3>
     <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
     <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" value="${uval(f.r)}"></label>
     <button class="del">Löschen</button>`;
   const sel = panel.querySelector('select')!, inp = panel.querySelector('input')!;
   sel.value = f.type;
-  sel.onchange = () => { pushHistory(); f.type = sel.value as EdgeOp['type']; refresh(); };
+  sel.onchange = () => { pushHistory(); for (const g of [f, ...more]) g.type = sel.value as EdgeOp['type']; refresh(); };
   inp.onchange = () => {
     const v = mmOf(inp);
     if (!isFinite(v)) return;
-    pushHistory(); f.r = Math.max(0.5, v); refresh();
+    pushHistory(); for (const g of [f, ...more]) g.r = Math.max(0.5, v); refresh();
   };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
@@ -1796,7 +1813,7 @@ function renderShellPanel(f: Shell) {
 }
 // Mehrere Kanten auf einmal runden oder fasen (Shift+Klick auf Kanten)
 function renderEdgeSetPanel() {
-  panel.innerHTML = `<h3>${edgeSel.length} Kante${edgeSel.length > 1 ? 'n' : ''}</h3><p style="color:var(--muted);margin:0 0 6px">Shift+Klick = weitere Kanten</p>
+  panel.innerHTML = `<h3>${edgeSel.length} Kante${edgeSel.length > 1 ? 'n' : ''}</h3><p style="color:var(--muted);margin:0 0 6px">Shift+Klick = weitere Kanten · eine davon ziehen = alle runden</p>
     <label>Maß <input type="number" step="0.5" value="${uval(2)}" class="r"></label>
     <button class="act" data-t="fillet">Runden</button><button class="act" data-t="chamfer">Fasen</button>`;
   panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => {
@@ -2373,6 +2390,8 @@ for (const [name, n, u, v, pos] of [['XY-Ebene', [0, 1, 0], [1, 0, 0], [0, 0, -1
 scene.add(originPlanes);
 // Quadrat unter der Maus; Körper und Skizzen davor oder darauf behalten den Klick
 function originAt() {
+  originPlanes.scale.setScalar(pxSize()); // nicht aufs nächste Bild warten: sonst sind die Quadrate kurz zu groß und fangen Klicks ab
+  originPlanes.updateMatrixWorld(true);
   const hit = originPlanes.visible && ray.intersectObjects(originPlanes.children)[0];
   return hit && !pick().face ? hit.object : null;
 }

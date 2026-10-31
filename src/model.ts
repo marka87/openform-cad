@@ -491,6 +491,16 @@ export function bounds(f: Extrude) {
   return [0, 1, 2].map(k => [Math.min(...w.map(q => q[k])), Math.max(...w.map(q => q[k]))]);
 }
 
+// Markierte Skizzen, die beim Hochziehen von f mitgehen: nur beim Zug an der Deckfläche und nur in dieselbe Richtung
+export const pullTogether = (f: Extrude, part: Part, others: (Feature | undefined)[]) => part !== 'end' ? []
+  : others.filter((g): g is Extrude => !!g && isExtrude(g) && g !== f && !noFace(g) && !g.rev && dot(g.n, f.n) > 0.999);
+// Liegen zwei Klickpunkte auf derselben Kante? Punkt und Richtung reichen, der Klick darf irgendwo auf der Kante sitzen.
+// shortcut: bei Kreiskanten zählt nur die Tangente am Klickpunkt, zweiter Klick auf denselben Kreis gilt dann als andere Kante
+export function sameEdge(a: { at: Vec; dir: Vec }, b: { at: Vec; dir: Vec }, tol: number) {
+  const q = sub(b.at, a.at), L = Math.hypot(...a.dir), t = dot(q, a.dir) / L ** 2;
+  return Math.abs(dot(a.dir, b.dir)) / (L * Math.hypot(...b.dir)) > 0.999 && Math.hypot(...q.map((x, k) => x - t * a.dir[k])) < tol;
+}
+
 // Wird eine flache Skizze f an P gezogen und überschneidet sie andere flache Skizzen derselben Ebene,
 // entsteht ein eigener Bereich: in f und allen Nachbarn, die P enthalten, aber in keinem anderen. Sonst null.
 // shortcut: Überschneidung nur über umschließende Quader geprüft, Nachbarn ohne echte Überschneidung kosten eine Boolesche Operation

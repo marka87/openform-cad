@@ -4,7 +4,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
-import { applyPush, GROUND, linePlane, mirroredCopy, pushTo, rectSize, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { applyPush, GROUND, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -395,6 +395,21 @@ test('Zwei Kreise auf einer flachen Skizze hochziehen: der zweite bleibt, statt 
   expect([...r.errors]).toEqual([]);
   expect(measureVolume(r.body!)).toBeCloseTo(2 * Math.PI * 25 * 4, 1);
   expect((fs.find(f => f.id === 3) as Extrude).onFace).toBe(false); // die Skizze lag nie auf einer Körperfläche
+});
+
+test('Gemeinsam ziehen: nur Skizzen gleicher Richtung am Deckel; zwei markierte Kanten auf einmal gerundet', () => {
+  const a = circle(GROUND, [-20, 0], 5, 1, 0, false), b = circle(GROUND, [20, 0], 5, 2, 0, false), wand = circle({ o: [0, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] }, [0, 0], 5, 3, 0, false);
+  const linie = { ...GROUND, id: 4, type: 'line', p: {}, d: 0, open: true, pts: [[0, 0], [5, 5]] } as Extrude;
+  expect(pullTogether(a, 'end', [b, wand, linie, a, undefined]).map(f => f.id)).toEqual([2]);
+  expect(pullTogether(a, 'start', [b])).toEqual([]);
+  const kante = { at: [10, 2, 0] as Vec, dir: [0, 1, 0] as Vec };
+  expect(sameEdge(kante, { at: [10, 7, 0], dir: [0, -2, 0] }, 0.1)).toBe(true); // irgendwo auf derselben Kante, Richtung egal
+  expect(sameEdge(kante, { at: [12, 2, 0], dir: [0, 1, 0] }, 0.1)).toBe(false); // parallele Kante daneben
+  expect(sameEdge(kante, { at: [10, 2, 0], dir: [1, 0, 0] }, 0.1)).toBe(false); // andere Kante an derselben Ecke
+  const block = rect(GROUND, [0, 0], [20, 10], 1, 5, false), fs: Feature[] = [block, edge('fillet', 2, [0, 2, 0], [0, 1, 0], 1.5), edge('fillet', 3, [20, 2, -10], [0, 1, 0], 1.5)];
+  const { r } = settle(fs);
+  expect([...r.errors]).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(1000 - 2 * 5 * 1.5 ** 2 * (1 - Math.PI / 4), 2);
 });
 
 test('Rechteck aus der Mitte behält die Mitte: Maß tippen und Seite ziehen', () => {
