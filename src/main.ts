@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -555,6 +555,7 @@ function nameOf(f: Feature) {
   if (f.type === 'line') return 'Linie';
   if (f.ball) return 'Kugel';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
+  if (isSlot(f)) return 'Langloch';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   if (f.p.ry) return isCut(f) ? 'Tasche' : 'Ellipse';
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
@@ -893,7 +894,10 @@ function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extr
   if (tool === 'rect' && rectMode === 'center') { const f = sketchFeature('rect', pl, [2 * a[0] - b[0], 2 * a[1] - b[1]], b, nextId, onFace); return f && { ...f, mid: true }; }
   if (tool === 'rect' && rectMode === '3pt') return null; // erst die Kante; Vorschau als Linie in onMove
   if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonPts(a, b, sides), nextId, onFace);
-  if (tool === 'slot') return Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
+  if (tool === 'slot') {
+    const f = Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
+    return f && { ...f, slot: true };
+  }
   if (tool === 'ellipse') return ellipseFeature(pl, a, b, nextId, onFace);
   if (tool === 'sphere') { const f = sketchFeature('circle', pl, a, b, nextId, onFace); return f && { ...f, rev: 360, ball: true }; }
   return sketchFeature(tool as 'rect' | 'circle', pl, a, b, nextId, onFace);
@@ -1433,7 +1437,8 @@ function onMove(e: PointerEvent) {
         rebuild();
         return showHud(e, `Pfadpunkt ${fmt(q[0])} / ${len(q[1])}`);
       }
-      movePoint(drag.f, drag.f0, drag.i, q);
+      if (isSlot(drag.f)) drag.f.pts = slotMoveEnd(drag.f0.pts, drag.i, slotPull(drag.f0.pts, drag.i, q)); // Langloch bleibt Langloch, nur die Länge ändert sich
+      else movePoint(drag.f, drag.f0, drag.i, q);
       if (constrain(drag.f, [drag.i])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts; // gezogener Punkt bleibt, Rest folgt
       rebuild();
       return showHud(e, `Punkt ${fmt(q[0])} / ${len(q[1])}`);
@@ -1665,7 +1670,8 @@ function renderFeaturePanel() {
     (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '');
   panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
-    (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
+    (isSlot(f) ? `<details open class="cons"><summary>Maße</summary><label>Länge <input type="number" step="0.5" class="len" data-i="0" value="${uval(sideLen(f.pts!, 0))}"></label><label>Radius <input type="number" step="0.5" class="rad" data-i="1" value="${uval(arcR(f.pts!, 1))}"></label><button class="act free" title="Jede Seite und jeder Bogen lässt sich dann einzeln ändern">Freie Form</button></details>`
+      : f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
     (f.rev && !f.ball ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
@@ -1754,6 +1760,13 @@ function consHtml(f: Extrude) {
     (f.cons ?? []).map((c, k) => `<div class="con">${conText(c)}<button data-k="${k}" title="entfernen">✕</button></div>`).join('') + `</details>`;
 }
 function bindCons(f: Extrude) {
+  if (isSlot(f)) {
+    const set = (cls: string, to: (v: number) => number[][]) => { const inp = panel.querySelector<HTMLInputElement>(`.cons input.${cls}`)!; inp.onchange = () => { const v = mmOf(inp); if (isFinite(v) && v > 0) { pushHistory(); f.pts = to(v); } refresh(); }; };
+    set('len', v => slotLength(f.pts!, v));
+    set('rad', v => slotRadius(f.pts!, v));
+    panel.querySelector<HTMLButtonElement>('.free')!.onclick = () => { pushHistory(); delete f.slot; refresh(); };
+    return;
+  }
   // Abhängigkeit setzen (gleiche ersetzen), Seite i bleibt stehen; widerspricht sie, bleibt alles wie vorher
   const addCon = (c: Con) => {
     const pts0 = f.pts!, cons0 = f.cons ?? [];
@@ -1848,6 +1861,7 @@ function buildDims(of?: Extrude, live = false) {
   pts.forEach((a, i) => {
     if (f.open && i === pts.length - 1) return; // offene Linie: kein Schlusssegment
     if (live && i !== (f.open ? pts.length - 2 : 0)) return; // beim Zeichnen nur die Seite, die gerade entsteht
+    if (isSlot(f) && i > 1) return; // Langloch: eine Länge und ein Radius reichen, die Gegenseiten sind gleich
     const b = pts[(i + 1) % pts.length], c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     if (a[2]) { // Bogen: Radius am Scheitel
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]), s = a[2] * L / 2, r = L * (1 + a[2] ** 2) / (4 * Math.abs(a[2]));

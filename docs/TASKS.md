@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
 - **0.14.1** Körperraster kräftiger und 175 % der Fläche groß
@@ -168,6 +169,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Langloch (0.16.0). Abhängigkeiten im Löser taugen dafür nicht: parallel, gleich lang und tangential zusammen scheitern schon an
+  einer neuen Länge. Deshalb eigene Regeln statt Löser, die Form hängt am Merkmal slot. Länge gemessen an Seite 0, das Ende bei Punkt 0 und 3
+  bleibt stehen, damit die Richtung nicht davon abhängt, welche Seite man anfasst. Vorhandene Langlöcher bleiben freie Form.
 - 2026-10-31 Nähte (0.15.1). Eine Naht gehört nur zu einer Fläche, jede echte Kante eines geschlossenen Körpers zu zweien; so fallen sie
   aus dem Kantennetz fürs Bild. Dazu Kanten zwischen zwei Teilen derselben runden Fläche, denn ein Kreis wird beim Hochziehen zu zwei
   Halbzylindern; Vergleich über Art und Maße der Fläche. Das B-Rep und die Exporte bleiben unberührt. Offene Flächenkörper würden ihre Randkanten verlieren, die

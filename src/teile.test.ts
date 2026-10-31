@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -554,4 +554,36 @@ test('Kantennetz: Nähte von Kugel und Zylinder fallen weg, echte Kanten bleiben
   // Bohrung: nur die beiden Kreise an den Enden, beim Abziehen wird der Zylinder wieder eine Fläche mit Naht
   const loch = shownEdges(buildBody([rect(GROUND, [-20, -20], [20, 20], 1, 10, false), circle(top(10), [0, 0], 4, 2, -10)]).body!, mesh);
   expect(loch.edges.length / 2).toBe(12 + 2);
+});
+
+test('Langloch: Länge und Radius ändern beide Seiten gemeinsam, freie Form ändert einzeln', () => {
+  const pts = slotPts([0, 0], [30, 10]); // Gerade 20, Radius 5
+  const soll = (L: number, r: number, x = 5, y = 0) => [[x, y], [x + L, y, 1], [x + L, y + 2 * r], [x, y + 2 * r, 1]];
+  expect(slotLength(pts, 40)).toEqual(soll(40, 5));
+  expect(slotRadius(pts, 8)).toEqual(soll(20, 8, 5, -3));
+  // Punkt am rechten Ende ziehen: oben und unten laufen mit, auch wenn die Maus schräg steht
+  expect(slotMoveEnd(pts, 2, slotPull(pts, 2, [35, 99]))).toEqual(soll(30, 5));
+  // Punkt am linken Ende: dort wandert das Ende
+  expect(slotMoveEnd(pts, 0, slotPull(pts, 0, [0, -7]))).toEqual(soll(25, 5, 0));
+  // nicht durch das andere Ende hindurch, auch nicht mit der kleinsten Länge
+  expect(slotMoveEnd(pts, 1, -100)).toEqual(pts);
+  expect(slotLength(pts, 0)[1][0]).toBeCloseTo(5.5);
+  // Bogen ziehen: Ende wandert nach außen, links in die Gegenrichtung
+  const f = { ...sketchFeature('rect', GROUND, [0, 0], [10, 10], 1, false)!, type: 'poly', p: {}, pts, slot: true, d: 0 } as Extrude;
+  expect(isSlot(f)).toBe(true);
+  const rechts = structuredClone(f), links = structuredClone(f);
+  applyPush(rechts, f, 'arc', 1, 4, 1);
+  expect(rechts.pts).toEqual(soll(24, 5));
+  applyPush(links, f, 'arc', 1, 4, 3);
+  expect(links.pts).toEqual(soll(24, 5, 1));
+  // ohne das Merkmal: frei wie bisher
+  delete f.slot;
+  expect(isSlot(f)).toBe(false);
+  const frei = structuredClone(f);
+  applyPush(frei, f, 'arc', 1, 4, 1);
+  expect(frei.pts![1].slice(0, 2)).toEqual([25, 0]);
+  // bleibt ein gültiger Körper
+  const r = buildBody([{ ...f, slot: true, pts: slotLength(pts, 40), d: 10 } as Extrude]);
+  expect(valid(r.body!)).toBe(true);
+  expect(measureVolume(r.body!)).toBeCloseTo((40 * 10 + Math.PI * 25) * 10, 2);
 });

@@ -18,6 +18,7 @@ export interface Extrude extends Frame {
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
+  slot?: boolean;            // Langloch: bleibt beim Ändern eines (gerade Seiten 0 und 2, Halbkreise 1 und 3); „Freie Form“ nimmt das Merkmal weg
   ball?: boolean;            // Kugel: Kreis, der sich um die Achse durch seine Mitte dreht
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
@@ -200,6 +201,29 @@ export function slotPts(a: number[], b: number[]): number[][] {
   const r = (x1 - x0) / 2;
   return [[x1, y0 + r], [x1, y1 - r, 1], [x0, y1 - r], [x0, y0 + r, 1]];
 }
+
+export const isSlot = (f: Extrude) => !!f.slot && f.pts?.length === 4 && !!f.pts[1][2] && !!f.pts[3][2];
+const slotAxis = (pts: number[][]) => { const L = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]); return { L, d: [(pts[1][0] - pts[0][0]) / L, (pts[1][1] - pts[0][1]) / L] }; };
+const shifted = (q: number[], d: number[], t: number) => [q[0] + d[0] * t, q[1] + d[1] * t, ...q.slice(2)];
+// Länge der geraden Seiten: beide wachsen gemeinsam, das Ende an Punkt 0 und 3 bleibt stehen, egal an welcher Seite gemessen wird
+export function slotLength(pts: number[][], L: number) {
+  const a = slotAxis(pts), t = Math.max(0.5, L) - a.L;
+  return pts.map((q, i) => i === 1 || i === 2 ? shifted(q, a.d, t) : [...q]);
+}
+// Radius: die Mittellinie bleibt, beide Halbkreise ändern sich gemeinsam
+export function slotRadius(pts: number[][], r: number) {
+  const { d } = slotAxis(pts), n = [-d[1], d[0]], r0 = Math.hypot(pts[3][0] - pts[0][0], pts[3][1] - pts[0][1]) / 2, s = (pts[3][0] - pts[0][0]) * n[0] + (pts[3][1] - pts[0][1]) * n[1] > 0 ? 1 : -1;
+  const t = (Math.max(0.5, r) - r0) * s;
+  return pts.map((q, i) => shifted(q, n, i === 0 || i === 1 ? -t : t));
+}
+// Ein Ende entlang der Achse verschieben (Punkt ziehen, Bogen ziehen): t in Achsrichtung, i = gefasster Punkt
+export function slotMoveEnd(pts: number[][], i: number, t: number) {
+  const a = slotAxis(pts), far = i === 1 || i === 2;
+  if (a.L + (far ? t : -t) < 0.5) return pts.map(q => [...q]); // nicht durch das andere Ende hindurch
+  return pts.map((q, n) => (n === 1 || n === 2) === far ? shifted(q, a.d, t) : [...q]);
+}
+// Punkt q auf die Achse abgebildet: um wie viel das Ende an Punkt i wandert
+export const slotPull = (pts: number[][], i: number, q: number[]) => { const { d } = slotAxis(pts); return (q[0] - pts[i][0]) * d[0] + (q[1] - pts[i][1]) * d[1]; };
 
 // Bogen von a nach b als Punktfolge (ohne a), für Vorschau, Darstellung und Innen-Test
 export function arcPoints(a: number[], b: number[], bulge: number, n = 24): number[][] {
@@ -682,6 +706,10 @@ export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: num
       return ['Versatz', m];
     }
     case 'arc': { // Pfeilhöhe ändern, Endpunkte bleiben stehen
+      if (isSlot(f0)) { // Langloch: Halbkreis bleibt, das Ende wandert nach außen
+        f.pts = slotMoveEnd(f0.pts!, i, i === 1 ? m : -m);
+        return ['Länge', Math.hypot(f.pts[1][0] - f.pts[0][0], f.pts[1][1] - f.pts[0][1])];
+      }
       const pts = f0.pts!, q = pts[i], c = arcInfo(q, pts[(i + 1) % pts.length], q[2]);
       const s = Math.max(0.1, c.s + m), bulge = Math.sign(q[2]) * 2 * s / c.L;
       f.pts = pts.map((p, n) => n === i ? [p[0], p[1], bulge] : [...p]);
