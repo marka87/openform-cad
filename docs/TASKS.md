@@ -121,12 +121,16 @@ Datenverlust = sofort ein Paket.
 - [Vergleich] Wollte: zwei markierte Flächen zusammen hochziehen, mehrere Kanten zusammen runden | Passiert: nur eine
   ging mit, Kanten nur übers Seitenfeld | Umweg: einzeln (0.9.0)
 
+- [Vergleich] Wollte: überlappendes Rechteck und Kreis zu einer Form trimmen | Passiert: Trimmen ging nur bei Hilfslinien
+  | Umweg: - (0.10.0)
+
 ### Teil 3: (Name, Datum, wofür)
 
 ## Versionen
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.10.0** Trimmen an Rechteck, Kreis, Vieleck und Linie, auch an Bögen; Reste verbinden sich zu einer Fläche
 - **0.9.0** Markierte Skizzen gemeinsam hochziehen; markierte Kanten durch Ziehen gemeinsam runden, Radius für alle
 - **0.8.1** Skizzen auf einer flachen Skizze hängen sich nicht mehr an die Unterseite eines Körpers
 - **0.8.0** Ebenen XY, XZ, YZ am Ursprung; Rechteck aus der Mitte behält die Mitte; Maße neben der Skizze;
@@ -150,6 +154,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Trimmen wie in Shapr3D (0.10.0, `src/trim.ts`). Stück unter der Maus wird rot angezeigt und weggeklickt.
+  Rechteck und Kreis werden dabei zu offenen Linienzügen; treffen sich Enden, werden sie eins, ein geschlossener Ring wird
+  wieder Fläche. Damit gehen Breite/Tiefe und Abhängigkeiten dieser Skizze verloren. Ellipse und Spline nur als Schnittkante.
 - 2026-10-31 Gemeinsam ändern (0.9.0). Ziehen an der Deckfläche nimmt markierte Skizzen gleicher Richtung mit, getippt
   gehen alle auf dasselbe Maß. Markierte Kanten: eine ziehen rundet alle, je Kante ein eigener Schritt; sie bleiben
   markiert, Radius und Art im Seitenfeld gelten für alle. Kanten mit gemeinsamer Ecke laufen weiter nacheinander durch den

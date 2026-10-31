@@ -12,11 +12,12 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
+import { pieceAt, piecePoints, trimFeatures, type Piece } from './trim';
 
 type Tool = 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
@@ -34,7 +35,7 @@ const HINTS: Record<Tool, string> = {
   measure: 'Zwei Punkte anklicken (Ecken und Kanten rasten ein) = Abstand; zwei Flächen = auch deren Winkel · dritter Klick beginnt neu',
   shell:  'Fläche des Körpers anklicken, die offen bleiben soll · Shift+Klick = weitere offene Fläche · Wandstärke im Seitenfeld',
   line:   'Punkte klicken · Zahl tippen + Enter = Länge in Mausrichtung · vom letzten Punkt aus ziehen = Bogen · Klick auf den ersten Punkt = Fläche · Doppelklick, Klick auf den letzten Punkt, Enter, Esc oder Rechtsklick = offene Linie fertig',
-  trim:   'Hilfslinie anklicken = Stück bis zu den nächsten Schnittpunkten entfernen · Shift+Klick nahe einem Ende = bis zur nächsten Linie verlängern',
+  trim:   'Stück einer Skizze anklicken = bis zu den nächsten Schnittpunkten entfernen; schließen sich die Reste, entsteht eine Fläche · Shift+Klick nahe dem Ende einer Hilfslinie = bis zur nächsten Linie verlängern',
   aux:    'Hilfslinie: Punkte klicken (bildet keine Fläche, nur zum Einrasten) · Enter = fertig · Klick auf den ersten Punkt = geschlossen · Esc = abbrechen',
   spline: 'Punkte klicken, die Kurve läuft glatt hindurch · Klick auf den ersten Punkt oder Enter = schließen · Esc = abbrechen',
 };
@@ -362,29 +363,42 @@ function rebuild() {
 }
 // Trimmen (Klick) bzw. Verlängern (Shift+Klick) der offenen Hilfslinie unter der Maus; Schnitte mit allen Linien der Ebene
 function trimAt(e: PointerEvent) {
+  if (!e.shiftKey) {
+    const t = trimTarget();
+    if (!t) return showHint('Hier liegt keine Skizzenlinie, die sich trimmen lässt (Ellipse und Spline gehen nicht, nur flache Skizzen)');
+    pushHistory();
+    ({ features, nextId } = trimFeatures(features, t, nextId));
+    clearSel(); disposeGroup(preview); refresh();
+    const now = getById(t.f.id);
+    if (now && isExtrude(now) && now.type === 'poly' && !now.open && !now.aux) showNotice('Umriss geschlossen: Die Fläche lässt sich jetzt hochziehen');
+    return;
+  }
   const f = auxPick !== null ? getById(auxPick) : undefined;
   if (!f || !isExtrude(f) || !f.open) return showHint('Nur offene Hilfslinien lassen sich trimmen und verlängern');
   const p = planeHit(f);
   if (!p) return;
   const q = toLocal(f, p), pts = f.pts!, segs = snapSegs(f).map(s => s.map(x => toLocal(f, V(x))));
-  const near = pts.slice(0, -1).map((a, i) => { // nächster Abschnitt und Stelle t darauf
-    const b = pts[i + 1], d = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((q[0] - a[0]) * d[0] + (q[1] - a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2)));
-    return { i, t, dist: Math.hypot(q[0] - a[0] - t * d[0], q[1] - a[1] - t * d[1]) };
-  }).sort((x, y) => x.dist - y.dist)[0];
-  if (e.shiftKey) {
-    const end = Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) ? 0 : 1;
-    const out = extendOpen(pts, end, segs);
-    if (!out) return showHint('In Verlängerung liegt keine Linie');
-    pushHistory(); f.pts = out; delete f.src; return refresh(); // von Hand geändert: wandert nicht mehr mit
+  const end = Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1]) < Math.hypot(q[0] - pts.at(-1)![0], q[1] - pts.at(-1)![1]) ? 0 : 1;
+  const out = extendOpen(pts, end, segs);
+  if (!out) return showHint('In Verlängerung liegt keine Linie');
+  pushHistory(); f.pts = out; delete f.src; refresh(); // von Hand geändert: wandert nicht mehr mit
+}
+// Stück unter der Maus: nächste flache Skizze innerhalb von 8 Pixeln
+function trimTarget() {
+  const fs = live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && isFlat(f) && !f.and);
+  let best: Piece | null = null;
+  for (const f of fs) {
+    const q = planeHit(f), p = q && pieceAt(f, fs, toLocal(f, q));
+    if (p && p.dist < 8 * pxSize() && (!best || p.dist < best.dist)) best = p;
   }
-  if (pts[near.i][2]) return showHint('Bögen lassen sich nicht trimmen – Bogen über seinen Punkt ändern');
-  const cuts = segs.map(([c, d]) => cutParam(pts[near.i], pts[near.i + 1], c, d)).filter((s): s is number => s !== null);
-  const parts = trimOpen(pts, near.i, near.t, cuts);
-  pushHistory();
-  if (!parts.length) { features.splice(features.indexOf(f), 1); clearSel(); return refresh(); }
-  f.pts = parts[0]; delete f.src;
-  if (parts[1]) add({ ...structuredClone(f), id: nextId++, pts: parts[1] });
-  refresh();
+  return best;
+}
+function showTrim() {
+  disposeGroup(preview);
+  const t = trimTarget();
+  if (!t) return;
+  const pts = piecePoints(t).map(([x, y]) => V(t.f.o).addScaledVector(V(t.f.u), x).addScaledVector(V(t.f.v), y));
+  preview.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xff5a5a, depthTest: false })));
 }
 // Kanten des Körpers unter dem Flächenraster als Hilfslinien in dessen Ebene legen (je Kante eine Linie, deckungsgleiche nur einmal).
 // Der Kern projiziert aus dem B-Rep (Kreise exakt) und liefert je Kante einen Bezug, über den die Linie mit dem Körper mitwandert (T5.5)
@@ -1177,6 +1191,7 @@ function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
   hoverOrigin(drag ? null : originAt());
+  if (tool === 'trim') return showTrim();
   hideSnap();
   if (!drag && (['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool) || (!poly && ['line', 'arc', 'spline', 'aux'].includes(tool)))) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
   if (rect3 && !drag) { // 3-Punkt-Rechteck: Breite = Abstand der Maus von der Kante

@@ -200,7 +200,7 @@ export function arcPoints(a: number[], b: number[], bulge: number, n = 24): numb
 }
 
 // Kreis eines Bogens: Mitte, Radius, Winkel th, Sehnenlänge L, Pfeilhöhe s und Richtung (wx, wy) von der Sehne zum Bogen
-function arcInfo(a: number[], b: number[], bulge: number) {
+export function arcInfo(a: number[], b: number[], bulge: number) {
   const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), th = 4 * Math.atan(bulge);
   const off = L / 2 / Math.tan(th / 2), cx = (a[0] + b[0]) / 2 - dy / L * off, cy = (a[1] + b[1]) / 2 + dx / L * off;
   const sg = Math.sign(bulge);
@@ -290,17 +290,6 @@ export function cutParam(a: number[], b: number[], c: number[], d: number[]) {
   if (Math.abs(den) < 1e-12) return null;
   const w = [c[0] - a[0], c[1] - a[1]], s = (w[0] * q[1] - w[1] * q[0]) / den, u = (w[0] * r[1] - w[1] * r[0]) / den;
   return s > 1e-6 && s < 1 - 1e-6 && u > -1e-9 && u < 1 + 1e-9 ? s : null;
-}
-
-// Offene Hilfslinie trimmen: auf Abschnitt i bei t (0..1) das Stück zwischen den nächsten Schnittpunkten
-// (cuts = Parameter auf Abschnitt i) entfernen; ohne Schnittpunkt auf einer Seite bis zum Ende des Abschnitts.
-// Ergebnis: die verbleibenden Linienzüge (0, 1 oder 2)
-export function trimOpen(pts: number[][], i: number, t: number, cuts: number[]): number[][][] {
-  const a = pts[i], b = pts[i + 1], P = (s: number) => [a[0] + s * (b[0] - a[0]), a[1] + s * (b[1] - a[1])];
-  const lo = Math.max(...cuts.filter(s => s < t), -1), hi = Math.min(...cuts.filter(s => s > t), 2);
-  const left = lo < 0 ? pts.slice(0, i + 1) : [...pts.slice(0, i + 1), P(lo)];
-  const right = hi > 1 ? pts.slice(i + 1) : [P(hi), ...pts.slice(i + 1)];
-  return [left, right].filter(l => l.length >= 2).map(l => l.map(p => [...p]));
 }
 
 // Ende (0 = Anfang, 1 = Ende) einer offenen Hilfslinie geradeaus bis zur nächsten der Strecken segs verlängern; null = trifft nichts

@@ -4,7 +4,8 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
-import { applyPush, GROUND, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { pieceAt, trimFeatures } from './trim';
+import { applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -410,6 +411,48 @@ test('Gemeinsam ziehen: nur Skizzen gleicher Richtung am Deckel; zwei markierte 
   const { r } = settle(fs);
   expect([...r.errors]).toEqual([]);
   expect(measureVolume(r.body!)).toBeCloseTo(1000 - 2 * 5 * 1.5 ** 2 * (1 - Math.PI / 4), 2);
+});
+
+test('Trimmen: Rechteck und Kreis werden zu einer Fläche, in jeder Reihenfolge, und lassen sich hochziehen', () => {
+  const start = (): Feature[] => [rect(GROUND, [0, 0], [20, 20], 1, 0, false), { ...circle(GROUND, [20, 20], 10, 2, 0, false), body: 1 }];
+  const klick = (fs: Feature[], q: number[]) => { // wie im Programm: nächste Skizze an der Mausposition, Nummern ändern sich beim Verbinden
+    const sk = fs.filter((f): f is Extrude => isExtrude(f)), p = sk.map(f => pieceAt(f, sk, q)!).sort((x, y) => x.dist - y.dist)[0];
+    return trimFeatures(fs, p, 50).features;
+  };
+  const a = [20, 15], b = [15, 20], c = [12.93, 12.93];
+  for (const reihe of [[a, b, c], [c, a, b], [b, c, a], [a, c, b]]) {
+    let fs = start();
+    for (const q of reihe) fs = klick(fs, q);
+    const sk = fs.filter(isExtrude);
+    expect(sk.length).toBe(1);
+    expect(sk[0].type).toBe('poly');
+    expect(sk[0].open).toBeUndefined();
+    const { r } = settle([{ ...sk[0], d: 3 }]);
+    expect([...r.errors]).toEqual([]);
+    expect(valid(r.body!)).toBe(true);
+    expect(measureVolume(r.body!)).toBeCloseTo(3 * (400 + Math.PI * 100 * 0.75), 1);
+  }
+});
+
+test('Trimmen: Stücke bis zum nächsten Schnitt, Hilfslinie bleibt Hilfslinie, Bogen wird geteilt, ohne Schnitt verschwindet der Kreis', () => {
+  const hilfe = { ...GROUND, id: 1, type: 'poly', p: {}, d: 0, aux: true, open: true, pts: [[0, 0], [20, 0], [20, 20]] } as Extrude;
+  const quer = { ...GROUND, id: 2, type: 'poly', p: {}, d: 0, aux: true, open: true, pts: [[5, -5], [5, 5]] } as Extrude, quer2 = { ...quer, id: 3, pts: [[15, -5], [15, 5]] };
+  const rest = (f: Extrude, q: number[], ...o: Extrude[]) => trimFeatures([f, ...o], pieceAt(f, [f, ...o], q)!, 50).features.filter(isExtrude).filter(g => !o.includes(g));
+  expect(rest(hilfe, [10, 0], quer, quer2).map(g => g.pts)).toEqual([[[0, 0], [5, 0]], [[15, 0], [20, 0], [20, 20]]]); // Mitte raus: zwei Linien
+  expect(rest(hilfe, [2, 0], quer).map(g => g.pts)).toEqual([[[5, 0], [20, 0], [20, 20]]]); // bis zum Schnitt kürzen
+  expect(rest(hilfe, [10, 0], quer, quer2).every(g => g.aux && g.type === 'poly')).toBe(true);
+  expect(rest({ ...hilfe, pts: [[0, 0], [20, 0]] }, [10, 0])).toEqual([]); // ohne Schnitt: ganz weg
+  // Halbkreis-Bogen, senkrecht geschnitten: bleibt ein Bogen auf demselben Kreis
+  const bogen = { ...GROUND, id: 4, type: 'line', p: {}, d: 0, open: true, pts: [[10, 0, 1], [-10, 0]] } as Extrude, s = { ...quer, id: 5, pts: [[0, 0], [0, 20]] };
+  const [teil] = rest(bogen, [7.07, 7.07], s), mitte = arcPoints(teil.pts![0], teil.pts![1], teil.pts![0][2] ?? 0, 2)[0];
+  expect(teil.pts![0][0]).toBeCloseTo(0, 6);
+  expect(Math.hypot(mitte[0], mitte[1])).toBeCloseTo(10, 6);
+  expect(mitte[0]).toBeLessThan(0); // das Stück bei x > 0 ist weg
+  const k = circle(GROUND, [0, 0], 5, 6, 0, false);
+  expect(rest(k, [5, 0])).toEqual([]);
+  const r2 = rect(GROUND, [100, 100], [110, 110], 7, 0, false); // andere Skizze ohne Berührung: bleibt, nichts wird verbunden
+  expect(pieceAt(k, [k, r2], [5, 0])!.i).toBe(-1);
+  expect(pieceAt({ ...k, p: { ...k.p, ry: 3 } }, [k], [5, 0])).toBeNull(); // Ellipse lässt sich nicht trimmen
 });
 
 test('Rechteck aus der Mitte behält die Mitte: Maß tippen und Seite ziehen', () => {
