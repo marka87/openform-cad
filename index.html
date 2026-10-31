@@ -123,8 +123,8 @@
   #views svg { vertical-align:-3px; margin-right:5px; }
   #views .vg { width:100%; color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:5px 4px 0; border-top:1px solid var(--line); margin-top:2px; }
   #views .vg:first-child { border-top:0; margin-top:0; padding-top:1px; }
-  /* Unter 900 px Höhe reichen die Werkzeuge einspaltig nicht neben die Ansichten: zwei Spalten, gleiche Breite wie die Ansichten */
-  @media (max-height:900px) {
+  /* Unter 930 px Höhe reichen die Werkzeuge einspaltig nicht neben die Ansichten: zwei Spalten, gleiche Breite wie die Ansichten */
+  @media (max-height:930px) {
     #toolbar { display:grid; grid-template-columns:1fr 1fr; width:272px; max-height:calc(100% - 255px); }
     #toolbar .grp, #toolbar [data-tool="select"], #toolbar [data-act="move"], #bAll { grid-column:1 / -1; }
     #toolbar button { padding:1px 6px; white-space:nowrap; }
@@ -194,6 +194,7 @@
   <button data-tool="plane">Ebene <kbd>E</kbd></button>
   <div class="grp">Körper</div>
   <button data-tool="shell">Schale <kbd>H</kbd></button>
+  <button data-tool="sphere" title="Kugel: Mittelpunkt setzen, Radius ziehen oder tippen">Kugel <kbd>K</kbd></button>
   <button data-act="move" title="Ausgewählten Körper (oder den Körper der Skizze) mit Griffen verschieben/drehen">Verschieben / Drehen<span class="dd" data-menu="xf" title="Transformieren: Skalieren, Werte, Drehen um Achse, Ausrichten … (auch Rechtsklick)">▾</span></button>
   <button data-act="pattern" title="Ausgewählten Körper oder Skizze als Reihe, Raster oder Kreis vervielfältigen">Muster</button>
   <button data-act="mirror" title="Ausgewählten Körper oder Skizze spiegeln">Spiegeln</button>

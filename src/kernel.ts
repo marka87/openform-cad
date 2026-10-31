@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { assembleWire, cast, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
+import { revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -13,8 +13,16 @@ function sketchOf(f: Extrude) {
 }
 
 export function solidOf(f: Extrude): Shape3D {
-  const sk = sketchOf(f);
   const ax = f.rev ? revAxis(f) : null;
+  let of = f;
+  if (ax) {
+    const [lo, hi] = revSpan(f), c = [f.p.cx, f.p.cy], r = f.p.r;
+    if (f.type === 'circle' && !f.p.ry && Math.abs(lo + hi) < 1e-6) { // Kreis um seine Mitte: die Hälfte reicht, der ganze Kreis ergäbe Volumen 0
+      const du = ax.d[0] * f.u[0] + ax.d[1] * f.u[1] + ax.d[2] * f.u[2], dv = ax.d[0] * f.v[0] + ax.d[1] * f.v[1] + ax.d[2] * f.v[2];
+      of = { ...f, type: 'poly', pts: [[c[0] + r * du, c[1] + r * dv, 1], [c[0] - r * du, c[1] - r * dv]] };
+    } else if (lo < -1e-6 && hi > 1e-6) throw new Error('Die Skizze liegt auf beiden Seiten der Drehachse');
+  }
+  const sk = sketchOf(of);
   let s = (ax ? sk.revolve(ax.d, { origin: ax.p, angle: f.rev }) : sk.extrude(f.d)) as Shape3D;
   // Bereich: mit hohen Prismen der anderen Skizzen schneiden bzw. sie abziehen (Höhe egal, Ebene ist dieselbe)
   for (const c of [...f.and ?? [], ...f.not ?? []]) {

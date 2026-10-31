@@ -18,6 +18,7 @@ export interface Extrude extends Frame {
   hidden?: boolean;          // im Feature-Baum ausgeschaltet: wird nicht berechnet
   body?: number;             // Körper, zu dem das Feature gehört (fehlt = Körper 1, so bleiben alte Modelle ein Körper)
   cons?: Con[];              // poly: Bemaßungen und Abhängigkeiten der Seiten (siehe sketchSolver)
+  ball?: boolean;            // Kugel: Kreis, der sich um die Achse durch seine Mitte dreht
   rev?: number;              // Drehkörper: Skizze um eine ihrer Achsen gedreht (Winkel in Grad) statt extrudiert
   axis?: 'u' | 'v';          // Drehachse: x- (u) oder y-Achse (v) der Skizze durch ihren Ursprung o
   axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
@@ -122,9 +123,17 @@ export const noFace = (f: Extrude) => !!f.aux || f.type === 'line';
 // Flache Skizze: weder extrudiert noch gedreht
 // Drehachse eines Drehkörpers als Punkt + Einheitsrichtung und die Richtung w in der Skizzenebene quer dazu
 export function revAxis(f: Extrude) {
-  const p = f.axisLine?.p ?? f.o, d0 = f.axisLine?.d ?? f[f.axis ?? 'u'], L = Math.hypot(...d0), d = d0.map(x => x / L) as Vec;
+  const p = f.ball ? f.o.map((x, i) => x + f.p.cx * f.u[i] + f.p.cy * f.v[i]) as Vec : f.axisLine?.p ?? f.o, d0 = f.axisLine?.d ?? f[f.axis ?? 'u'], L = Math.hypot(...d0), d = d0.map(x => x / L) as Vec;
   const w = f.axisLine ? [f.n[1] * d[2] - f.n[2] * d[1], f.n[2] * d[0] - f.n[0] * d[2], f.n[0] * d[1] - f.n[1] * d[0]] as Vec : f.axis === 'v' ? f.u : f.v;
   return { p, d, w };
+}
+// Von wo bis wo reicht die Skizze quer zur Drehachse? Liegt sie auf beiden Seiten, gibt es keinen gültigen Drehkörper
+export function revSpan(f: Extrude) {
+  const { p: A, w } = revAxis(f), p = f.p;
+  const at = ([x, y]: number[]) => [0, 1, 2].reduce((s, i) => s + (f.o[i] + x * f.u[i] + y * f.v[i] - A[i]) * w[i], 0);
+  if (f.type === 'circle') { const c = at([p.cx, p.cy]), r = Math.max(p.r, p.ry ?? 0); return [c - r, c + r]; }
+  const s = (f.type === 'rect' ? [[p.x, p.y], [p.x + p.w, p.y], [p.x, p.y + p.h], [p.x + p.w, p.y + p.h]] : outline(f.pts!, !f.open)).map(at);
+  return [Math.min(...s), Math.max(...s)];
 }
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
@@ -542,9 +551,10 @@ function segment(pts: number[][], i: number, x: number, y: number) {
 
 // Findet das Feature, auf dessen Begrenzung der Punkt (mit Flächennormale N) liegt. Spätere Features gewinnen.
 // Rundungs-/Fasenflächen gehören zu keinem Extrude; sie werden danach über die Nähe zur Kante gefunden.
-export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps = 0.15): Grip | null {
+// body = getroffener Körper: eine Rundung eines anderen Körpers kommt dann nicht in Frage, auch wenn ihre Kante in der Nähe verläuft.
+export function ownerOf(features: Feature[], P: ArrayLike<number>, N: ArrayLike<number>, eps = 0.15, body?: number): Grip | null {
   features = features.filter(f => !f.hidden);
-  return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps) ?? importOwner(features);
+  return extrudeOwner(features, P, N, eps) ?? edgeOwner(features, P, eps, body) ?? importOwner(features);
 }
 
 // shortcut: Flächen ohne Besitzer gehören zum zuletzt importierten Körper; bei mehreren Importen ungenau → Flächen-IDs aus dem Kern
@@ -584,10 +594,13 @@ function importOwner(features: Feature[]): Grip | null {
   return f?.type === 'import' ? { f, part: 'import', k: 0 } : null;
 }
 
-function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number): Grip | null {
+function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number, body?: number): Grip | null {
+  // shortcut: nach Verrechnen oder Teilen stimmen Körpernummern und Herkunft nicht mehr überein, dann bleibt es bei der Nähe
+  const sure = body !== undefined && !features.some(f => f.type === 'combine' || f.type === 'split');
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
     if (f.type !== 'fillet' && f.type !== 'chamfer') continue;
+    if (sure && bodyOf(f) !== body) continue;
     const q = sub(toOriginal(features, i, P, P)[0], f.at), along = dot(q, f.dir);
     const toLine = Math.sqrt(Math.max(0, dot(q, q) - along * along));
     if (Math.min(toLine, Math.hypot(...q)) < f.r * 1.5 + eps) return { f, part: 'edge', k: 0 };
@@ -598,6 +611,11 @@ function edgeOwner(features: Feature[], P: ArrayLike<number>, eps: number): Grip
 function extrudeOwner(features: Feature[], P0: ArrayLike<number>, N0: ArrayLike<number>, eps: number): Grip | null {
   for (let i = features.length - 1; i >= 0; i--) {
     const f = features[i];
+    if (isExtrude(f) && f.ball) { // Kugel: ziehen an der Oberfläche ändert den Radius
+      const c = revAxis(f).p, q = sub(toOriginal(features, i, P0, N0)[0], c);
+      if (Math.abs(Math.hypot(...q) - f.p.r) < eps) return { f, part: 'r', k: 1 };
+      continue;
+    }
     if (!isExtrude(f) || Math.abs(f.d) < 1e-6) continue;
     const [P, N] = toOriginal(features, i, P0, N0);
     const q = sub(P, f.o), x = dot(q, f.u), y = dot(q, f.v), z = dot(q, f.n);

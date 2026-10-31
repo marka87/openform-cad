@@ -19,12 +19,13 @@ import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
 import { pieceAt, piecePoints, trimFeatures, type Piece } from './trim';
 
-type Tool = 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
+type Tool = 'sphere' | 'text' | 'trim' | 'aux' | 'ellipse' | 'arc' | 'plane' | 'measure' | 'shell' | 'select' | 'rect' | 'circle' | 'ngon' | 'slot' | 'line' | 'spline';
 const V = (a: ArrayLike<number>) => new THREE.Vector3().fromArray(a as number[]);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const HINTS: Record<Tool, string> = {
   select: 'Ziehen oder anklicken · F1 = alle Bedienhinweise',
   rect:   'Klicken = Anfang, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei „20x10“ tippen + Enter = genaues Maß · Ende = an der Maus fertig',
+  sphere: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
   circle: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
   ngon:   'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
   ellipse: 'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · Zahl tippen + Enter = Halbachsen „a x b“',
@@ -196,7 +197,8 @@ function shapeOf(f: Extrude) {
 // Skizzen, Vorschau und Auswahlrahmen kommen aus Three.js; der eigentliche Körper aus dem Kern
 function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline' | 'add' | 'cut') {
   let g: THREE.BufferGeometry;
-  if (Math.abs(f.d) < 1e-6) g = new THREE.ShapeGeometry(shapeOf(f), 64);
+  if (f.ball && kind !== 'outline') g = new THREE.SphereGeometry(f.p.r, 48, 24).translate(f.p.cx, f.p.cy, 0); // beim Aufziehen und Ziehen als Kugel; ausgewählt bleibt der Umriss als Ring
+  else if (Math.abs(f.d) < 1e-6) g = new THREE.ShapeGeometry(shapeOf(f), 64);
   else {
     g = new THREE.ExtrudeGeometry(shapeOf(f), { depth: Math.abs(f.d), bevelEnabled: false, curveSegments: 64 });
     if (f.d < 0) g.translate(0, 0, f.d);
@@ -551,6 +553,7 @@ function nameOf(f: Feature) {
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
   if (f.aux) return 'Hilfslinie';
   if (f.type === 'line') return 'Linie';
+  if (f.ball) return 'Kugel';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
   if (Math.abs(f.d) < 1e-6) return 'Skizze';
   if (f.p.ry) return isCut(f) ? 'Tasche' : 'Ellipse';
@@ -656,7 +659,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
-    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray()) ?? patternGrip(fh.point.toArray(), n.toArray());
+    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray(), 0.15, fh.object.userData.body) ?? patternGrip(fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
     face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat, patSrc: fh.object.userData.src };
   }
@@ -772,7 +775,7 @@ function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
 }
 // Raster nur, wo gearbeitet wird: auf der Ebene, auf der gerade gezeichnet wird oder deren flache Skizze ausgewählt ist.
 // In der reinen Modellansicht keines; im leeren Modell bleibt der Boden zur Orientierung
-const SKETCH_TOOLS: Tool[] = ['rect', 'circle', 'ellipse', 'ngon', 'slot', 'line', 'arc', 'spline', 'aux', 'text', 'trim', 'plane'];
+const SKETCH_TOOLS: Tool[] = ['sphere', 'rect', 'circle', 'ellipse', 'ngon', 'slot', 'line', 'arc', 'spline', 'aux', 'text', 'trim', 'plane'];
 let gridKey = '';
 function updateGrid() {
   const sel = getSel(), sk = sel && isExtrude(sel) && isFlat(sel) && !movesAfter(features, features.indexOf(sel)).length ? sel : null;
@@ -892,6 +895,7 @@ function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extr
   if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonPts(a, b, sides), nextId, onFace);
   if (tool === 'slot') return Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
   if (tool === 'ellipse') return ellipseFeature(pl, a, b, nextId, onFace);
+  if (tool === 'sphere') { const f = sketchFeature('circle', pl, a, b, nextId, onFace); return f && { ...f, rev: 360, ball: true }; }
   return sketchFeature(tool as 'rect' | 'circle', pl, a, b, nextId, onFace);
 }
 function hudText(f: Extrude) {
@@ -1224,7 +1228,7 @@ function onDown(e: PointerEvent) {
     const q = sketchPoint(rect3.pl, e), f = q && rect3Feature(q);
     disposeGroup(preview);
     if (f) { f.body = rect3.body ?? f.id; f.cons = [1, 2, 3].map(i => ({ t: 'perp', i, j: i - 1 })); pushHistory(); nextId++; add(f); selId = f.id; rect3 = null; setTool('select'); refresh(); }
-  } else if (tool === 'rect' || tool === 'circle' || tool === 'ngon' || tool === 'slot' || tool === 'ellipse') {
+  } else if (tool === 'sphere' || tool === 'rect' || tool === 'circle' || tool === 'ngon' || tool === 'slot' || tool === 'ellipse') {
     const t = sketchOn(h), pl = planeFor(t); // auf Boden, Fläche oder Flächenraster skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
@@ -1300,7 +1304,7 @@ function onMove(e: PointerEvent) {
   hoverOrigin(drag ? null : originAt());
   if (tool === 'trim') return showTrim();
   hideSnap();
-  if (!drag && (['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool) || (!poly && ['line', 'arc', 'spline', 'aux'].includes(tool)))) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
+  if (!drag && (['sphere', 'rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool) || (!poly && ['line', 'arc', 'spline', 'aux'].includes(tool)))) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
   if (rect3 && !drag) { // 3-Punkt-Rechteck: Breite = Abstand der Maus von der Kante
     const q = sketchPoint(rect3.pl, e), f = q && rect3Feature(q);
     disposeGroup(preview);
@@ -1648,7 +1652,7 @@ function renderFeaturePanel() {
     : f.p.ry ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Halbachse X', 'p.r'], ['Halbachse Y', 'p.ry'], ['Höhe', 'd']]
     : f.type === 'circle' ? [['Mitte X', 'p.cx'], ['Mitte Y', 'p.cy'], ['Radius', 'p.r'], ['Höhe', 'd']]
     : [['Höhe', 'd']];
-  if (f.rev) fields.splice(-1, 1, ['Winkel °', 'rev']);
+  if (f.rev) fields.splice(-1, 1, ...f.ball ? [] : [['Winkel °', 'rev']]);
   const get = (k: string): number => k.split('.').reduce((o: any, p) => o[p], f);
   const name = nameOf(f);
   const other = multi.size === 1 ? getById([...multi][0]) : undefined, loftTo = isFlat(f) && other && isExtrude(other) && isFlat(other) ? other : null;
@@ -1664,7 +1668,7 @@ function renderFeaturePanel() {
     (f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
-    (f.rev ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
+    (f.rev && !f.ball ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
     `<button class="del">Löschen</button>` +
@@ -2235,6 +2239,7 @@ addEventListener('keydown', e => {
   else if (k === 'v') setTool('select');
   else if (k === 'r') setTool('rect');
   else if (k === 'c') setTool('circle');
+  else if (k === 'k') setTool('sphere');
   else if (k === 'i') setTool('ellipse');
   else if (k === 'a') setTool('arc');
   else if (k === 'n') setTool('ngon');
@@ -2734,7 +2739,7 @@ addEventListener('pointerdown', e => { if (!snapMenu.contains(e.target as Node) 
 
 // Symbole und Tooltips für die Werkzeugleiste
 const ICONS: Partial<Record<Tool, string>> = {
-  select: '<path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z"/>', rect: '<rect x="2" y="4" width="12" height="8"/>', circle: '<circle cx="8" cy="8" r="5.5"/>',
+  select: '<path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z"/>', rect: '<rect x="2" y="4" width="12" height="8"/>', circle: '<circle cx="8" cy="8" r="5.5"/>', sphere: '<circle cx="8" cy="8" r="6"/><path d="M2 8c2 2.5 10 2.5 12 0"/>',
   ngon: '<path d="M8 2l5.2 3v6L8 14l-5.2-3V5z"/>', slot: '<rect x="1.5" y="5" width="13" height="6" rx="3"/>', line: '<path d="M2 13L6 4l8 5"/><circle cx="6" cy="4" r="1"/>',
   spline: '<path d="M2 12c3-9 6 3 12-8"/>', ellipse: '<ellipse cx="8" cy="8" rx="6.5" ry="4"/>', arc: '<path d="M2 12A7 7 0 0 1 14 12"/><circle cx="8" cy="5" r="1"/>', plane: '<path d="M1.5 12l4-8h9l-4 8z"/>', shell: '<path d="M2 5l6-3 6 3v6l-6 3-6-3z M5 6.5l3 1.5 3-1.5"/>', measure: '<path d="M2 11L11 2l3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/>',
   text: '<path d="M3 4V2.5h10V4 M8 2.5v11 M6 13.5h4"/>', aux: '<path d="M1.5 8h2 M6 8h2 M10.5 8h2" stroke-dasharray="none"/>', trim: '<circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><path d="M5.5 5.5L14 12 M5.5 10.5L14 4"/>',
@@ -2775,6 +2780,7 @@ const FUNCS: [string, () => void][] = [
   ['Extrudieren', () => showHint('Extrudieren: Skizze anklicken und ziehen, Zahl tippen = genaues Maß')],
   ['Fläche versetzen', () => showHint('Fläche versetzen: Fläche eines Körpers anklicken und ziehen')],
   ['Abrundung / Fase', () => showHint('Abrundung / Fase: Kante ziehen, nach außen = Rundung, nach innen = Fase. Art im Seitenfeld wechseln')],
+  ['Kugel', () => setTool('sphere')],
   ['Gehäuse (Schale)', () => setTool('shell')],
   ['Loft (Übergang)', () => showHint('Loft: zwei Skizzen auf verschiedenen Ebenen anlegen, eine anklicken, die zweite mit Shift+Klick dazu, im Seitenfeld „Übergang (Loft)“')],
   ['Umlaufen (Drehkörper)', () => showHint('Umlaufen: Skizze anklicken, im Seitenfeld „Drehen um“ die Achse wählen')],

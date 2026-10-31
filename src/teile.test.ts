@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -490,4 +490,49 @@ test('Raster: ebene Fläche ergibt ihr Rechteck, runde und abgewandte Flächen f
   const idx = [0, 1, 2, 3, 4, 5, 6, 7, 8];
   expect(coplanarBounds(pos, idx, nrm, [0, 3, 3, 3, 6, 3], pl)).toEqual([[2, 1], [12, 4]]);
   expect(coplanarBounds(pos, idx, nrm, [3, 3, 6, 3], pl)).toBeNull();
+});
+
+test('Kugel: Werkzeug, Vollkreis als Drehkörper, Skizze quer über die Achse', async () => {
+  const soll = (r: number) => 4 / 3 * Math.PI * r ** 3;
+  const k: Extrude = { ...circle(GROUND, [30, -20], 10, 1, 0, false), rev: 360, ball: true };
+  const r = buildBody([k]);
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  expect(measureVolume(r.body!)).toBeCloseTo(soll(10), 3);
+  const box = r.body!.boundingBox; // Mitte liegt am Klickpunkt, nicht am Ursprung
+  expect(box.center[0]).toBeCloseTo(30, 3);
+  expect(box.center[2]).toBeCloseTo(20, 3);
+  // Maße ändern, dann Export hin und zurück
+  const groesser = buildBody([{ ...k, p: { ...k.p, r: 15, cx: 0, cy: 5 } }]);
+  expect(measureVolume(groesser.body!)).toBeCloseTo(soll(15), 3);
+  const back = await loadStep(await forExport(r.body!).blobSTEP().text());
+  expect(measureVolume(back)).toBeCloseTo(soll(10), 1);
+  expect(to3MF([...r.bodies.values()])).toBeTruthy();
+  // Zurückspulen: Kugel an einen Quader gesetzt, ohne Kugel bleibt der Quader
+  const quader = rect(GROUND, [0, 0], [10, 10], 2, 10, false), mit = buildBody([quader, { ...k, id: 3, body: 2, p: { cx: 10, cy: 5, r: 5 } }]);
+  expect(valid(mit.body!)).toBe(true);
+  expect(measureVolume(mit.body!)).toBeGreaterThan(1000);
+  expect(measureVolume(buildBody([quader]).body!)).toBeCloseTo(1000, 3);
+  // Vollkreis mit Achse durch die Mitte ist auch ohne Werkzeug eine Kugel
+  const voll: Extrude = { ...circle(GROUND, [0, 0], 10, 1, 0, false), rev: 360 };
+  expect(measureVolume(buildBody([voll]).body!)).toBeCloseTo(soll(10), 3);
+  // Quer über die Achse: Meldung statt leerer Körper
+  const quer = buildBody([{ ...rect(GROUND, [-5, -5], [5, 5], 1, 0, false), rev: 360 }]);
+  expect(quer.errors.get(1)).toContain('beiden Seiten');
+});
+
+test('Griff: Kugel zieht am Radius, Rundung eines anderen Körpers bleibt unberührt', () => {
+  const k: Extrude = { ...circle(GROUND, [50, 0], 10, 2, 0, false), rev: 360, ball: true, body: 2 };
+  const rund = edge('fillet', 3, [40, 10, 0], [1, 0, 0], 20); // Kante zeigt genau auf die Kugel
+  rund.body = 1;
+  const quader = { ...rect(GROUND, [0, -5], [40, 5], 1, 10, false), body: 1 };
+  const g = ownerOf([quader, rund, k], [60, 0, 0], [1, 0, 0], 0.15, 2);
+  expect(g?.f.id).toBe(2);
+  expect(g?.part).toBe('r');
+  const f0 = structuredClone(k);
+  applyPush(k, f0, 'r', 1, 5);
+  expect(k.p.r).toBe(15);
+  // Drehkörper ohne eigenen Griff: die Rundung des anderen Körpers darf nicht anspringen
+  const dreh: Extrude = { ...rect(GROUND, [45, 2], [55, 8], 4, 0, false), rev: 360, body: 4 };
+  expect(ownerOf([quader, rund, dreh], [50, 8, 0], [0, 1, 0], 0.15, 4)?.f.id).not.toBe(3);
 });
