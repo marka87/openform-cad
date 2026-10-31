@@ -124,12 +124,17 @@ Datenverlust = sofort ein Paket.
 - [Vergleich] Wollte: überlappendes Rechteck und Kreis zu einer Form trimmen | Passiert: Trimmen ging nur bei Hilfslinien
   | Umweg: - (0.10.0)
 
+- [Vergleich] Wollte: fast flache Sicht mit Leertaste ganz flach stellen, ohne Achse durchs Bild | Passiert: wählte
+  das letzte Werkzeug | Umweg: Würfel (0.11.0)
+- [Vergleich] Wollte: markierte Kanten sehen | Passiert: nur die unter der Maus war erkennbar | Umweg: - (0.11.0)
+
 ### Teil 3: (Name, Datum, wofür)
 
 ## Versionen
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.11.0** Leertaste stellt flach auf Fläche oder nächste Würfelseite; Achse längs zum Blick ausgeblendet; markierte Kanten ganz in eigener Farbe
 - **0.10.0** Trimmen an Rechteck, Kreis, Vieleck und Linie, auch an Bögen; Reste verbinden sich zu einer Fläche
 - **0.9.0** Markierte Skizzen gemeinsam hochziehen; markierte Kanten durch Ziehen gemeinsam runden, Radius für alle
 - **0.8.1** Skizzen auf einer flachen Skizze hängen sich nicht mehr an die Unterseite eines Körpers
@@ -154,6 +159,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Ansicht und Markierung (0.11.0). Leertaste über einer Fläche legt das Raster und schaut sofort darauf, ohne
+  Fläche auf die nächste Würfelseite, nochmal = zurück. Das letzte Werkzeug kommt nur noch, wenn die Ansicht schon flach ist
+  und kein Zurück vorliegt. Achse wird unter rund 6° zum Blick ausgeblendet. Reine Bedienung, Tests decken das nicht ab.
 - 2026-10-31 Trimmen wie in Shapr3D (0.10.0, `src/trim.ts`). Stück unter der Maus wird rot angezeigt und weggeklickt.
   Rechteck und Kreis werden dabei zu offenen Linienzügen; treffen sich Enden, werden sie eins, ein geschlossener Ring wird
   wieder Fläche. Damit gehen Breite/Tiefe und Abhängigkeiten dieser Skizze verloren. Ellipse und Spline nur als Schnittkante.

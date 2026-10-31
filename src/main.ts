@@ -72,10 +72,12 @@ const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswah
 const preview = new THREE.Group(); scene.add(preview);
 const handles = new THREE.Group(); scene.add(handles);     // Punkte der ausgewählten Skizze zum Ziehen
 // Achsen wie in der Exportdatei (Z oben): X rot, Y grün (Szene −Z), Z blau (Szene +Y); knapp über dem Raster
-for (const [d, c] of [[[1, 0, 0], 0xe05555], [[0, 0, -1], 0x55c060], [[0, 1, 0], 0x5588ee]] as const) {
+const axes = ([[[1, 0, 0], 0xe05555], [[0, 0, -1], 0x55c060], [[0, 1, 0], 0x5588ee]] as const).map(([d, c]) => {
   const ends = [-200, 200].map(s => V(d).multiplyScalar(s).setY(d[1] ? s : 0.02));
-  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ends), new THREE.LineBasicMaterial({ color: c })));
-}
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ends), new THREE.LineBasicMaterial({ color: c }));
+  scene.add(line);
+  return { line, d: V(d) };
+});
 const snapMark = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
 snapMark.visible = false; snapMark.renderOrder = 2; scene.add(snapMark);
 // Hilfslinien beim Ausrichten: vom Bezugspunkt zum Mauszeiger
@@ -231,6 +233,24 @@ function bodyMesh(m: BodyMesh) {
   return mesh;
 }
 
+// Markierte Kante: die ganze B-Rep-Kante in eigener Farbe, bis sie abgewählt wird; ohne Treffer der Punkt wie bei einer Rundung
+function edgeLine(a: { at: Vec }) {
+  let best: { pos: ArrayLike<number>; r: number[]; dist: number } | null = null;
+  const at = V(a.at), seg = new THREE.Line3(), q = new THREE.Vector3();
+  for (const mesh of bodyGroup.children) {
+    const pos = (mesh.children[0] as THREE.LineSegments).geometry.attributes.position.array, gr: Int32Array = mesh.userData.edges;
+    for (let k = 0; k < gr.length; k += 2) for (let i = gr[k]; i < gr[k] + gr[k + 1]; i += 2) {
+      seg.start.fromArray(pos, i * 3); seg.end.fromArray(pos, i * 3 + 3);
+      const dist = seg.closestPointToPoint(at, true, q).distanceTo(at);
+      if (dist < 0.05 && (!best || dist < best.dist)) best = { pos, r: [gr[k], gr[k + 1]], dist };
+    }
+  }
+  if (!best) return edgeMarker(a);
+  const pts = Array.prototype.slice.call(best.pos, best.r[0] * 3, (best.r[0] + best.r[1]) * 3);
+  const l = new LineSegments2(new LineSegmentsGeometry().setPositions(pts), new LineMaterial({ color: 0x29b6f6, linewidth: 3, depthTest: false }));
+  l.raycast = () => {}; l.renderOrder = 3;
+  return l;
+}
 // Ausgewählte Rundung/Fase: Punkt auf der ursprünglichen Kante
 function edgeMarker(f: { at: Vec }) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 8), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
@@ -329,7 +349,7 @@ function rebuild() {
     o.matrix.premultiply(M);
     group.add(o);
   });
-  for (const a of edgeSel) group.add(edgeMarker(a));
+  for (const a of edgeSel) group.add(edgeLine(a));
   group.updateMatrixWorld(true);
   disposeGroup(handles);
   const s = getSel();
@@ -2085,7 +2105,8 @@ addEventListener('keydown', e => {
     e.preventDefault();
     const h = !poly && !drag ? pick().face : null;
     if (workHit && (!h || samePlane(h, workHit))) return lookAtWork(); // Raster liegt: draufschauen bzw. zurück
-    return h ? setWorkPlane(h) : setTool(lastTool);
+    if (h) { setWorkPlane(h); if (workHit) return lookAtWork(); } // Fläche unter der Maus: gleich senkrecht darauf
+    return snapView() || setTool(lastTool);
   }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
@@ -2381,6 +2402,21 @@ function setView(name: string) {
   const dist = camera.position.distanceTo(controls.target);
   flyTo(controls.target.clone().addScaledVector(V(VIEWS[name]).normalize(), dist), controls.target.clone());
 }
+// Leertaste ohne Fläche: auf die nächstliegende Seite des Würfels flach stellen; steht die Ansicht schon flach: zurück zur vorigen
+function snapView() {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const near = Object.keys(VIEWS).filter(v => v !== 'iso').map(v => ({ v, k: V(VIEWS[v]).normalize().dot(dir) })).sort((a, b) => b.k - a.k)[0];
+  if (near.k > 0.99999) {
+    if (!lookBack) return false;
+    flyTo(lookBack.p, lookBack.t); lookBack = null;
+    showHint('Zurück zur vorigen Ansicht');
+    return true;
+  }
+  lookBack = { p: camera.position.clone(), t: controls.target.clone() };
+  setView(near.v);
+  showHint('Flach auf die nächste Seite · Leertaste = zurück zur vorigen Ansicht');
+  return true;
+}
 // Senkrecht auf das Flächenraster schauen, so dass es das Bild füllt; nochmal = zurück zur Ansicht davor.
 // shortcut: Kamera-oben bleibt die Welt-Hochachse (OrbitControls verträgt kein anderes up); bei liegenden Flächen
 // ist „oben“ daher −z wie in der Draufsicht, nicht die y-Achse der Skizze
@@ -2610,6 +2646,8 @@ renderer.setAnimationLoop(() => {
   renderCube();
   updateScale();
   originPlanes.visible = !display.render && !display.section;
+  const view = camera.position.clone().sub(controls.target).normalize();
+  for (const a of axes) a.line.visible = Math.abs(a.d.dot(view)) < 0.995; // Blick längs der Achse: sie wäre nur ein störender Strich durchs Bild
   originPlanes.scale.setScalar(pxSize());
   updateDims();
   placeMeasureLabel();
