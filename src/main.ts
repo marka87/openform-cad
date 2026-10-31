@@ -669,6 +669,11 @@ const sketchOn = (h: Hit | null) => {
   const loc = workPts.map(w => toLocal(pl, V(w.p))), x = toLocal(pl, q);
   return [0, 1].every(k => x[k] >= Math.min(...loc.map(l => l[k])) - 1e-6 && x[k] <= Math.max(...loc.map(l => l[k])) + 1e-6) ? workHit : h;
 };
+// Liegt die neue Skizze auf einem Körper? Nicht auf einer Ebene am Ursprung, einer Hilfsebene oder einer flachen Skizze, die selbst frei liegt
+const onBody = (t: Hit | null) => {
+  const g = t?.grip?.f;
+  return !!t && t.grip?.part !== 'plane' && !t.free && !(g && isExtrude(g) && isFlat(g) && !g.onFace);
+};
 function setWorkPlane(h: Hit | null) {
   workHit = h && h.grip?.part !== 'plane' ? h : null;
   faceGrid.visible = !!workHit && grid.visible;
@@ -1066,7 +1071,7 @@ function onDown(e: PointerEvent) {
   }
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
-    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane' && !t.free, smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: onBody(t), smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -1078,7 +1083,7 @@ function onDown(e: PointerEvent) {
     }
   } else if (tool === 'arc') { // Bogen durch drei Punkte: Anfang (nur beim ersten Mal), Ende, Punkt auf dem Bogen
     const t = sketchOn(h);
-    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane' && !t.free, smooth: false, body: t?.body };
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: onBody(t), smooth: false, body: t?.body };
     const q = polyPoint(e);
     if (!q) return;
     drag = { kind: 'line', arc: false, sx: e.clientX, sy: e.clientY, started: false };
@@ -1101,7 +1106,7 @@ function onDown(e: PointerEvent) {
     const t = sketchOn(h), pl = planeFor(t); // auf Boden, Fläche oder Flächenraster skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane' && !t.free, body: t?.body, sx: e.clientX, sy: e.clientY };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: onBody(t), body: t?.body, sx: e.clientX, sy: e.clientY };
   } else if (tool === 'measure') {
     if (measureMode === 'obj') return measureObject();
     const s = measurePoint();
@@ -2374,6 +2379,7 @@ function originAt() {
 let originOver: THREE.Object3D | null = null;
 function hoverOrigin(o: THREE.Object3D | null) {
   if (o === originOver) return;
+  if (!o) showHint(HINTS[tool]);
   originOver = o;
   for (const m of originPlanes.children as THREE.Mesh[]) (m.material as THREE.MeshBasicMaterial).opacity = m === o ? 0.5 : 0.18;
   el.style.cursor = o ? 'pointer' : '';

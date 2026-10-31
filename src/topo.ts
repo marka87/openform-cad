@@ -329,8 +329,11 @@ export function anchorSketch(f: Extrude, s: Shape3D | null, named: Named): Ancho
   if (!f.onFace || !s) return { f, sure: true };
   if (!f.face) {
     const b = bounds(f), mid = b.map(([lo, hi]) => (lo + hi) / 2);
-    const cands = s.faces.filter(x => x.geomType === 'PLANE' && Math.abs(dot(x.normalAt(x.center).toTuple(), f.n)) > 0.999
+    const inPlane = s.faces.filter(x => x.geomType === 'PLANE' && Math.abs(dot(x.normalAt(x.center).toTuple(), f.n)) > 0.999
       && Math.abs(dot(sub3(x.center.toTuple(), f.o), f.n)) < 1e-4);
+    const cands = inPlane.filter(x => dot(x.normalAt(x.center).toTuple(), f.n) > 0);
+    // Nur Unterseiten in der Ebene: Die Skizze lag auf einer flachen Skizze, nie auf dem Körper (z. B. zwei Kreise auf einem Rechteck hochgezogen)
+    if (!cands.length && inPlane.length) return { f: { ...f, onFace: false }, sure: true, patch: { onFace: false } };
     // shortcut: mehrere Flächen in der Ebene → die mit dem nächsten Schwerpunkt; ungenau bei verschachtelten Flächen → Abstand Punkt–Fläche
     const face = cands.sort((x, y) => Math.hypot(...sub3(x.center.toTuple(), mid)) - Math.hypot(...sub3(y.center.toTuple(), mid)))[0];
     if (!face) throw new Error('Fläche der Skizze nicht gefunden (in ihrer Ebene liegt keine Fläche mehr, z. B. von einer Schale geöffnet)'); // sonst schneidet sie still nichts

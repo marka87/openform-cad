@@ -387,6 +387,16 @@ test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
   expect(invalidBodies(new Map([[1, cast(b.Shape()) as any]]))).toEqual([1]);
 });
 
+test('Zwei Kreise auf einer flachen Skizze hochziehen: der zweite bleibt, statt sich an der Unterseite des ersten umzudrehen', () => {
+  const a = { ...circle(GROUND, [-20, 0], 5, 2, 0), body: 1 }, b = { ...circle(GROUND, [20, 0], 5, 3, 4), body: 1 }, flach = { ...rect(GROUND, [-30, -10], [30, 10], 1, 0, false), body: 1 };
+  const { r: r1, fs: fs1 } = settle([flach, a, b]);
+  expect([...r1.errors]).toEqual([]);
+  const { r, fs } = settle(fs1.map(f => f.id === 2 ? { ...f, d: 4 } as Feature : f)); // danach auch der linke, er steht in der Liste vor dem rechten
+  expect([...r.errors]).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(2 * Math.PI * 25 * 4, 1);
+  expect((fs.find(f => f.id === 3) as Extrude).onFace).toBe(false); // die Skizze lag nie auf einer Körperfläche
+});
+
 test('Rechteck aus der Mitte behält die Mitte: Maß tippen und Seite ziehen', () => {
   const f = { ...rect(GROUND, [-5, -10], [5, 10], 1, 0, false), mid: true };
   const mitte = () => [f.p.x + f.p.w / 2, f.p.y + f.p.h / 2];

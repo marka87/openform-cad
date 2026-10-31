@@ -115,12 +115,16 @@ Datenverlust = sofort ein Paket.
 - [Vergleich] Wollte: Kreis an Hilfslinie spiegeln, mehrere Skizzen markieren | Passiert: Klick traf das
   Rechteck unter dem Kreis, Hilfslinie nicht wählbar | Umweg: - (0.8.0)
 
+- [Vergleich] Wollte: zwei Kreise auf einem Rechteck nacheinander hochziehen | Passiert: erster verschwand, rot
+  „umgedreht“ | Umweg: - (0.8.1)
+
 ### Teil 3: (Name, Datum, wofür)
 
 ## Versionen
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.8.1** Skizzen auf einer flachen Skizze hängen sich nicht mehr an die Unterseite eines Körpers
 - **0.8.0** Ebenen XY, XZ, YZ am Ursprung; Rechteck aus der Mitte behält die Mitte; Maße neben der Skizze;
   Spiegeln an Hilfslinie; Strg/Shift nimmt Hilfslinien mit, kleinste Skizze gewinnt den Klick
 - **0.7.1** STEP aus FreeCAD: Zwischenstände und Hilfsachsen werden beim Import weggelassen; leeres
@@ -142,6 +146,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Fix 0.8.1. Skizze auf einer freien flachen Skizze bekam `onFace`, der Kern band sie dann an irgendeine
+  Fläche in der Ebene, auch an die Unterseite eines Körpers: „umgedreht“. Jetzt beim Anlegen kein `onFace`, im Kern nur
+  Flächen gleicher Richtung; alte Skizzen ohne Bezug werden gelöst. Schon gebundene alte Skizzen bleiben rot.
 - 2026-10-31 Parallelvergleich mit Shapr3D (0.8.0). Ebenen am Ursprung nutzen das Flächenraster mit `free`, keine neuen
   Modellschritte. Rechteck: `mid`, wirkt bei Eingabe und beim Ziehen der Seite. Beim Zeichnen klickt man durch Maße
   hindurch. Spiegeln schlägt die jüngste Hilfslinie derselben Ebene vor; Hilfslinie zählt als Bezug, nicht als Kopie.
