@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.12.2** Weniger Grafikkarten-Last: gezeichnet wird nur noch, wenn sich etwas tut; Schatten nur neu, wenn sich Körper ändern
 - **0.12.1** Griffe neu: schlanker Pfeil je Achse, runde Drehringe, Farben wie die Achsen, Markierung orange
 - **0.12.0** Maße mit Maßlinie und Pfeilen, auch beim Zeichnen; Hilfslinien kräftig in Magenta; Skizzenlinien dicker; sanftes Zoomen und Kamerafahrt auf dem Bogen; Menü „Alle Funktionen“
 - **0.11.1** Werkzeugleiste ohne Scrollbalken auf kleinen Bildschirmen: zwei Spalten unter 900 px Höhe, Ansichten kompakter, obere Leiste bleibt bei 1280 px einzeilig
@@ -162,6 +163,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Grafikkarten-Last (0.12.2). Die Schleife zeichnete dauernd, auch im Ruhezustand, mit Schatten 2048² je Bild. Jetzt
+  weckt jede Eingabe, Kernantwort oder Kamerabewegung für 400 ms, sonst ein Bild je Sekunde als Sicherung. Wer künftig etwas
+  ohne Eingabe oder Kernantwort am Bild ändert, muss wake() bzw. wakeShadow() rufen. Darstellung, deshalb kein Kern-Test.
 - 2026-10-31 Griffe (0.12.1). Die Griffe von TransformControls werden zur Laufzeit umgebaut, das greift auf dessen internes
   _gizmo zu und ist nach einem Three.js-Update zu prüfen. Die graue Kugel für freies Drehen ist weg, die Griffe in Gegenrichtung
   auch; gezogen wird weiter in beide Richtungen. Reine Darstellung, deshalb kein Kern-Test.

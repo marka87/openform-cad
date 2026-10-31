@@ -42,7 +42,7 @@ const HINTS: Record<Tool, string> = {
 
 // ---------- Szene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(devicePixelRatio);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 const el = renderer.domElement;
@@ -2755,10 +2755,25 @@ palIn.onblur = () => setTimeout(closePalette, 150);
 
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
-renderer.setAnimationLoop(() => {
+// Nur zeichnen, wenn sich etwas tut: nach jeder Eingabe, Kernantwort oder Kamerabewegung noch kurz, sonst einmal je Sekunde als Sicherung.
+// Der Schatten hängt nur an den Körpern: beim reinen Drehen der Kamera bleibt er liegen (2048² je Bild wäre die teuerste Arbeit)
+let awake = 0, lastDraw = 0;
+const wake = () => { awake = performance.now() + 400; };
+const wakeShadow = () => { wake(); sun.shadow.needsUpdate = true; };
+sun.shadow.autoUpdate = false;
+for (const t of ['pointermove', 'wheel', 'resize', 'focus']) addEventListener(t, wake, { capture: true, passive: true });
+for (const t of ['pointerdown', 'pointerup', 'click', 'keydown', 'keyup', 'input', 'change']) addEventListener(t, wakeShadow, { capture: true, passive: true });
+worker.addEventListener('message', wakeShadow);
+gizmo.addEventListener('objectChange', wakeShadow);
+controls.addEventListener('change', wake);
+wakeShadow();
+renderer.setAnimationLoop(now => {
   stepFly();
   stepWheel();
-  controls.update(); renderer.render(scene, camera);
+  controls.update();
+  if (!fly && !wheel.left && now > awake && now - lastDraw < 1000) return;
+  lastDraw = now;
+  renderer.render(scene, camera);
   renderCube();
   updateScale();
   originPlanes.visible = !display.render && !display.section;
