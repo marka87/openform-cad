@@ -2217,6 +2217,36 @@ const gizmo = new TransformControls(camera, el), pivot = new THREE.Object3D(), g
 scene.add(pivot, gizmo.getHelper());
 gizmo.setTranslationSnap(1); gizmo.setRotationSnap(Math.PI / 12); // 1 mm bzw. 15°
 gizmo.addEventListener('dragging-changed', e => { controls.enabled = !e.value; if (!e.value) commitGizmo(); });
+// Griffe von Three.js umgestalten: ein schlanker Pfeil je Achse statt zwei, runde Drehringe, Farben wie die Achsen im Bild (dort ist Y oben, -Z grün).
+// shortcut: greift auf das interne _gizmo von TransformControls zu, nach einem Three.js-Update prüfen
+function styleGizmo() {
+  gizmo.setColors(0xe05555, 0x5588ee, 0x55c060, 0xff9a3c);
+  gizmo.showXYZE = false; // freies Drehen in alle Richtungen trifft man nur aus Versehen
+  const g = (gizmo as any)._gizmo, up = new THREE.Vector3(0, 1, 0);
+  const swap = (parent: THREE.Object3D, name: string, geos: THREE.BufferGeometry[], drop: (o: THREE.Mesh) => boolean = () => true) => {
+    const olds = (parent.children as THREE.Mesh[]).filter(o => o.name === name), material = olds[0].material;
+    for (const o of olds.filter(drop)) { parent.remove(o); o.geometry.dispose(); }
+    for (const geo of geos) {
+      const m = new THREE.Mesh(geo, material);
+      m.name = name; m.renderOrder = Infinity;
+      parent.add(m);
+    }
+  };
+  for (const [name, d] of [['X', [1, 0, 0]], ['Y', [0, 1, 0]], ['Z', [0, 0, 1]]] as const) {
+    const q = new THREE.Quaternion().setFromUnitVectors(up, V([...d]));
+    const part = (geo: THREE.BufferGeometry, y: number) => geo.translate(0, y, 0).applyQuaternion(q);
+    swap(g.gizmo.translate, name, [part(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 12), 0.34), part(new THREE.ConeGeometry(0.04, 0.14, 32), 0.66)]);
+    swap(g.picker.translate, name, [part(new THREE.CylinderGeometry(0.07, 0.07, 0.68, 8), 0.42)]);
+  }
+  const center = g.gizmo.translate.children.find((o: THREE.Mesh) => o.name === 'XYZ').material;
+  center.opacity = center._opacity = 0.95;
+  swap(g.gizmo.translate, 'XYZ', [new THREE.SphereGeometry(0.03, 24, 16)]);
+  const ring = (r: number, e: [number, number, number]) => new THREE.TorusGeometry(r, 0.008, 8, 96, Math.PI).rotateY(Math.PI / 2).rotateX(Math.PI / 2).applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...e)));
+  swap(g.gizmo.rotate, 'X', [ring(0.5, [0, 0, 0])]);
+  swap(g.gizmo.rotate, 'Y', [ring(0.5, [0, 0, -Math.PI / 2])]);
+  swap(g.gizmo.rotate, 'Z', [ring(0.5, [0, Math.PI / 2, 0])]);
+}
+styleGizmo();
 const bodyMeshOf = (b: number) => bodyGroup.children.find(m => m.userData.body === b);
 function attachGizmo(mode: 'translate' | 'rotate') {
   const m = selBody !== null && bodyMeshOf(selBody);
