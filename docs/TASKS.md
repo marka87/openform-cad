@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.12.0** Maße mit Maßlinie und Pfeilen, auch beim Zeichnen; Hilfslinien kräftig in Magenta; Skizzenlinien dicker; sanftes Zoomen und Kamerafahrt auf dem Bogen; Menü „Alle Funktionen“
 - **0.11.1** Werkzeugleiste ohne Scrollbalken auf kleinen Bildschirmen: zwei Spalten unter 900 px Höhe, Ansichten kompakter, obere Leiste bleibt bei 1280 px einzeilig
 - **0.11.0** Leertaste stellt flach auf Fläche oder nächste Würfelseite; Achse längs zum Blick ausgeblendet; markierte Kanten ganz in eigener Farbe
 - **0.10.0** Trimmen an Rechteck, Kreis, Vieleck und Linie, auch an Bögen; Reste verbinden sich zu einer Fläche
@@ -160,6 +161,10 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Vergleich Shapr3D, Gefühl und Funktionen (0.12.0). Maßlinien liegen als SVG über dem Bild und werden je Bild neu
+  gerechnet; das Mausrad läuft über mehrere Bilder an OrbitControls. Das Menü „Alle Funktionen“ zeigt, was schon da war, aber
+  nur im Seitenfeld oder per Rechtsklick zu finden war. Reine Bedienung, deshalb kein Kern-Test. Offen aus der Shapr3D-Liste:
+  Füllung, Fläche ersetzen, Umhüllen und Prägen; Griffpfeile zum Verschieben sind noch die von Three.js.
 - 2026-10-31 Kleine Bildschirme (0.11.1). Bei 1366x768 fehlten der Leiste 72 px, sie scrollte. Unter 900 px Höhe jetzt zwei
   Spalten und Ansichten ohne Überschriften, unter 640 px auch die Leiste ohne Gruppentitel. Gemessen bei 1920x1080, 1600x900,
   1366x768, 1280x720 und 1280x600: kein Scrollbalken. Reine Darstellung, deshalb kein Kern-Test.

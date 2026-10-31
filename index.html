@@ -14,6 +14,7 @@
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
   #toolbar button:hover, #top button:hover { background:#353a42; }
+  #toolbar button, #top button, #views button { transition:background-color .12s, border-color .12s, color .12s; }
   #toolbar button { padding:1px 10px; }
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
   #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
@@ -125,7 +126,7 @@
   /* Unter 900 px Höhe reichen die Werkzeuge einspaltig nicht neben die Ansichten: zwei Spalten, gleiche Breite wie die Ansichten */
   @media (max-height:900px) {
     #toolbar { display:grid; grid-template-columns:1fr 1fr; width:272px; max-height:calc(100% - 255px); }
-    #toolbar .grp, #toolbar [data-tool="select"], #toolbar [data-act="move"] { grid-column:1 / -1; }
+    #toolbar .grp, #toolbar [data-tool="select"], #toolbar [data-act="move"], #bAll { grid-column:1 / -1; }
     #toolbar button { padding:1px 6px; white-space:nowrap; }
     #toolbar kbd { margin-left:4px; }
     #toolbar small.mode { display:none; }
@@ -148,11 +149,13 @@
     background:rgba(53,58,66,.92); border:1px solid #5a606b; box-sizing:border-box; cursor:pointer; user-select:none; }
   #cube .face:hover { background:var(--accent); color:#1e2126; }
   #dims { position:fixed; inset:0; pointer-events:none; }
-  #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:var(--text); background:rgba(42,46,53,.85);
-    border-radius:4px; padding:1px 4px; white-space:nowrap; }
+  #dims svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; fill:#f2f4f7; filter:drop-shadow(0 0 1px rgba(0,0,0,.9)); }
+  #dims svg .st { fill:none; stroke:#f2f4f7; stroke-width:1; }
+  #dims span { position:absolute; transform:translate(-50%,-50%); font:11px system-ui; color:#fff; background:rgba(58,62,70,.95);
+    border-radius:6px; padding:2px 7px; white-space:nowrap; }
   #dims span { pointer-events:auto; cursor:text; }
   #dims span:hover { outline:1px solid var(--accent); }
-  #dims.pass span { pointer-events:none; opacity:.6; }
+  #dims.pass span { pointer-events:none; }
   #dims input { position:absolute; transform:translate(-50%,-50%); width:6em; font:11px system-ui; pointer-events:auto; }
   #boxSel { position:fixed; display:none; border:1px dashed var(--accent); background:rgba(255,154,60,.08); pointer-events:none; z-index:5; }
   #dims span.lock { background:var(--accent); color:#1e2126; font-weight:600; }
@@ -194,6 +197,7 @@
   <button data-act="move" title="Ausgewählten Körper (oder den Körper der Skizze) mit Griffen verschieben/drehen">Verschieben / Drehen<span class="dd" data-menu="xf" title="Transformieren: Skalieren, Werte, Drehen um Achse, Ausrichten … (auch Rechtsklick)">▾</span></button>
   <button data-act="pattern" title="Ausgewählten Körper oder Skizze als Reihe, Raster oder Kreis vervielfältigen">Muster</button>
   <button data-act="mirror" title="Ausgewählten Körper oder Skizze spiegeln">Spiegeln</button>
+  <button id="bAll" title="Alle Modellierfunktionen an einer Stelle, mit Anleitung">Alle Funktionen<span class="dd">▾</span></button>
   <div class="grp">Prüfen</div>
   <button data-tool="measure">Messen <small class="mode"></small><kbd>M</kbd><span class="dd" data-menu="measure" title="Art des Messens (auch Rechtsklick)">▾</span></button>
 </div>

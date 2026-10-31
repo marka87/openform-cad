@@ -97,8 +97,23 @@ function showSnapTip(p: THREE.Vector3, text: string) {
 
 // Eigene Listener VOR OrbitControls registrieren, damit Werkzeuge Linksklicks übernehmen können
 el.addEventListener('pointerdown', onDown);
+// Mausrad sanft: echte Raststufen sammeln, stepWheel gibt sie über mehrere Bilder an die Kamera weiter
+const wheel = { left: 0, x: 0, y: 0, ctrl: false };
+el.addEventListener('wheel', e => {
+  if (!e.isTrusted) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  wheel.left += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+  wheel.x = e.clientX; wheel.y = e.clientY; wheel.ctrl = e.ctrlKey;
+}, { passive: false });
+function stepWheel() {
+  if (Math.abs(wheel.left) < 0.5) { wheel.left = 0; return; }
+  const deltaY = wheel.left * 0.25;
+  wheel.left -= deltaY;
+  el.dispatchEvent(new WheelEvent('wheel', { deltaY, clientX: wheel.x, clientY: wheel.y, ctrlKey: wheel.ctrl, cancelable: true }));
+}
 const controls = new OrbitControls(camera, el);
 controls.enableDamping = true;
+controls.dampingFactor = 0.12; // kurzer Nachlauf: weich, aber das Modell bleibt dort stehen, wo man loslässt
 controls.zoomToCursor = true; // Mausrad zoomt dorthin, wo die Maus steht
 // Links gehört den Werkzeugen (Ziehen ins Leere = Rahmen), rechts drehen, Mitte verschieben, Rad zoomen (wie Shapr3D)
 controls.mouseButtons = { LEFT: null as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
@@ -192,9 +207,8 @@ function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline' | 'add' | 
     side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
   const mesh = new THREE.Mesh(g, mat);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(g, 20),
-    new THREE.LineBasicMaterial({ color: sel ? 0xffd2a8 : 0x8cc4ff, depthTest: kind !== 'outline' }));
-  edges.raycast = () => {};
+  const eg = new THREE.EdgesGeometry(g, 20), edges = fatLine(eg.attributes.position.array, { color: sel ? 0xffa64d : 0x4da3ff, depthTest: kind !== 'outline' });
+  eg.dispose();
   mesh.add(edges);
   if (kind !== 'sketch') mesh.raycast = () => {};
   mesh.matrixAutoUpdate = false;
@@ -439,14 +453,24 @@ function projected(lines: { pts: number[][]; closed: boolean; src: EdgeRef | nul
   const fixed = lines.filter(l => !l.src).length;
   showNotice(`${out.length} Kanten als Hilfslinien projiziert${fixed ? ` · ${fixed} ohne eindeutigen Bezug, bleiben fest` : ''}`);
 }
-// Hilfslinie gestrichelt, offene Skizzenlinie durchgezogen; userData.aux = ID zum Anklicken
+// Dicke Linie aus Paaren von Punkten (x, y, z, x, y, z, …); nimmt keine Klicks an
+function fatLine(pos: ArrayLike<number>, opts: ConstructorParameters<typeof LineMaterial>[0]) {
+  const l = new LineSegments2(new LineSegmentsGeometry().setPositions(pos as number[]), new LineMaterial({ linewidth: 2, depthTest: false, ...opts }));
+  l.raycast = () => {};
+  l.renderOrder = 1;
+  return l;
+}
+const pairsOf = (pts: THREE.Vector3[]) => pts.slice(1).flatMap((p, i) => [...pts[i].toArray(), ...p.toArray()]);
+// Hilfslinie gestrichelt in Magenta (hebt sich von hellen Flächen und dunklem Grund ab), offene Skizzenlinie durchgezogen.
+// Sichtbar ist die dicke Linie; die unsichtbare dünne bleibt zum Anklicken, userData.aux = ID
 function auxLine(f: Extrude) {
   const pts = outline(f.pts!, !f.open).map(([x, y]) => V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y));
   if (!f.open) pts.push(pts[0]);
-  const color = f.id === selId ? 0xffa64d : f.aux ? 0x9fb3c8 : 0x4da3ff;
-  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-    f.aux ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.5, depthTest: false }) : new THREE.LineBasicMaterial({ color, depthTest: false }));
-  l.computeLineDistances();
+  const color = f.id === selId ? 0xffa64d : f.aux ? 0xd63bd9 : 0x4da3ff, r = pxSize();
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+  const fat = fatLine(pairsOf(pts), { color, dashed: !!f.aux, dashSize: 9 * r, gapSize: 6 * r });
+  if (f.aux) fat.computeLineDistances();
+  l.add(fat);
   l.renderOrder = 1;
   l.userData.aux = f.id;
   return l;
@@ -913,10 +937,11 @@ function showPoly(pts: number[][]) {
   disposeGroup(preview);
   const { o, u, v } = poly!.pl;
   const world = contour(pts, poly!.smooth, false).map(([x, y]) => V(o).addScaledVector(V(u), x).addScaledVector(V(v), y));
-  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(world), new THREE.LineBasicMaterial({ color: 0x4da3ff, depthTest: false }));
+  const line = fatLine(pairsOf(world), { color: poly!.aux ? 0xd63bd9 : 0x4da3ff });
   const start = new THREE.Mesh(new THREE.SphereGeometry(4 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0x4da3ff, depthTest: false }));
   start.position.copy(world[0]);
   preview.add(line, start);
+  if (!poly!.smooth) buildDims({ ...poly!.pl, id: 0, d: 0, type: 'line', open: true, p: {}, pts }, true);
 }
 // Punkt auf der Skizzenebene unter der Maus, eingerastet an Punkte und Linien auf dieser Ebene, sonst ans Raster
 function sketchPoint(pl: Frame, e: PointerEvent) {
@@ -1217,7 +1242,7 @@ function onMove(e: PointerEvent) {
   if (rect3 && !drag) { // 3-Punkt-Rechteck: Breite = Abstand der Maus von der Kante
     const q = sketchPoint(rect3.pl, e), f = q && rect3Feature(q);
     disposeGroup(preview);
-    if (f) { preview.add(buildMesh(f, 'preview')); showHud(e, `${fmt(Math.hypot(rect3.b[0] - rect3.a[0], rect3.b[1] - rect3.a[1]))} × ${len(Math.abs(rect3W(q!)))}`); }
+    if (f) { preview.add(buildMesh(f, 'preview')); buildDims(f, true); showHud(e, `${fmt(Math.hypot(rect3.b[0] - rect3.a[0], rect3.b[1] - rect3.a[1]))} × ${len(Math.abs(rect3W(q!)))}`); }
     return;
   }
   if (poly && !drag) {
@@ -1233,7 +1258,7 @@ function onMove(e: PointerEvent) {
     showPoly([...poly.pts, q]);
     if (poly.path !== undefined && !poly.edges) previewPath([...poly.pts, q]);
     if (typed) return showTyped();
-    return showHud(e, `${len(Math.hypot(q[0] - last[0], q[1] - last[1]))} · Zahl tippen`);
+    return showHud(e, 'Zahl tippen');
   }
   if (!drag) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
@@ -1276,7 +1301,8 @@ function onMove(e: PointerEvent) {
     }
     if (f) {
       preview.add(buildMesh(f, 'preview'));
-      if (typed) showTyped(); else showHud(e, `${hudText(f)} · Zahl tippen`);
+      buildDims(f, true);
+      if (typed) showTyped(); else showHud(e, dimLabels.length ? 'Zahl tippen' : `${hudText(f)} · Zahl tippen`);
     }
   } else {
     if (!drag.started) {
@@ -1711,7 +1737,10 @@ function bindCons(f: Extrude) {
 
 // Maßzahlen an den Seiten der ausgewählten Skizze; festgelegte Maße orange, waagrecht/senkrecht als — / |
 const dims = $('dims');
-let dimLabels: { el: HTMLElement; p: THREE.Vector3; q: THREE.Vector3 }[] = []; // p = Stelle an der Skizze, q = Punkt nach außen
+let dimLabels: { el: HTMLElement; p: THREE.Vector3; q: THREE.Vector3; b?: THREE.Vector3 }[] = []; // p = Stelle an der Skizze (mit b: Anfang und Ende der Seite), q = Punkt nach außen
+const SVG = 'http://www.w3.org/2000/svg', dimSvg = document.createElementNS(SVG, 'svg'), dimStroke = document.createElementNS(SVG, 'path'), dimHeads = document.createElementNS(SVG, 'path');
+dimStroke.setAttribute('class', 'st'); dimSvg.append(dimStroke, dimHeads);
+let dimsLive = false; // Maße gehören zur Vorschau beim Zeichnen
 // Rahmenauswahl: alle Skizzen und Features, deren Eckpunkte ganz im Rahmen liegen; Klick ohne Ziehen = Auswahl aufheben
 const boxSel = $('boxSel');
 function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift: boolean; started: boolean }) {
@@ -1722,41 +1751,43 @@ function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift:
   const n = selectWhere(f => keyPoints(f).every(inside), d.shift);
   showNotice(n ? `${n} ausgewählt${n > 1 ? ' · Entf = alle löschen' : ''}` : 'Nichts ganz im Rahmen');
 }
-// Maße an der ausgewählten Skizze: Seitenlängen, Bogenradien, Rechteck Breite/Tiefe, Kreisradius.
+// Maße an der ausgewählten Skizze oder (live) an der gerade gezeichneten Form: Seitenlängen, Bogenradien, Rechteck Breite/Tiefe, Kreisradius.
 // Klick auf ein Maß = Wert tippen; geschrieben wird über das passende Feld im Seitenfeld (gleiche Prüfung und Abhängigkeiten)
 let dimEditing = false; // Maß wird gerade an der Skizze getippt: nicht neu aufbauen, sonst verschwindet das Eingabefeld
-function buildDims() {
+function buildDims(of?: Extrude, live = false) {
   if (dimEditing) return;
-  dims.replaceChildren();
+  dims.replaceChildren(dimSvg);
   dimLabels = [];
-  const f = getSel();
+  dimsLive = live;
+  const f = of ?? getSel();
   if (!f || !isExtrude(f) || f.smooth || f.p.ry) return;
-  const M = moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
-  const label = (text: string, at: number[], out: number[], target: string, lock = false) => {
+  const M = live ? new THREE.Matrix4() : moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
+  const label = (text: string, at: number[], out: number[], target: string, lock = false, end?: number[]) => {
     const el = document.createElement('span');
     el.textContent = text; if (lock) el.className = 'lock';
     el.title = 'Klicken = Maß tippen';
     el.onmousedown = e => e.preventDefault(); // Fokus nicht auf die Seite ziehen, sonst schließt das Eingabefeld sofort
     el.onclick = e => { e.stopPropagation(); editDim(el, target); };
     dims.append(el);
-    dimLabels.push({ el, p: world(at).applyMatrix4(M), q: world([at[0] + out[0], at[1] + out[1]]).applyMatrix4(M) });
+    dimLabels.push({ el, p: world(at).applyMatrix4(M), q: world([at[0] + out[0], at[1] + out[1]]).applyMatrix4(M), b: end && world(end).applyMatrix4(M) });
   };
   const p = f.p;
   if (f.type === 'rect') {
-    label(fmt(p.w), [p.x + p.w / 2, p.y], [0, -1], 'input[data-k="p.w"]');
-    label(fmt(p.h), [p.x + p.w, p.y + p.h / 2], [1, 0], 'input[data-k="p.h"]');
+    label(fmt(p.w), [p.x, p.y], [0, -1], 'input[data-k="p.w"]', false, [p.x + p.w, p.y]);
+    label(fmt(p.h), [p.x + p.w, p.y], [1, 0], 'input[data-k="p.h"]', false, [p.x + p.w, p.y + p.h]);
     return;
   }
   if (f.type === 'circle') return label(`R ${fmt(p.r)}`, [p.cx + p.r, p.cy], [1, 0], 'input[data-k="p.r"]');
   const pts = f.pts!, turn = Math.sign(pts.reduce((s, a, i) => { const b = pts[(i + 1) % pts.length]; return s + a[0] * b[1] - b[0] * a[1]; }, 0)) || 1; // Umlaufsinn: rechts der Seite = außen bei gegen den Uhrzeigersinn
   pts.forEach((a, i) => {
     if (f.open && i === pts.length - 1) return; // offene Linie: kein Schlusssegment
+    if (live && i !== (f.open ? pts.length - 2 : 0)) return; // beim Zeichnen nur die Seite, die gerade entsteht
     const b = pts[(i + 1) % pts.length], c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     if (a[2]) { // Bogen: Radius am Scheitel
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]), s = a[2] * L / 2, r = L * (1 + a[2] ** 2) / (4 * Math.abs(a[2]));
       return label(`R ${fmt(r)}`, [mid[0] + (b[1] - a[1]) / L * s, mid[1] - (b[0] - a[0]) / L * s], [(b[1] - a[1]) * Math.sign(s), (a[0] - b[0]) * Math.sign(s)], `.cons input.rad[data-i="${i}"]`, c('rad'));
     }
-    label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, mid, [(b[1] - a[1]) * turn, (a[0] - b[0]) * turn], `.cons input.len[data-i="${i}"]`, c('len'));
+    label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, a, [(b[1] - a[1]) * turn, (a[0] - b[0]) * turn], `.cons input.len[data-i="${i}"]`, c('len'), b);
   });
 }
 // Maß an der Skizze bearbeiten: Eingabefeld an Ort und Stelle, Enter übernimmt, Esc bricht ab
@@ -1777,15 +1808,42 @@ function editDim(span: HTMLSpanElement, target: string) {
   inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
   inp.onblur = () => finish(true);
 }
+// Jedes Bild neu: Maßlinie mit Hilfslinien und Pfeilen neben der Kante, Zahl mittig und entlang der Linie; Radius mit Pfeil von außen
 function updateDims() {
+  if (dimsLive && !preview.children.length) buildDims(); // Zeichnen abgebrochen
   const W = dims.clientWidth, H = dims.clientHeight;
-  for (const { el, p, q } of dimLabels) {
-    const s = p.clone().project(camera), t = q.clone().project(camera);
-    const dx = (t.x - s.x) * W, dy = (s.y - t.y) * H, L = Math.hypot(dx, dy) || 1; // Maß neben die Kante, damit Punkte darauf frei bleiben
-    el.style.display = s.z > 1 ? 'none' : '';
-    el.style.left = `${(s.x + 1) / 2 * W + dx / L * 26}px`;
-    el.style.top = `${(1 - s.y) / 2 * H + dy / L * 18}px`;
+  const scr = (v: THREE.Vector3) => { const s = v.clone().project(camera); return { x: (s.x + 1) / 2 * W, y: (1 - s.y) / 2 * H, z: s.z }; };
+  let lines = '', heads = '';
+  const line = (x0: number, y0: number, x1: number, y1: number) => { lines += `M${x0} ${y0}L${x1} ${y1}`; };
+  const arrow = (x: number, y: number, dx: number, dy: number) => { heads += `M${x} ${y}L${x - dx * 9 - dy * 3} ${y - dy * 9 + dx * 3}L${x - dx * 9 + dy * 3} ${y - dy * 9 - dx * 3}Z`; };
+  for (const { el, p, q, b } of dimLabels) {
+    const s = scr(p), t = scr(q), E = b && scr(b), behind = s.z > 1 || (E && E.z > 1);
+    const ol = Math.hypot(t.x - s.x, t.y - s.y) || 1, ox = (t.x - s.x) / ol, oy = (t.y - s.y) / ol;
+    const L = E ? Math.hypot(E.x - s.x, E.y - s.y) : 0;
+    el.style.display = behind || (E && L < 1) ? 'none' : '';
+    if (behind || (E && L < 1)) continue;
+    if (!E) { // Radius: Zahl außen, Pfeil zeigt auf die Linie
+      const a = 28, w = el.offsetWidth / 2;
+      line(s.x, s.y, s.x + ox * a, s.y + oy * a);
+      arrow(s.x, s.y, -ox, -oy);
+      el.style.left = `${s.x + ox * (a + w * Math.abs(ox) + 9 * Math.abs(oy))}px`;
+      el.style.top = `${s.y + oy * (a + w * Math.abs(ox) + 9 * Math.abs(oy))}px`;
+      continue;
+    }
+    const ux = (E.x - s.x) / L, uy = (E.y - s.y) / L, flip = -uy * ox + ux * oy < 0 ? -1 : 1, nx = -uy * flip, ny = ux * flip, off = 24;
+    const ax = s.x + nx * off, ay = s.y + ny * off, bx = E.x + nx * off, by = E.y + ny * off;
+    line(s.x + nx * 4, s.y + ny * 4, ax + nx * 5, ay + ny * 5);
+    line(E.x + nx * 4, E.y + ny * 4, bx + nx * 5, by + ny * 5);
+    if (L > el.offsetWidth + 26) { line(ax, ay, bx, by); arrow(ax, ay, -ux, -uy); arrow(bx, by, ux, uy); } // kurze Seite: Pfeile von außen
+    else { line(ax - ux * 16, ay - uy * 16, bx + ux * 16, by + uy * 16); arrow(ax, ay, ux, uy); arrow(bx, by, -ux, -uy); }
+    let deg = Math.atan2(uy, ux) * 180 / Math.PI;
+    if (deg > 90) deg -= 180; else if (deg <= -90) deg += 180;
+    el.style.left = `${(ax + bx) / 2}px`;
+    el.style.top = `${(ay + by) / 2}px`;
+    el.style.transform = `translate(-50%,-50%) rotate(${deg}deg)`;
   }
+  dimStroke.setAttribute('d', lines);
+  dimHeads.setAttribute('d', heads);
 }
 
 function renderImportPanel(f: Import) {
@@ -2376,7 +2434,7 @@ function showMeasure() {
 
 // ---------- Ansichten ----------
 const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], bottom: [0, -1, 1e-4], front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0] };
-// Kamera weich zu neuer Lage fahren (300 ms), statt zu springen
+// Kamera weich zu neuer Lage fahren, statt zu springen: auf einem Bogen ums Ziel, damit der Abstand unterwegs nicht einbricht
 let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number; spin?: number } | null = null;
 function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
   if (![...pos.toArray(), ...target.toArray()].every(Number.isFinite)) return; // NaN in der Kamera ließe das Bild dauerhaft leer
@@ -2384,10 +2442,15 @@ function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
 }
 function stepFly() {
   if (!fly) return;
-  const t = Math.min(1, (performance.now() - fly.start) / 300), s = t * t * (3 - 2 * t);
-  if (fly.spin) camera.position.copy(fly.p0).sub(fly.t0).applyAxisAngle(new THREE.Vector3(0, 1, 0), fly.spin * s).add(fly.t0); // auf dem Kreis, sonst ginge der Abstand unterwegs verloren
-  else camera.position.lerpVectors(fly.p0, fly.p1, s);
+  const t = Math.min(1, (performance.now() - fly.start) / 400), s = t < 0.5 ? 4 * t ** 3 : 1 - (2 - 2 * t) ** 3 / 2;
   controls.target.lerpVectors(fly.t0, fly.t1, s);
+  const a = fly.p0.clone().sub(fly.t0), b = fly.p1.clone().sub(fly.t1), la = a.length(), lb = b.length();
+  if (fly.spin) camera.position.copy(a).applyAxisAngle(new THREE.Vector3(0, 1, 0), fly.spin * s).add(controls.target);
+  else if (!la || !lb) camera.position.lerpVectors(fly.p0, fly.p1, s);
+  else {
+    const q = new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
+    camera.position.copy(a).normalize().applyQuaternion(new THREE.Quaternion().slerp(q, s)).multiplyScalar(la + (lb - la) * s).add(controls.target);
+  }
   if (t === 1) fly = null;
 }
 // Ansicht um die Hochachse drehen; in der Draufsicht dreht das den Grundriss im Bild
@@ -2587,6 +2650,7 @@ const ICONS: Partial<Record<Tool, string>> = {
   text: '<path d="M3 4V2.5h10V4 M8 2.5v11 M6 13.5h4"/>', aux: '<path d="M1.5 8h2 M6 8h2 M10.5 8h2" stroke-dasharray="none"/>', trim: '<circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><path d="M5.5 5.5L14 12 M5.5 10.5L14 4"/>',
 };
 const ICONS2: Record<string, string> = {
+  bAll: '<path d="M2.5 2.5h4v4h-4z M9.5 2.5h4v4h-4z M2.5 9.5h4v4h-4z M9.5 9.5h4v4h-4z"/>',
   move: '<path d="M8 1.5v13 M1.5 8h13 M8 1.5L6.5 3 M8 1.5L9.5 3 M8 14.5L6.5 13 M8 14.5L9.5 13 M1.5 8L3 6.5 M1.5 8L3 9.5 M14.5 8L13 6.5 M14.5 8L13 9.5"/>',
   pattern: '<circle cx="3.5" cy="3.5" r="1"/><circle cx="8" cy="3.5" r="1"/><circle cx="12.5" cy="3.5" r="1"/><circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/><circle cx="3.5" cy="12.5" r="1"/><circle cx="8" cy="12.5" r="1"/><circle cx="12.5" cy="12.5" r="1"/>',
   mirror: '<path d="M8 1.5v13 M6 4L1.5 12H6z M10 4l4.5 8H10z"/>',
@@ -2603,7 +2667,7 @@ document.querySelectorAll<HTMLButtonElement>('#top button').forEach(b => b.inser
 document.querySelectorAll<HTMLButtonElement>('#views button').forEach(b => b.insertAdjacentHTML('afterbegin', svgOf(b.dataset.view ?? b.dataset.show ?? b.id)));
 document.querySelectorAll<HTMLButtonElement>('#toolbar button').forEach(b => {
   const t = b.dataset.tool as Tool;
-  b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 16 16">${ICONS[t] ?? ICONS2[b.dataset.act!] ?? ''}</svg>`);
+  b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 16 16">${ICONS[t] ?? ICONS2[b.dataset.act ?? b.id] ?? ''}</svg>`);
   if (t) b.title = HINTS[t];
 });
 document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => b.onclick = () => {
@@ -2616,8 +2680,29 @@ applyDisplay();
 
 // ---------- Werkzeugsuche (Strg+K): alle Knöpfe der Werkzeugleiste und der oberen Leiste ----------
 const palette = $('palette'), palIn = palette.querySelector('input')!, palList = palette.querySelector('div')!;
+// Alle Modellierfunktionen an einer Stelle (auch in der Werkzeugsuche); was am Modell passiert, erklärt der Hinweis
+const FUNCS: [string, () => void][] = [
+  ['Extrudieren', () => showHint('Extrudieren: Skizze anklicken und ziehen, Zahl tippen = genaues Maß')],
+  ['Fläche versetzen', () => showHint('Fläche versetzen: Fläche eines Körpers anklicken und ziehen')],
+  ['Abrundung / Fase', () => showHint('Abrundung / Fase: Kante ziehen, nach außen = Rundung, nach innen = Fase. Art im Seitenfeld wechseln')],
+  ['Gehäuse (Schale)', () => setTool('shell')],
+  ['Loft (Übergang)', () => showHint('Loft: zwei Skizzen auf verschiedenen Ebenen anlegen, eine anklicken, die zweite mit Shift+Klick dazu, im Seitenfeld „Übergang (Loft)“')],
+  ['Umlaufen (Drehkörper)', () => showHint('Umlaufen: Skizze anklicken, im Seitenfeld „Drehen um“ die Achse wählen')],
+  ['Sweep (Zug)', () => showHint('Sweep: Skizze anklicken, im Seitenfeld „Zug: Pfad zeichnen“')],
+  ['Kante versetzen', () => showHint('Kante versetzen: Skizze anklicken, im Seitenfeld Versatz eintragen und „Versatz anlegen“')],
+  ['Projizieren', () => projectEdges()],
+  null!,
+  ...['Vereinigung', 'Subtrahieren', 'Schneiden (Schnittmenge)', 'Körper teilen'].map((n): [string, () => void] => [n, () => { transformAct('move'); if (selBody !== null) showHint(`${n}: im Seitenfeld des Körpers wählen`); }]),
+  null!,
+  ['Fläche löschen (Loch schließen)', () => showHint('Fläche löschen: Rechtsklick auf die Wand eines Lochs oder eine Rundung, „Fläche löschen“')],
+];
+$('bAll').onclick = e => {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  showMenu(r.right + 12, r.top - 120, FUNCS);
+};
 const commands = () => [...document.querySelectorAll<HTMLButtonElement>('#toolbar button, #top button, #views button')]
-  .map(b => ({ label: [...b.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').replace(/[↶↷]/g, '').trim(), run: () => b.click() }));
+  .map(b => ({ label: [...b.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').replace(/[↶↷]/g, '').trim(), run: () => b.click() }))
+  .concat(FUNCS.filter(Boolean).map(([label, run]) => ({ label, run })));
 function renderPalette() {
   const q = palIn.value.toLowerCase(), hits = commands().filter(c => c.label.toLowerCase().includes(q));
   palList.replaceChildren(...hits.map((c, i) => {
@@ -2642,6 +2727,7 @@ function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = i
 addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => {
   stepFly();
+  stepWheel();
   controls.update(); renderer.render(scene, camera);
   renderCube();
   updateScale();
