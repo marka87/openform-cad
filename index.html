@@ -14,7 +14,7 @@
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
   #toolbar button:hover, #top button:hover { background:#353a42; }
-  #toolbar button { padding:1px 10px; } /* 18 Einträge + 4 Gruppen: passt so ohne Scrollen in 768 px Fensterhöhe */
+  #toolbar button { padding:1px 10px; }
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
   #toolbar kbd { float:right; margin-left:14px; color:var(--muted); font:11px monospace; }
   #top { position:fixed; top:12px; left:150px; right:320px; width:fit-content; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:center; gap:4px;
@@ -122,6 +122,18 @@
   #views svg { vertical-align:-3px; margin-right:5px; }
   #views .vg { width:100%; color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:5px 4px 0; border-top:1px solid var(--line); margin-top:2px; }
   #views .vg:first-child { border-top:0; margin-top:0; padding-top:1px; }
+  /* Unter 900 px Höhe reichen die Werkzeuge einspaltig nicht neben die Ansichten: zwei Spalten, gleiche Breite wie die Ansichten */
+  @media (max-height:900px) {
+    #toolbar { display:grid; grid-template-columns:1fr 1fr; width:272px; max-height:calc(100% - 255px); }
+    #toolbar .grp, #toolbar [data-tool="select"], #toolbar [data-act="move"] { grid-column:1 / -1; }
+    #toolbar button { padding:1px 6px; white-space:nowrap; }
+    #toolbar kbd { margin-left:4px; }
+    #toolbar small.mode { display:none; }
+    #views .vg { display:none; }
+    #views button { padding:1px 4px; }
+  }
+  @media (max-height:640px) { #toolbar .grp { display:none; } }
+  @media (max-width:1400px) { #top { gap:2px; } #top button { padding:6px 3px; } } /* sonst bricht die obere Leiste bei 1280 px um */
   #panel.wide { width:290px; }
   #panel.wide select { max-width:165px; }
   #panel h3 .x { float:right; background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; }

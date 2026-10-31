@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.11.1** Werkzeugleiste ohne Scrollbalken auf kleinen Bildschirmen: zwei Spalten unter 900 px Höhe, Ansichten kompakter, obere Leiste bleibt bei 1280 px einzeilig
 - **0.11.0** Leertaste stellt flach auf Fläche oder nächste Würfelseite; Achse längs zum Blick ausgeblendet; markierte Kanten ganz in eigener Farbe
 - **0.10.0** Trimmen an Rechteck, Kreis, Vieleck und Linie, auch an Bögen; Reste verbinden sich zu einer Fläche
 - **0.9.0** Markierte Skizzen gemeinsam hochziehen; markierte Kanten durch Ziehen gemeinsam runden, Radius für alle
@@ -159,6 +160,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Kleine Bildschirme (0.11.1). Bei 1366x768 fehlten der Leiste 72 px, sie scrollte. Unter 900 px Höhe jetzt zwei
+  Spalten und Ansichten ohne Überschriften, unter 640 px auch die Leiste ohne Gruppentitel. Gemessen bei 1920x1080, 1600x900,
+  1366x768, 1280x720 und 1280x600: kein Scrollbalken. Reine Darstellung, deshalb kein Kern-Test.
 - 2026-10-31 Ansicht und Markierung (0.11.0). Leertaste über einer Fläche legt das Raster und schaut sofort darauf, ohne
   Fläche auf die nächste Würfelseite, nochmal = zurück. Das letzte Werkzeug kommt nur noch, wenn die Ansicht schon flach ist
   und kein Zurück vorliegt. Achse wird unter rund 6° zum Blick ausgeblendet. Reine Bedienung, Tests decken das nicht ab.
