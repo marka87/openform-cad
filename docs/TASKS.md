@@ -108,12 +108,21 @@ Datenverlust = sofort ein Paket.
 - [Zahnbürstenständer] Wollte: STEP aus FreeCAD öffnen und auf der Seite weiterarbeiten | Passiert: Löcher
   fehlten, nach Doppelklick und Leertaste alles leer, nichts ging mehr | Umweg: keiner (behoben in 0.7.1)
 
+### Vergleich Schritt für Schritt mit Shapr3D (2026-10-31)
+- [Vergleich] Wollte: Ebene XY, XZ oder YZ wählen | Passiert: nur Boden, Fläche oder eigene Ebene | Umweg: - (0.8.0)
+- [Vergleich] Wollte: Rechteck aus der Mitte von 10x20 auf 20x10 | Passiert: Mitte blieb nicht stehen | Umweg: X/Y von Hand (0.8.0)
+- [Vergleich] Wollte: Hilfslinie am Kantenpunkt ansetzen | Passiert: Maß lag darauf, Klick ging ins Maß | Umweg: - (0.8.0)
+- [Vergleich] Wollte: Kreis an Hilfslinie spiegeln, mehrere Skizzen markieren | Passiert: Klick traf das
+  Rechteck unter dem Kreis, Hilfslinie nicht wählbar | Umweg: - (0.8.0)
+
 ### Teil 3: (Name, Datum, wofür)
 
 ## Versionen
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.8.0** Ebenen XY, XZ, YZ am Ursprung; Rechteck aus der Mitte behält die Mitte; Maße neben der Skizze;
+  Spiegeln an Hilfslinie; Strg/Shift nimmt Hilfslinien mit, kleinste Skizze gewinnt den Klick
 - **0.7.1** STEP aus FreeCAD: Zwischenstände und Hilfsachsen werden beim Import weggelassen; leeres
   Bild nach Doppelklick und Leertaste behoben
 - **0.7.0** Neue Oberfläche nach Vorlage des Nutzers; Würfel: Doppelklick, Drehknöpfe ±90°; Ändern
@@ -133,6 +142,10 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Parallelvergleich mit Shapr3D (0.8.0). Ebenen am Ursprung nutzen das Flächenraster mit `free`, keine neuen
+  Modellschritte. Rechteck: `mid`, wirkt bei Eingabe und beim Ziehen der Seite. Beim Zeichnen klickt man durch Maße
+  hindurch. Spiegeln schlägt die jüngste Hilfslinie derselben Ebene vor; Hilfslinie zählt als Bezug, nicht als Kopie.
+  Bodenschatten schrieb Tiefe und verdeckte Skizzen unter dem Boden, behoben. Regel vom Nutzer: Installer nur auf Wunsch.
 - 2026-10-31 Fix 0.7.1, Dateien des Nutzers aus FreeCAD. Der Export enthält den ganzen Baum: 5 bzw. 7 Körper
   (Rohblock deckt die Löcher zu, Volumen 2217 statt 212 cm³) und Achsen als unendliche Kanten (4e100). Die
   ergaben NaN im Kantennetz, damit im Raster und in der Kamera: Bild dauerhaft leer. Import behält nur Körper,

@@ -23,6 +23,7 @@ export interface Extrude extends Frame {
   axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
   thru?: boolean;            // Schnitt durch den ganzen Körper: d rechnet der Kern bei jedem Lauf neu
+  mid?: boolean;             // Rechteck aus der Mitte gezogen: Maßänderungen lassen die Mitte stehen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
 }
@@ -647,8 +648,8 @@ export function pushTo(part: Part, f0: Extrude, v: number): number | null {
     case 'start': return f0.d - v;
     case 'seg': return v;
     case 'r': return v - p.r;
-    case 'x1': case 'x0': return part === 'x1' ? v - p.w : p.w - v;
-    case 'y1': case 'y0': return part === 'y1' ? v - p.h : p.h - v;
+    case 'x1': case 'x0': return (part === 'x1' ? v - p.w : p.w - v) / (f0.mid ? 2 : 1);
+    case 'y1': case 'y0': return (part === 'y1' ? v - p.h : p.h - v) / (f0.mid ? 2 : 1);
     default: return null;
   }
 }
@@ -673,9 +674,22 @@ export function applyPush(f: Extrude, f0: Extrude, part: Part, k: number, t: num
     case 'start':
       f.o = f0.o.map((c, i) => c + m * f0.n[i]) as Vec; f.d = f0.d - m; return ['Höhe', f.d];
     case 'r': p.r = Math.max(0.5, p0.r + m); return ['Radius', p.r];
-    case 'x1': p.w = Math.max(1, p0.w + m); return ['Breite', p.w];
-    case 'x0': p.w = Math.max(1, p0.w - m); p.x = p0.x + p0.w - p.w; return ['Breite', p.w];
-    case 'y1': p.h = Math.max(1, p0.h + m); return ['Tiefe', p.h];
-    case 'y0': p.h = Math.max(1, p0.h - m); p.y = p0.y + p0.h - p.h; return ['Tiefe', p.h];
+    case 'x1': p.x = p0.x; p.w = p0.w; rectSize(f, 'w', Math.max(1, p0.w + (f.mid ? 2 : 1) * m)); return ['Breite', p.w];
+    case 'x0': p.w = Math.max(1, p0.w - (f.mid ? 2 : 1) * m); p.x = p0.x + (f.mid ? (p0.w - p.w) / 2 : p0.w - p.w); return ['Breite', p.w];
+    case 'y1': p.y = p0.y; p.h = p0.h; rectSize(f, 'h', Math.max(1, p0.h + (f.mid ? 2 : 1) * m)); return ['Tiefe', p.h];
+    case 'y0': p.h = Math.max(1, p0.h - (f.mid ? 2 : 1) * m); p.y = p0.y + (f.mid ? (p0.h - p.h) / 2 : p0.h - p.h); return ['Tiefe', p.h];
   }
+}
+// Breite oder Tiefe eines Rechtecks setzen; aus der Mitte gezogen bleibt die Mitte stehen
+export function rectSize(f: Extrude, key: 'w' | 'h', v: number) {
+  const pos = key === 'w' ? 'x' : 'y';
+  if (f.mid) f.p[pos] -= (v - f.p[key]) / 2;
+  f.p[key] = v;
+}
+// Fläche einer Skizze: unter übereinanderliegenden Skizzen gewinnt beim Anklicken die kleinste, sonst wäre der Kreis im Rechteck nicht erreichbar
+export function sketchArea(f: Extrude) {
+  if (f.type === 'rect') return f.p.w * f.p.h;
+  if (f.type === 'circle') return Math.PI * f.p.r * (f.p.ry ?? f.p.r);
+  const xs = (f.pts ?? []).map(q => q[0]), ys = (f.pts ?? []).map(q => q[1]);
+  return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
 }

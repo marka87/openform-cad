@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies } from './model';
+import { THREADS, cutParam, extendOpen, trimOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -54,7 +54,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(80, 150,
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.3;
 Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 150, bottom: -150, near: 1, far: 500 });
 const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-100, 60, -80); scene.add(fill);
-const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.ShadowMaterial({ opacity: 0.22 }));
+const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.ShadowMaterial({ opacity: 0.22, depthWrite: false })); // sonst verdeckt der Boden halbdurchsichtige Skizzen darunter
 shadowFloor.rotation.x = -Math.PI / 2; shadowFloor.position.y = -0.03; shadowFloor.receiveShadow = true; shadowFloor.raycast = () => {};
 scene.add(shadowFloor);
 const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
@@ -555,7 +555,7 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; body?: number; tri?: number[]; pat?: number; patSrc?: number }; // pat = Kopie aus diesem Muster, patSrc = ihre Quellskizze // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; free?: boolean; body?: number; tri?: number[]; pat?: number; patSrc?: number }; // pat = Kopie aus diesem Muster, patSrc = ihre Quellskizze // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
 let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
 // Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
@@ -587,7 +587,8 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
   auxPick = hs.find(h => h.object.userData.aux)?.object.userData.aux ?? null; // Hilfslinie unter der Maus (keine Körperkante)
   const faces = hs.filter(h => h.face);
-  const fh = faces.find(h => (h.object.userData.id || h.object.userData.pat) && h.distance < faces[0].distance + 0.05) ?? faces[0];
+  const areaOf = (h: THREE.Intersection) => { const g = getById(h.object.userData.id ?? h.object.userData.src); return g && isExtrude(g) ? sketchArea(g) : Infinity; };
+  const fh = faces.filter(h => (h.object.userData.id || h.object.userData.pat) && h.distance < faces[0].distance + 0.05).sort((a, b) => areaOf(a) - areaOf(b))[0] ?? faces[0];
   // Beim Greifen schlägt eine flache Skizze unter der Maus die Kante: Bei flachem Blick liegt deren Fangbereich sonst über der Skizze, statt einer Bohrung entstand eine Fase
   const sf = features.find(f => f.id === fh?.object.userData.id), onSketch = tool === 'select' && !poly && !xfPick && axisFor === null && patPickFor === null && patPickBody === null && !!sf && isExtrude(sf) && isFlat(sf);
   const eh = onSketch ? undefined : hs.find(h => !h.face && !h.object.userData.aux);
@@ -677,7 +678,8 @@ function setWorkPlane(h: Hit | null) {
   // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
   // die Linien bleiben auf dem Einrastraster der Skizzenebene
   const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
-  const box = m ? new THREE.Box3().setFromObject(m) : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
+  const all = workHit.free ? new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)) : null;
+  const box = m ? new THREE.Box3().setFromObject(m) : all && !all.isEmpty() ? all : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
   const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
   const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
   const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
@@ -760,7 +762,7 @@ let measAt: THREE.Vector3 | null = null; // Lage des Messwerts im Modell (Beschr
 const measLabel = $('measLabel');
 let rect3: { pl: Frame; a: number[]; b: number[]; onFace: boolean; body?: number } | null = null; // 3-Punkt-Rechteck: Kante steht, Breite folgt der Maus
 function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extrude | null {
-  if (tool === 'rect' && rectMode === 'center') return sketchFeature('rect', pl, [2 * a[0] - b[0], 2 * a[1] - b[1]], b, nextId, onFace);
+  if (tool === 'rect' && rectMode === 'center') { const f = sketchFeature('rect', pl, [2 * a[0] - b[0], 2 * a[1] - b[1]], b, nextId, onFace); return f && { ...f, mid: true }; }
   if (tool === 'rect' && rectMode === '3pt') return null; // erst die Kante; Vorschau als Linie in onMove
   if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonPts(a, b, sides), nextId, onFace);
   if (tool === 'slot') return Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
@@ -1010,11 +1012,14 @@ function onDown(e: PointerEvent) {
   }
   const { face: h, edge } = pick();
   const hp = tool === 'select' ? ray.intersectObjects(handles.children)[0] : undefined;
+  const noPick = xfPick || patPickFor !== null || patPickBody !== null || axisFor !== null || poly || tool === 'trim' || tool === 'measure';
+  if (!noPick && !hp) { const o = originAt(); if (o) return chooseOrigin(o); }
   if (tool === 'trim') return trimAt(e);
   if (xfPick) return xfClick(h, edge);
   if (patPickBody !== null) { // dasselbe für den ganzen Körper
     const b = patPickBody;
     patPickBody = null;
+    if (lineOf(auxPick)) { patVals.ax = `l${auxPick}`; clearSel(); selBody = b; return refresh(); }
     patRef = edge ? { ax: edge.dir, c: edge.at, label: 'gewählte Kante' } : h ? { ax: h.n.toArray() as Vec, c: h.point.toArray() as Vec, label: 'gewählte Fläche' } : null;
     clearSel(); selBody = b; if (patRef) patVals.ax = 'ref';
     showHint(patRef ? `Bezug: ${patRef.label}` : 'Nichts getroffen');
@@ -1024,6 +1029,7 @@ function onDown(e: PointerEvent) {
   if (patPickFor !== null) { // Bezug für Muster/Spiegeln: Kante = Richtung durch die Kante, Fläche = Normale durch den Klickpunkt
     const id = patPickFor;
     patPickFor = null;
+    if (lineOf(auxPick)) { patVals.ax = `l${auxPick}`; selId = id; return refresh(); }
     patRef = edge ? { ax: edge.dir, c: edge.at, label: 'gewählte Kante' } : h ? { ax: h.n.toArray() as Vec, c: h.point.toArray() as Vec, label: 'gewählte Fläche' } : null;
     selId = id; if (patRef) patVals.ax = 'ref';
     showHint(patRef ? `Bezug: ${patRef.label}` : 'Nichts getroffen');
@@ -1046,7 +1052,10 @@ function onDown(e: PointerEvent) {
     pathPreview = sweepOf([], false); requestBuild();
     return showHint(pathHint());
   }
-  if (tool === 'select' && auxPick !== null && !hp) { clearSel(); selId = auxPick; detachGizmo(); return refresh(); } // Hilfslinie auswählen
+  if (tool === 'select' && auxPick !== null && !hp) { // Hilfslinie auswählen, mit Strg/Shift zur Auswahl dazu
+    if (e.ctrlKey || e.shiftKey) toggleSel(auxPick); else { clearSel(); selId = auxPick; }
+    detachGizmo(); return refresh();
+  }
   if (tool === 'select' && h?.pat !== undefined && !hp) { // Kopie eines Musters: wählt das Muster; ziehen drückt die Quelle hinein, alle Kopien folgen
     if (e.ctrlKey || e.shiftKey) { toggleSel(h.pat); return refresh(); }
     clearSel(); selId = h.pat; detachGizmo(); refresh();
@@ -1057,7 +1066,7 @@ function onDown(e: PointerEvent) {
   }
   if (tool === 'line' || tool === 'spline' || tool === 'aux') {
     const t = sketchOn(h);
-    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane' && !t.free, smooth: tool === 'spline', body: t?.body, ...tool === 'aux' && { aux: true } };
     const q = polyPoint(e), last = poly.pts.at(-1);
     // Druck auf den letzten Punkt: beim Ziehen entsteht ein Bogen; sonst setzt der Klick einen Punkt
     const arc = !poly.smooth && poly.pts.length >= 2 && nearPt(q, last);
@@ -1069,7 +1078,7 @@ function onDown(e: PointerEvent) {
     }
   } else if (tool === 'arc') { // Bogen durch drei Punkte: Anfang (nur beim ersten Mal), Ende, Punkt auf dem Bogen
     const t = sketchOn(h);
-    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane', smooth: false, body: t?.body };
+    if (!poly) poly = { pl: planeFor(t), pts: [], onFace: !!t && t.grip?.part !== 'plane' && !t.free, smooth: false, body: t?.body };
     const q = polyPoint(e);
     if (!q) return;
     drag = { kind: 'line', arc: false, sx: e.clientX, sy: e.clientY, started: false };
@@ -1092,7 +1101,7 @@ function onDown(e: PointerEvent) {
     const t = sketchOn(h), pl = planeFor(t); // auf Boden, Fläche oder Flächenraster skizzieren
     const a = sketchPoint(pl, e);
     if (!a) return;
-    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane', body: t?.body, sx: e.clientX, sy: e.clientY };
+    drag = { kind: 'sketch', pl, a, b: a, onFace: !!t && t.grip?.part !== 'plane' && !t.free, body: t?.body, sx: e.clientX, sy: e.clientY };
   } else if (tool === 'measure') {
     if (measureMode === 'obj') return measureObject();
     const s = measurePoint();
@@ -1143,7 +1152,7 @@ function onDown(e: PointerEvent) {
     if (!h) { drag = { kind: 'box', sx: e.clientX, sy: e.clientY, shift: e.shiftKey || e.ctrlKey, started: false }; controls.enabled = false; el.setPointerCapture(e.pointerId); return; } // Leere: Rahmen
     if (!h.grip) { if (selId !== null || selBody !== null || multi.size || edgeSel.length) { clearSel(); detachGizmo(); refresh(); } return; }
     const g = h.grip;
-    if ((e.shiftKey || e.ctrlKey) && selId !== null) { toggleSel(g.f.id); refresh(); return; }
+    if (e.shiftKey || e.ctrlKey) { toggleSel(g.f.id); refresh(); return; }
     if (!multi.has(g.f.id)) multi.clear();
     selId = g.f.id; selBody = null; edgeSel = []; detachGizmo(); refresh();
     if (g.part === 'import') return; // Import ohne Körpernummer: nur auswählen
@@ -1160,6 +1169,7 @@ el.addEventListener('pointermove', onMove);
 function onMove(e: PointerEvent) {
   if (!ready) return;
   setRay(e);
+  hoverOrigin(drag ? null : originAt());
   hideSnap();
   if (!drag && (['rect', 'circle', 'ngon', 'slot', 'ellipse'].includes(tool) || (!poly && ['line', 'arc', 'spline', 'aux'].includes(tool)))) sketchPoint(planeFor(sketchOn(pick().face)), e); // Einrasten schon vor dem Klick zeigen
   if (rect3 && !drag) { // 3-Punkt-Rechteck: Breite = Abstand der Maus von der Kante
@@ -1352,6 +1362,7 @@ document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.onclick = 
 addEventListener('pointerdown', e => { if (!flyout.contains(e.target as Node)) flyout.style.display = 'none'; }, true);
 modeLabels();
 function setTool(t: Tool) {
+  dims.classList.toggle('pass', t !== 'select'); // beim Zeichnen klickt man durch die Maße hindurch
   rect3 = null;
   if (drag?.kind === 'sketch' && drag.armed) { drag = null; disposeGroup(preview); hud.style.display = 'none'; } // halb gesetzte Form verwerfen
   const keep = poly && !poly.smooth && ['line', 'arc'].includes(t) && ['line', 'arc'].includes(tool); // zwischen Linie und Bogen wechseln
@@ -1382,9 +1393,16 @@ function transformAct(act: string) {
     if (act === 'align') { xfPick = { b: bb, kind: 'from' }; return showNotice('Ausrichten: erst eine ebene Fläche dieses Körpers anklicken · Esc = abbrechen'); }
   }
   if (act === 'pattern' || act === 'mirror') {
+    // Markierte gerade Hilfslinie ist der Bezug, nicht das, was vervielfältigt wird
+    const sel = [selId, ...multi].map(id => id === null ? undefined : getById(id)).filter((g): g is Extrude => !!g && isExtrude(g));
+    const parts = sel.filter(g => !noFace(g)), marked = sel.find(g => lineOf(g.id));
+    if (selBody === null && parts.length && sel.length > parts.length) { multi.clear(); selId = parts[0].id; parts.slice(1).forEach(g => multi.add(g.id)); }
     patView = { mode: act === 'mirror' ? 'mir' : 'lin', key: selBody !== null ? `b${selBody}` : `s${selId}` };
     patVals.ax = selBody !== null ? 'Z' : 'u'; patRef = null;
-    return renderPanel();
+    const near = parts[0] && [...lineChoices()].reverse().find(g => Math.abs(V(g.n).dot(V(parts[0].n))) > 0.999 && Math.abs(V(g.o).sub(V(parts[0].o)).dot(V(g.n))) < 1e-6);
+    const ref = marked ?? (act === 'mirror' ? near : undefined);
+    if (ref) patVals.ax = `l${ref.id}`;
+    return refresh();
   }
   const d = panel.querySelector<HTMLDetailsElement>('details.vals');
   if (d) { d.open = true; d.scrollIntoView({ block: 'nearest' }); }
@@ -1552,7 +1570,8 @@ function renderFeaturePanel() {
     const ks = inp.dataset.k!.split('.'), key = ks.at(-1)!;
     const obj: any = ks.length > 1 ? f.p : f;
     if (key === 'd') delete f.thru;
-    obj[key] = ['w', 'h', 'r', 'ry'].includes(key) ? Math.max(0.5, v) : key === 'rev' ? Math.max(1, Math.min(360, v)) : v;
+    if (f.type === 'rect' && (key === 'w' || key === 'h')) rectSize(f, key, Math.max(0.5, v));
+    else obj[key] = ['w', 'h', 'r', 'ry'].includes(key) ? Math.max(0.5, v) : key === 'rev' ? Math.max(1, Math.min(360, v)) : v;
     refresh();
   });
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -1637,7 +1656,7 @@ function bindCons(f: Extrude) {
 
 // Maßzahlen an den Seiten der ausgewählten Skizze; festgelegte Maße orange, waagrecht/senkrecht als — / |
 const dims = $('dims');
-let dimLabels: { el: HTMLElement; p: THREE.Vector3 }[] = [];
+let dimLabels: { el: HTMLElement; p: THREE.Vector3; q: THREE.Vector3 }[] = []; // p = Stelle an der Skizze, q = Punkt nach außen
 // Rahmenauswahl: alle Skizzen und Features, deren Eckpunkte ganz im Rahmen liegen; Klick ohne Ziehen = Auswahl aufheben
 const boxSel = $('boxSel');
 function boxSelect(d: { sx: number; sy: number; ex?: number; ey?: number; shift: boolean; started: boolean }) {
@@ -1658,31 +1677,31 @@ function buildDims() {
   const f = getSel();
   if (!f || !isExtrude(f) || f.smooth || f.p.ry) return;
   const M = moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
-  const label = (text: string, at: number[], target: string, lock = false) => {
+  const label = (text: string, at: number[], out: number[], target: string, lock = false) => {
     const el = document.createElement('span');
     el.textContent = text; if (lock) el.className = 'lock';
     el.title = 'Klicken = Maß tippen';
     el.onmousedown = e => e.preventDefault(); // Fokus nicht auf die Seite ziehen, sonst schließt das Eingabefeld sofort
     el.onclick = e => { e.stopPropagation(); editDim(el, target); };
     dims.append(el);
-    dimLabels.push({ el, p: world(at).applyMatrix4(M) });
+    dimLabels.push({ el, p: world(at).applyMatrix4(M), q: world([at[0] + out[0], at[1] + out[1]]).applyMatrix4(M) });
   };
   const p = f.p;
   if (f.type === 'rect') {
-    label(fmt(p.w), [p.x + p.w / 2, p.y], 'input[data-k="p.w"]');
-    label(fmt(p.h), [p.x + p.w, p.y + p.h / 2], 'input[data-k="p.h"]');
+    label(fmt(p.w), [p.x + p.w / 2, p.y], [0, -1], 'input[data-k="p.w"]');
+    label(fmt(p.h), [p.x + p.w, p.y + p.h / 2], [1, 0], 'input[data-k="p.h"]');
     return;
   }
-  if (f.type === 'circle') return label(`R ${fmt(p.r)}`, [p.cx + p.r, p.cy], 'input[data-k="p.r"]');
-  const pts = f.pts!;
+  if (f.type === 'circle') return label(`R ${fmt(p.r)}`, [p.cx + p.r, p.cy], [1, 0], 'input[data-k="p.r"]');
+  const pts = f.pts!, turn = Math.sign(pts.reduce((s, a, i) => { const b = pts[(i + 1) % pts.length]; return s + a[0] * b[1] - b[0] * a[1]; }, 0)) || 1; // Umlaufsinn: rechts der Seite = außen bei gegen den Uhrzeigersinn
   pts.forEach((a, i) => {
     if (f.open && i === pts.length - 1) return; // offene Linie: kein Schlusssegment
     const b = pts[(i + 1) % pts.length], c = (t: Con['t']) => f.cons?.some(d => d.t === t && d.i === i), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     if (a[2]) { // Bogen: Radius am Scheitel
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]), s = a[2] * L / 2, r = L * (1 + a[2] ** 2) / (4 * Math.abs(a[2]));
-      return label(`R ${fmt(r)}`, [mid[0] + (b[1] - a[1]) / L * s, mid[1] - (b[0] - a[0]) / L * s], `.cons input.rad[data-i="${i}"]`, c('rad'));
+      return label(`R ${fmt(r)}`, [mid[0] + (b[1] - a[1]) / L * s, mid[1] - (b[0] - a[0]) / L * s], [(b[1] - a[1]) * Math.sign(s), (a[0] - b[0]) * Math.sign(s)], `.cons input.rad[data-i="${i}"]`, c('rad'));
     }
-    label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, mid, `.cons input.len[data-i="${i}"]`, c('len'));
+    label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, mid, [(b[1] - a[1]) * turn, (a[0] - b[0]) * turn], `.cons input.len[data-i="${i}"]`, c('len'));
   });
 }
 // Maß an der Skizze bearbeiten: Eingabefeld an Ort und Stelle, Enter übernimmt, Esc bricht ab
@@ -1704,11 +1723,13 @@ function editDim(span: HTMLSpanElement, target: string) {
   inp.onblur = () => finish(true);
 }
 function updateDims() {
-  for (const { el, p } of dimLabels) {
-    const s = p.clone().project(camera);
+  const W = dims.clientWidth, H = dims.clientHeight;
+  for (const { el, p, q } of dimLabels) {
+    const s = p.clone().project(camera), t = q.clone().project(camera);
+    const dx = (t.x - s.x) * W, dy = (s.y - t.y) * H, L = Math.hypot(dx, dy) || 1; // Maß neben die Kante, damit Punkte darauf frei bleiben
     el.style.display = s.z > 1 ? 'none' : '';
-    el.style.left = `${(s.x + 1) / 2 * el.parentElement!.clientWidth}px`;
-    el.style.top = `${(1 - s.y) / 2 * el.parentElement!.clientHeight}px`;
+    el.style.left = `${(s.x + 1) / 2 * W + dx / L * 26}px`;
+    el.style.top = `${(1 - s.y) / 2 * H + dy / L * 18}px`;
   }
 }
 
@@ -2101,6 +2122,14 @@ type PatMode = 'lin' | 'rot' | 'mir';
 let patView: { mode: PatMode; key: string } | null = null;
 const patVals = { ax: '', cnt: 3, dist: 20, cnt2: 1, dist2: 20 }; // Abstände in mm; bleiben beim Wechsel der Art und nach dem Anklicken eines Bezugs erhalten
 const WORLD_AXES: Record<string, Vec> = { X: [1, 0, 0], Y: [0, 0, -1], Z: [0, 1, 0] }; // wie in der Exportdatei (Z oben = Szene +Y), durch den Ursprung
+// Gerade Hilfslinien und Linien als Bezug: Spiegeln an der Linie (Ebene senkrecht zur Skizze durch sie), Reihe und Kreis entlang bzw. um sie
+function lineOf(id: number | null) { const f = id === null ? undefined : getById(id); return f && isExtrude(f) && noFace(f) && linePlane(f, 0) ? f : null; }
+const lineChoices = () => live().filter((f): f is Extrude => isExtrude(f) && !f.hidden && !!lineOf(f.id));
+const lineOptions = (): [string, string][] => lineChoices().map(f => [`l${f.id}`, `${nameOf(f)} #${f.id}`]);
+function lineAxis(a: string, mode: PatMode): { ax: Vec; c: Vec } | null {
+  const f = a[0] === 'l' ? lineOf(+a.slice(1)) : null, pl = f && linePlane(f, 0);
+  return pl ? { ax: mode === 'mir' ? pl.n : pl.u, c: pl.c } : null;
+}
 function renderPatView(title: string, axes: [string, string][], cross: boolean, note: string, pick: () => void, run: (mode: PatMode, axis: string) => void) {
   const m = patView!.mode, lab = { lin: 'Basis-Richtung', rot: 'Drehachse', mir: 'Senkrecht zur Ebene' }[m];
   const tab = (k: PatMode, t: string) => `<button data-m="${k}"${k === m ? ' class="on"' : ''}>${t}</button>`;
@@ -2136,11 +2165,11 @@ function renderPatView(title: string, axes: [string, string][], cross: boolean, 
 }
 // Skizze: ein Muster-Schritt, bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit. Mehrfachauswahl wird gemeinsam vervielfältigt
 function renderSketchPat(f: Extrude) {
-  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g))];
-  renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [['u', 'X-Achse der Skizze'], ['v', 'Y-Achse der Skizze'], ['X', 'Welt X'], ['Y', 'Welt Y'], ['Z', 'Welt Z']], true,
-    multi.size ? `Wirkt auf alle ${multi.size + 1} ausgewählten Skizzen` : '', () => { patPickFor = f.id; }, (mode, a) => {
+  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g) && !noFace(g))];
+  renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [...lineOptions(), ['u', 'X-Achse der Skizze'], ['v', 'Y-Achse der Skizze'], ['X', 'Welt X'], ['Y', 'Welt Y'], ['Z', 'Welt Z']], true,
+    targets.length > 1 ? `Wirkt auf alle ${targets.length} ausgewählten Skizzen` : '', () => { patPickFor = f.id; }, (mode, a) => {
       // u/v liegen in der Fläche der Skizze (Seitenwand ohne Raten der Weltachse), Kreis dann um den Skizzenursprung
-      const { ax, c } = a === 'ref' && patRef ? patRef : a === 'u' || a === 'v' ? { ax: f[a], c: f.o } : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec };
+      const { ax, c } = lineAxis(a, mode) ?? (a === 'ref' && patRef ? patRef : a === 'u' || a === 'v' ? { ax: f[a], c: f.o } : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec });
       const p: Pattern = { id: nextId++, type: 'pattern', src: targets.map(g => g.id), a: { ax, n: patVals.cnt, d: patVals.dist }, body: bodyOf(f), ...mode !== 'lin' && { [mode]: { ax, c } } };
       if (mode === 'lin' && patVals.cnt2 > 1) p.b = { ax: crossDir(p), n: patVals.cnt2, d: patVals.dist2 };
       pushHistory(); add(p); clearSel(); selId = p.id; patRef = null; refresh();
@@ -2148,8 +2177,8 @@ function renderSketchPat(f: Extrude) {
 }
 // Ganzer Körper: je Exemplar Kopie aller Schritte + Bewegung (bodyCopy); Kreis: gleichmäßig auf 360°
 function renderBodyPat(b: number) {
-  renderPatView(`Körper #${b} vervielfältigen`, [['X', 'X'], ['Y', 'Y'], ['Z', 'Z']], false, '', () => { patPickBody = b; }, (mode, a) => {
-    const { ax, c } = a === 'ref' && patRef ? patRef : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec }, k = patVals.cnt, m = V(ax).normalize();
+  renderPatView(`Körper #${b} vervielfältigen`, [['X', 'X'], ['Y', 'Y'], ['Z', 'Z'], ...lineOptions()], false, '', () => { patPickBody = b; }, (mode, a) => {
+    const { ax, c } = lineAxis(a, mode) ?? (a === 'ref' && patRef ? patRef : { ax: WORLD_AXES[a] ?? WORLD_AXES.Z, c: [0, 0, 0] as Vec }), k = patVals.cnt, m = V(ax).normalize();
     const moves: { c: Vec; q: number[]; t: Vec; s?: number }[] = mode === 'mir' ? [{ c, q: [m.x, m.y, m.z, 0], t: [0, 0, 0], s: -1 }] // −1 und halbe Drehung um die Normale = Spiegelung
       : Array.from({ length: k - 1 }, (_, i) => mode === 'lin' ? { c: [0, 0, 0] as Vec, q: [0, 0, 0, 1], t: ax.map(x => x * patVals.dist * (i + 1)) as Vec }
         : { c, q: new THREE.Quaternion().setFromAxisAngle(m, 2 * Math.PI * (i + 1) / k).toArray(), t: [0, 0, 0] as Vec });
@@ -2327,6 +2356,35 @@ function lookAtWork() {
   showHint('Senkrecht auf die Fläche · Leertaste = zurück zur vorigen Ansicht');
 }
 const samePlane = (a: Hit, b: Hit) => a.n.dot(b.n) > 0.9999 && Math.abs(a.n.dot(a.point.clone().sub(b.point))) < 1e-3;
+// Drei Ebenen am Ursprung: anklicken = senkrecht draufschauen und dort skizzieren. Boden = zurück zum Normalfall; bleiben auf dem Bild gleich groß
+const originPlanes = new THREE.Group();
+for (const [name, n, u, v, pos] of [['XY-Ebene', [0, 1, 0], [1, 0, 0], [0, 0, -1], [30, 0, 30]], ['XZ-Ebene', [0, 0, 1], [1, 0, 0], [0, 1, 0], [30, 30, 0]], ['YZ-Ebene', [1, 0, 0], [0, 0, -1], [0, 1, 0], [0, 30, 30]]] as [string, Vec, Vec, Vec, Vec][]) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), new THREE.MeshBasicMaterial({ color: 0xb8c0cc, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+  m.matrixAutoUpdate = false;
+  m.matrix.makeBasis(V(u), V(v), V(n)).setPosition(V(pos));
+  m.userData = { name, n };
+  originPlanes.add(m);
+}
+scene.add(originPlanes);
+// Quadrat unter der Maus; Körper und Skizzen davor oder darauf behalten den Klick
+function originAt() {
+  const hit = originPlanes.visible && ray.intersectObjects(originPlanes.children)[0];
+  return hit && !pick().face ? hit.object : null;
+}
+let originOver: THREE.Object3D | null = null;
+function hoverOrigin(o: THREE.Object3D | null) {
+  if (o === originOver) return;
+  originOver = o;
+  for (const m of originPlanes.children as THREE.Mesh[]) (m.material as THREE.MeshBasicMaterial).opacity = m === o ? 0.5 : 0.18;
+  el.style.cursor = o ? 'pointer' : '';
+  if (o) showHint(`${o.userData.name}: anklicken = senkrecht draufschauen und hier skizzieren`);
+}
+function chooseOrigin(o: THREE.Object3D) {
+  const n = V(o.userData.n);
+  if (n.y) { setWorkPlane(null); setView('top'); }
+  else { setWorkPlane({ point: new THREE.Vector3(), n, grip: null, free: true }); lookAtWork(); }
+  showHint(`${o.userData.name}: Skizzenwerkzeug wählen und hier zeichnen`);
+}
 // Kamera so setzen, dass Körper und Skizzen ganz zu sehen sind
 // Boden-Raster wächst mit dem Modell (Zellen bleiben 10 mm / 1 mm), damit große Teile nicht über den Rand ragen
 function fitGrid() {
@@ -2350,6 +2408,7 @@ function fitView() {
 el.addEventListener('dblclick', e => {
   if (poly || performance.now() - lineDone < 600) return; // Doppelklick beendet die Linienkette, kein Raster
   setRay(e as unknown as PointerEvent);
+  if (originAt()) return; // die Ebene hat schon der einfache Klick gewählt
   const h = pick().face;
   setWorkPlane(h);
   if (!h) return showHint(HINTS[tool]);
@@ -2510,6 +2569,8 @@ renderer.setAnimationLoop(() => {
   controls.update(); renderer.render(scene, camera);
   renderCube();
   updateScale();
+  originPlanes.visible = !display.render && !display.section;
+  originPlanes.scale.setScalar(pxSize());
   updateDims();
   placeMeasureLabel();
 });

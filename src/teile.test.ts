@@ -4,7 +4,7 @@ import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
-import { GROUND, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { applyPush, GROUND, linePlane, mirroredCopy, pushTo, rectSize, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -385,4 +385,32 @@ test('Prüfung vor dem Export erkennt einen ungültigen Körper', () => {
   r.body!.edges.filter(e => { const [x, y, z] = e.pointAt(0.5).toTuple(); return x < -24 && Math.abs(y - 18.5) < 1e-6 && Math.abs(z + 20) < 1e-6; }).forEach(e => b.Add(7.5, e.wrapped));
   b.Build(new oc.Message_ProgressRange());
   expect(invalidBodies(new Map([[1, cast(b.Shape()) as any]]))).toEqual([1]);
+});
+
+test('Rechteck aus der Mitte behält die Mitte: Maß tippen und Seite ziehen', () => {
+  const f = { ...rect(GROUND, [-5, -10], [5, 10], 1, 0, false), mid: true };
+  const mitte = () => [f.p.x + f.p.w / 2, f.p.y + f.p.h / 2];
+  rectSize(f, 'w', 20); rectSize(f, 'h', 10);
+  expect(f.p).toMatchObject({ x: -10, y: -5, w: 20, h: 10 });
+  const f0 = structuredClone(f);
+  expect(applyPush(f, f0, 'x1', 1, 3)).toEqual(['Breite', 26]);
+  expect(mitte()).toEqual([0, 0]);
+  applyPush(f, f0, 'y0', -1, 2);
+  expect(f.p.h).toBe(14);
+  expect(mitte()).toEqual([0, 0]);
+  expect(pushTo('x1', f0, 30)).toBe(5); // 5 mm je Seite ergeben 30 mm
+  const ecke = rect(GROUND, [0, 0], [10, 20], 2, 0, false), ecke0 = structuredClone(ecke); // ohne Mitte bleibt die Gegenseite stehen
+  applyPush(ecke, ecke0, 'x1', 1, 3);
+  rectSize(ecke, 'h', 5);
+  expect(ecke.p).toEqual({ x: 0, y: 0, w: 13, h: 5 });
+});
+
+test('Kreis an einer schrägen Hilfslinie spiegeln; kleinere Skizze hat die kleinere Fläche', () => {
+  const k = circle(GROUND, [10, 0], 2, 1, 0, false);
+  const linie = { ...GROUND, id: 2, type: 'poly', p: {}, d: 0, aux: true, open: true, pts: [[0, 0], [5, 5]] } as Extrude, pl = linePlane(linie, 0)!;
+  const m = mirroredCopy(k, 3, pl.n, pl.c);
+  const mitte = [0, 1, 2].map(i => m.o[i] + m.p.cx * m.u[i] + m.p.cy * m.v[i]); // an y = x gespiegelt: (10, 0) wird (0, 10), v zeigt nach −z
+  expect(mitte[0]).toBeCloseTo(0, 6);
+  expect(mitte[2]).toBeCloseTo(-10, 6);
+  expect(sketchArea(k)).toBeLessThan(sketchArea(rect(GROUND, [-5, -10], [5, 10], 4, 0, false)));
 });
