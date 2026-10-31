@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -481,4 +481,13 @@ test('Kreis an einer schrägen Hilfslinie spiegeln; kleinere Skizze hat die klei
   expect(mitte[0]).toBeCloseTo(0, 6);
   expect(mitte[2]).toBeCloseTo(-10, 6);
   expect(sketchArea(k)).toBeLessThan(sketchArea(rect(GROUND, [-5, -10], [5, 10], 4, 0, false)));
+});
+
+test('Raster: ebene Fläche ergibt ihr Rechteck, runde und abgewandte Flächen fallen heraus', () => {
+  const pl = { o: [0, 5, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] } as Parameters<typeof coplanarBounds>[4];
+  const pos = [2, 5, -1, 12, 5, -1, 12, 5, -4, /* Fläche */ 0, 5, 0, 3, 7, 0, 6, 5, 0, /* gewölbt */ 20, 5, 0, 22, 5, 0, 22, 5, 2 /* abgewandt */];
+  const nrm = [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0];
+  const idx = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  expect(coplanarBounds(pos, idx, nrm, [0, 3, 3, 3, 6, 3], pl)).toEqual([[2, 1], [12, 4]]);
+  expect(coplanarBounds(pos, idx, nrm, [3, 3, 6, 3], pl)).toBeNull();
 });

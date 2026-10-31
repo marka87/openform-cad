@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -64,6 +64,7 @@ const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y
 const faceGrid = new THREE.Group(); faceGrid.visible = false; scene.add(faceGrid);
 const workMarks = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: false, depthTest: false }));
 workMarks.visible = false; workMarks.renderOrder = 2; workMarks.frustumCulled = false; scene.add(workMarks); // Rastpunkte der Fläche
+let workFrame: Frame | null = null; // Ebene dazu, bleibt beim Weiterbauen gleich
 let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizzen ins Leere landen dort statt auf dem Boden
 let workPts: { p: Vec; mid: boolean }[] = []; // shortcut: beim Anlegen des Rasters berechnet, nach einem Umbau des Körpers erst mit neuem Raster aktuell // Rastpunkte der Fläche unter dem Raster (Mitte, Ecken, Kantenmitten, Kreismitten)
 let workView: { c: THREE.Vector3; r: number } | null = null, lookBack: { p: THREE.Vector3; t: THREE.Vector3 } | null = null; // Raster-Mitte/-Größe; Ansicht vor „auf die Fläche schauen“
@@ -720,7 +721,8 @@ const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(
 // Ziel einer neuen Skizze: angeklickte Fläche, sonst das Flächenraster, sonst der Boden
 // Das Raster wirkt innerhalb der Fläche wie eine echte Ebene: trifft der Strahl es vor der Fläche darunter (Blick in eine
 // Bohrung), gilt das Raster. shortcut: „innerhalb“ = Rechteck um die Rastpunkte der Fläche, bei L-förmigen Flächen zu groß
-const sketchOn = (h: Hit | null) => {
+const sketchOn = (hit: Hit | null) => {
+  const h = isRound(hit) ? null : hit;
   if (!h || !workHit || !workPts.length) return h ?? workHit;
   const pl = planeFor(workHit), q = planeHit(pl), o = ray.ray.origin;
   if (!q || q.distanceTo(o) >= h.point.distanceTo(o) - 1e-3) return h;
@@ -733,20 +735,37 @@ const onBody = (t: Hit | null) => {
   return !!t && t.grip?.part !== 'plane' && !t.free && !(g && isExtrude(g) && isFlat(g) && !g.onFace);
 };
 const gridAllowed = () => !display.render && !display.section; // Raster schiene durch die Schnittfläche
-// Flächenraster in eine Ebene legen. Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
-// die Linien bleiben auf dem Einrastraster der Skizzenebene
-function placeFaceGrid(pl: Frame, box: THREE.Box3) {
-  const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
-  const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
-  const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
-  const size = 20 * Math.ceil((Math.max(hi[0] - x, x - lo[0], hi[1] - y, y - lo[1]) + 10) / 10), fine = Math.max(gridStep(), 1);
-  faceGrid.children.forEach(g => (g as THREE.GridHelper).dispose());
-  faceGrid.clear().add(new THREE.GridHelper(size, size / 10, 0x4da3ff, 0x4d86c4), new THREE.GridHelper(size, Math.round(size / fine), 0x4d86c4, 0x4d86c4));
-  faceGrid.children.forEach((g, i) => Object.assign((g as THREE.GridHelper).material, { transparent: true, opacity: i ? 0.12 : 0.55, depthWrite: false })); // Körper bleibt sichtbar
-  faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
-    .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
+// Ebene Körperflächen in dieser Ebene als Rechteck in deren Koordinaten; null = keine (Ebene am Ursprung, Hilfsebene, runde Fläche)
+function faceBounds(pl: Frame) {
+  let out: number[][] | null = null;
+  for (const m of bodyGroup.children as THREE.Mesh[]) {
+    if (!m.visible || !m.userData.faces) continue;
+    const b = coplanarBounds(m.geometry.attributes.position.array, m.geometry.index!.array, m.geometry.attributes.normal.array, m.userData.faces, pl);
+    if (b) out = out ? [[Math.min(out[0][0], b[0][0]), Math.min(out[0][1], b[0][1])], [Math.max(out[1][0], b[1][0]), Math.max(out[1][1], b[1][1])]] : b;
+  }
+  return out;
+}
+// Linien von der Mitte aus bis genau an den Rand der Fläche (xz-Ebene der Gruppe); Rand immer dabei
+function faceLines(b: number[][], step: number, color: number, opacity: number, from = 0) {
+  const pos: number[] = [];
+  for (const k of [0, 1]) {
+    const c = (b[0][k] + b[1][k]) / 2, half = (b[1][k] - b[0][k]) / 2, at = [b[0][k], b[1][k]];
+    for (let i = from; i * step < half; i++) at.push(c + i * step, c - i * step);
+    for (const x of at) pos.push(...(k ? [b[0][0], 0, x, b[1][0], 0, x] : [x, 0, b[0][1], x, 0, b[1][1]]));
+  }
+  return new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false })); // Körper bleibt sichtbar
+}
+// Raster in eine Ebene legen: auf einer Körperfläche blau und passend zur Fläche, sonst grau und groß wie der Boden
+function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
+  disposeGroup(faceGrid);
+  if (b) faceGrid.add(faceLines(b, 10, 0x4da3ff, 0.55), faceLines(b, fine, 0x4da3ff, 0.14));
+  else { // ohne Mittellinien: dort liegen die farbigen Achsen
+    const h = (grid.userData.size ?? 400) / 2, all = [[-h, -h], [h, h]];
+    faceGrid.add(faceLines(all, 10, 0x3a3f48, 1, 1), faceLines(all, 1, 0x2c3037, 1, 1));
+  }
+  faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v)).setPosition(V(pl.o).addScaledVector(V(pl.n), b ? 0.02 : 0)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
-  return { x, y, size };
 }
 // Raster nur, wo gearbeitet wird: auf der Ebene, auf der gerade gezeichnet wird oder deren flache Skizze ausgewählt ist.
 // In der reinen Modellansicht keines; im leeren Modell bleibt der Boden zur Orientierung
@@ -754,30 +773,44 @@ const SKETCH_TOOLS: Tool[] = ['rect', 'circle', 'ellipse', 'ngon', 'slot', 'line
 let gridKey = '';
 function updateGrid() {
   const sel = getSel(), sk = sel && isExtrude(sel) && isFlat(sel) && !movesAfter(features, features.indexOf(sel)).length ? sel : null;
-  const pl: Frame | null = workHit ? null : (drag?.kind === 'sketch' ? drag.pl as Frame : null) ?? poly?.pl ?? rect3?.pl ?? sk;
-  const ground = !!pl && Math.abs(pl.n[1]) > 0.999 && Math.abs(pl.o[1]) < 1e-6, other = !!pl && !ground;
-  const key = other ? [...pl.o, ...pl.n].join() : '';
+  const pl: Frame | null = workFrame ?? (drag?.kind === 'sketch' ? drag.pl as Frame : null) ?? poly?.pl ?? rect3?.pl ?? sk;
+  const ground = !!pl && Math.abs(pl.n[1]) > 0.999 && Math.abs(pl.o[1]) < 1e-6, flat = pl && !ground ? faceBounds(pl) : null;
+  const other = !!pl && !ground && (!!flat || pl !== sk || !sk.onFace); // Skizze, deren Fläche es nicht mehr gibt: kein Raster
+  const step = flat ? Math.max(gridStep(), 1, Math.max(flat[1][0] - flat[0][0], flat[1][1] - flat[0][1]) / 300) : 0;
+  const key = other ? [...pl!.o, ...pl!.n, ...(flat?.flat() ?? []), step, grid.userData.size].join() : '';
   if (key !== gridKey) {
     gridKey = key;
-    if (other) placeFaceGrid(pl, new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)));
+    if (other) placeGrid(pl!, flat, step);
   }
-  faceGrid.visible = gridAllowed() && (!!workHit || other);
-  grid.visible = fine.visible = gridAllowed() && !workHit && !other && (ground || SKETCH_TOOLS.includes(tool) || !features.length);
+  faceGrid.visible = gridAllowed() && other;
+  grid.visible = fine.visible = gridAllowed() && !other && (ground || SKETCH_TOOLS.includes(tool) || !features.length);
+}
+// Runde Fläche: hier gibt es weder Raster noch Skizze, dafür ist die Ebene (E) da
+function isRound(h: Hit | null) {
+  const m = h?.tri && h.body !== undefined ? bodyMeshOf(h.body) as THREE.Mesh | undefined : undefined;
+  if (!m) return false;
+  const idx = m.geometry.index!, pos = m.geometry.attributes.position as THREE.BufferAttribute, p = new THREE.Vector3();
+  for (let i = h!.tri![0]; i < h!.tri![0] + h!.tri![1]; i++) if (Math.abs(p.fromBufferAttribute(pos, idx.getX(i)).sub(h!.point).dot(h!.n)) > 1e-3) return true;
+  return false;
 }
 function setWorkPlane(h: Hit | null) {
-  workHit = h && h.grip?.part !== 'plane' ? h : null;
-  gridKey = '';
-  faceGrid.visible = !!workHit && gridAllowed();
-  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
+  const round = isRound(h);
+  workFrame = null;
+  workHit = h && !round && h.grip?.part !== 'plane' ? h : null;
+  workMarks.visible = !!workHit && gridAllowed() && display.snap.showPts && display.snap.body;
   lookBack = null;
+  if (round) showNotice('Raster und Skizzen gehen nur auf ebenen Flächen · an einer runden Fläche erst mit E eine Ebene anlegen');
   if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
-  const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
+  const pl = workFrame = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
   const all = workHit.free ? new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)) : null;
   const box = m ? new THREE.Box3().setFromObject(m) : all && !all.isEmpty() ? all : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
-  const { x, y, size } = placeFaceGrid(pl, box);
+  const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
+  const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
+  const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
+  const size = 20 * Math.ceil((Math.max(hi[0] - x, x - lo[0], hi[1] - y, y - lo[1]) + 10) / 10);
   workPts = workPoints(workHit, pl);
   workMarks.geometry.setFromPoints(workPts.map(q => V(q.p)));
-  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
+  workMarks.visible = gridAllowed() && display.snap.showPts && display.snap.body;
   workView = { c: V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y), r: size / 2 };
   showHint((gridAllowed() ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
     + 'Raster auf der Fläche: hier weiterskizzieren · Leertaste = senkrecht draufschauen · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
@@ -833,10 +866,14 @@ function edgePoints(m: THREE.Object3D, keep: (e: ReturnType<typeof edgeInfo>) =>
 // Skizzenebene: Boden oder die angeklickte Fläche
 function planeFor(h: Hit | null): Frame {
   if (!h) return GROUND;
+  if (workFrame && workHit && (h === workHit || samePlane(h, workHit))) return workFrame;
   const n = h.n, helper = Math.abs(n.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
   const u = helper.clone().cross(n).normalize(), v = n.clone().cross(u);
   const o = n.clone().multiplyScalar(n.dot(h.point)); // Lotpunkt des Ursprungs: Raster liegt wie auf dem Boden, nicht am Klickpunkt
-  return { o: o.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
+  const pl: Frame = { o: o.toArray() as Vec, n: n.toArray() as Vec, u: u.toArray() as Vec, v: v.toArray() as Vec };
+  const b = h.tri && faceBounds(pl); // Körperfläche: Einrasten und Raster gehen von ihrer Mitte aus
+  if (b) pl.o = o.addScaledVector(u, (b[0][0] + b[1][0]) / 2).addScaledVector(v, (b[0][1] + b[1][1]) / 2).toArray() as Vec;
+  return pl;
 }
 
 // Skizze des aufgezogenen Werkzeugs zwischen a und b
@@ -2185,7 +2222,7 @@ addEventListener('keydown', e => {
     e.preventDefault();
     const h = !poly && !drag ? pick().face : null;
     if (workHit && (!h || samePlane(h, workHit))) return lookAtWork(); // Raster liegt: draufschauen bzw. zurück
-    if (h) { setWorkPlane(h); if (workHit) return lookAtWork(); } // Fläche unter der Maus: gleich senkrecht darauf
+    if (h) { setWorkPlane(h); if (workHit) return lookAtWork(); if (isRound(h)) return; } // Fläche unter der Maus: gleich senkrecht darauf
     return snapView() || setTool(lastTool);
   }
   if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -2643,8 +2680,7 @@ function applyDisplay() {
   scene.environment = envMap;
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-  faceGrid.visible = !!workHit && gridAllowed();
-  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
+  workMarks.visible = !!workHit && gridAllowed() && display.snap.showPts && display.snap.body;
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
     const box = new THREE.Box3().setFromObject(bodyGroup), n = V([[1, 0, 0], [0, 0, 1], [0, -1, 0]][display.section - 1]);

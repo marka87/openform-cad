@@ -692,3 +692,23 @@ export function sketchArea(f: Extrude) {
   const xs = (f.pts ?? []).map(q => q[0]), ys = (f.pts ?? []).map(q => q[1]);
   return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
 }
+
+// Rechteck [[u0, v0], [u1, v1]] aller ebenen B-Rep-Flächen in dieser Ebene, die in Normalenrichtung zeigen; groups = [Anfang, Anzahl] im Index.
+// Eine runde Fläche fällt heraus, weil nicht alle ihre Punkte in der Ebene liegen
+export function coplanarBounds(pos: ArrayLike<number>, idx: ArrayLike<number>, nrm: ArrayLike<number>, groups: ArrayLike<number>, pl: Frame): number[][] | null {
+  const along = (a: Vec, i: number) => (pos[3 * i] - pl.o[0]) * a[0] + (pos[3 * i + 1] - pl.o[1]) * a[1] + (pos[3 * i + 2] - pl.o[2]) * a[2];
+  let out: number[][] | null = null;
+  for (let k = 0; k < groups.length; k += 2) {
+    const s = groups[k], e = s + groups[k + 1];
+    let flat = nrm[3 * idx[s]] * pl.n[0] + nrm[3 * idx[s] + 1] * pl.n[1] + nrm[3 * idx[s] + 2] * pl.n[2] > 0.99;
+    for (let i = s; flat && i < e; i++) flat = Math.abs(along(pl.n, idx[i])) < 1e-3;
+    if (!flat) continue;
+    out ??= [[Infinity, Infinity], [-Infinity, -Infinity]];
+    for (let i = s; i < e; i++) {
+      const u = along(pl.u, idx[i]), v = along(pl.v, idx[i]);
+      out[0][0] = Math.min(out[0][0], u); out[0][1] = Math.min(out[0][1], v);
+      out[1][0] = Math.max(out[1][0], u); out[1][1] = Math.max(out[1][1], v);
+    }
+  }
+  return out;
+}

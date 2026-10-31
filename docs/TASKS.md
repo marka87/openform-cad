@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.14.0** Ursprungsebenen grau wie der Boden; Körperraster blau, passend zur Fläche und von deren Mitte aus; runde Flächen ohne Raster und Skizze
 - **0.13.0** Raster nur noch auf der Ebene, auf der gearbeitet wird; in der Modellansicht keines
 - **0.12.2** Weniger Grafikkarten-Last: gezeichnet wird nur noch, wenn sich etwas tut; Schatten nur neu, wenn sich Körper ändern
 - **0.12.1** Griffe neu: schlanker Pfeil je Achse, runde Drehringe, Farben wie die Achsen, Markierung orange
@@ -164,6 +165,9 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Raster nach Shapr3D-Vergleich (0.14.0). Neue Skizzen auf einer Körperfläche haben ihren Ursprung in deren Mitte, damit
+  Linien und Einrasten zusammenpassen; bestehende Skizzen behalten ihren. Auf runden Flächen legt ein Klick jetzt keine Skizze mehr
+  auf die Tangentialebene, sondern sie fällt auf Raster oder Boden. Mehrere Flächen in derselben Ebene ergeben ein gemeinsames Rechteck.
 - 2026-10-31 Raster (0.13.0). Boden-Raster nur mit Skizzenwerkzeug, bei Skizze auf dem Boden oder im leeren Modell; auf anderen
   Ebenen liegt das blaue Raster, solange dort gezeichnet wird oder die flache Skizze ausgewählt ist. Entschieden: im leeren
   Modell bleibt der Boden sichtbar, sonst fehlt jede Orientierung. Einrasten ist unabhängig vom Sichtbaren. Darstellung, kein Kern-Test.
