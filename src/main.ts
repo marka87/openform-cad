@@ -756,10 +756,13 @@ function faceLines(b: number[][], step: number, color: number, opacity: number, 
   return new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)),
     new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false })); // Körper bleibt sichtbar
 }
-// Raster in eine Ebene legen: auf einer Körperfläche blau und passend zur Fläche, sonst grau und groß wie der Boden
+// Raster in eine Ebene legen: auf einer Körperfläche blau, 175 % der Fläche um ihre Mitte (man zeichnet auch mal darüber hinaus), sonst grau und groß wie der Boden
 function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
   disposeGroup(faceGrid);
-  if (b) faceGrid.add(faceLines(b, 10, 0x4da3ff, 0.55), faceLines(b, fine, 0x4da3ff, 0.14));
+  if (b) {
+    const c = [0, 1].map(k => (b[0][k] + b[1][k]) / 2), wide = b.map(q => [0, 1].map(k => c[k] + (q[k] - c[k]) * 1.75));
+    faceGrid.add(faceLines(wide, 10, 0x4da3ff, 0.9), faceLines(wide, fine, 0x4da3ff, 0.3));
+  }
   else { // ohne Mittellinien: dort liegen die farbigen Achsen
     const h = (grid.userData.size ?? 400) / 2, all = [[-h, -h], [h, h]];
     faceGrid.add(faceLines(all, 10, 0x3a3f48, 1, 1), faceLines(all, 1, 0x2c3037, 1, 1));
