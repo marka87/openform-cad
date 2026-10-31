@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { newCache, buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
+import { shownEdges, newCache, buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
@@ -57,10 +57,10 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     const r = buildBody(data.features, imports, buildCache);
     body = r.body; bodies = r.bodies; names = r.names;
     const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
-      const m = s.mesh(MESH), e = s.meshEdges(MESH);
+      const m = s.mesh(MESH), e = shownEdges(s, MESH);
       return { body: id, volume: measureVolume(s), vertices: new Float32Array(m.vertices), normals: new Float32Array(m.normals),
         triangles: new Uint32Array(m.triangles), lines: new Float32Array(e.lines),
-        faces: new Int32Array(m.faceGroups.flatMap(g => [g.start, g.count])), edges: new Int32Array(e.edgeGroups.flatMap(g => [g.start, g.count])) };
+        faces: new Int32Array(m.faceGroups.flatMap(g => [g.start, g.count])), edges: new Int32Array(e.edges) };
     });
     const volume = meshes.reduce((v, m) => v + m.volume, 0);
     let area = 0;

@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, cast, type Edge, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -10,6 +10,52 @@ function sketchOf(f: Extrude) {
     : f.type === 'circle' ? (p.ry ? drawEllipse(Math.max(p.r, p.ry), Math.min(p.r, p.ry)).rotate(p.ry > p.r ? 90 : 0) : drawCircle(p.r)).translate(p.cx, p.cy)
     : polyDrawing(f.pts!, f.smooth);
   return drawing.sketchOnPlane(new Plane(f.o, f.u, f.n)) as Sketch;
+}
+
+// Kennung der Fläche, auf der eine runde B-Rep-Fläche liegt: zwei Hälften desselben Zylinders haben dieselbe; Ebenen und Freiformflächen eine eigene je Fläche
+function roundSurfaceKey(face: Face, i: number) {
+  const oc = getOC() as any, t = face.geomType;
+  if (t !== 'CYLINDRE' && t !== 'CONE' && t !== 'SPHERE' && t !== 'TORUS') return `#${i}`;
+  const a = new oc.BRepAdaptor_Surface(face.wrapped, false), q = [] as number[];
+  try {
+  const xyz = (p: any) => { q.push(p.X(), p.Y(), p.Z()); p.delete(); return q.slice(-3); };
+  const line = (ax: any) => { // Achse als Gerade: Richtung ohne Vorzeichen, Lotpunkt des Ursprungs
+    const d0 = ax.Direction(), d = [d0.X(), d0.Y(), d0.Z()], sg = Math.sign(d.find(x => Math.abs(x) > 1e-9) ?? 1), l = ax.Location(), p = [l.X(), l.Y(), l.Z()], k = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
+    q.push(...d.map(x => x * sg), ...p.map((x, n) => x - k * d[n]));
+    d0.delete(); l.delete(); ax.delete();
+  };
+  if (t === 'TORUS') { // gp_Torus fehlt in dieser OCCT-Fassung: Mitte, Achse und Radien aus Punkten auf der Fläche, unabhängig vom Anfang der Parameter
+    const at = (u: number, v: number) => { const P = a.Value(u, v), r = [P.X(), P.Y(), P.Z()]; P.delete(); return r; };
+    const add = (A: number[], B: number[], k = 1) => A.map((x, n) => x + k * B[n]), ring = [0, 1, 2].map(n => add(at(n * 2 * Math.PI / 3, 0), at(n * 2 * Math.PI / 3, Math.PI)).map(x => x / 2));
+    const c = add(add(ring[0], ring[1]), ring[2]).map(x => x / 3), e = add(ring[0], c, -1), f = add(ring[1], c, -1);
+    const n = [e[1] * f[2] - e[2] * f[1], e[2] * f[0] - e[0] * f[2], e[0] * f[1] - e[1] * f[0]], L = Math.hypot(...n), sg = Math.sign(n.find(x => Math.abs(x) > 1e-9 * L) ?? 1);
+    q.push(Math.hypot(...e), Math.hypot(...add(at(0, 0), at(0, Math.PI), -1)) / 2, ...c, ...n.map(x => x * sg / L));
+  } else {
+    let g: any;
+    if (t === 'CYLINDRE') { g = a.Cylinder(); q.push(g.Radius()); line(g.Axis()); }
+    else if (t === 'CONE') { g = a.Cone(); q.push(g.SemiAngle()); xyz(g.Apex()); line(g.Axis()); }
+    else { g = a.Sphere(); q.push(g.Radius()); xyz(g.Location()); }
+    g.delete();
+  }
+  return t + q.map(x => (Math.round(x * 1e4) / 1e4 || 0).toFixed(4)).join();
+  } catch { return `#${i}`; } finally { a.delete(); } // lieber eine Linie zu viel als kein Bild
+}
+// Kantennetz fürs Bild ohne Nähte. Keine echte Kante: gehört nur zu einer einzigen Fläche (Naht einer Kugel, eines Zylinders)
+// oder trennt zwei Teile derselben runden Fläche (ein Kreis wird zu zwei Halbzylindern)
+export function shownEdges(s: Shape3D, options: { tolerance: number; angularTolerance: number }) {
+  const e = s.meshEdges(options), faces = new Map<number, string[]>();
+  s.faces.forEach((face, i) => {
+    const key = roundSurfaceKey(face, i);
+    for (const edge of face.edges) { faces.set(edge.hashCode, [...faces.get(edge.hashCode) ?? [], key]); edge.delete(); }
+    face.delete();
+  });
+  const keep = e.edgeGroups.filter(g => { const k = faces.get(g.edgeId); return !k || new Set(k).size > 1 && k.length > 1; }), lines: number[] = [];
+  const edges = keep.flatMap(g => {
+    const start = lines.length / 3;
+    for (let i = g.start * 3; i < (g.start + g.count) * 3; i++) lines.push(e.lines[i]);
+    return [start, g.count];
+  });
+  return { lines, edges };
 }
 
 export function solidOf(f: Extrude): Shape3D {

@@ -134,6 +134,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
 - **0.14.1** Körperraster kräftiger und 175 % der Fläche groß
 - **0.14.0** Ursprungsebenen grau wie der Boden; Körperraster blau, passend zur Fläche und von deren Mitte aus; runde Flächen ohne Raster und Skizze
@@ -167,11 +168,14 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-10-31 Nähte (0.15.1). Eine Naht gehört nur zu einer Fläche, jede echte Kante eines geschlossenen Körpers zu zweien; so fallen sie
+  aus dem Kantennetz fürs Bild. Dazu Kanten zwischen zwei Teilen derselben runden Fläche, denn ein Kreis wird beim Hochziehen zu zwei
+  Halbzylindern; Vergleich über Art und Maße der Fläche. Das B-Rep und die Exporte bleiben unberührt. Offene Flächenkörper würden ihre Randkanten verlieren, die
+  gibt es aber nicht, weil beim STEP-Import nur Volumenkörper bleiben.
 - 2026-10-31 Kugel (0.15.0). Kugel = Kreis mit ball: Achse läuft immer durch die Mitte, auch nach Maßänderung; gerechnet wird ein
   Halbkreis, der ganze Kreis lieferte still einen Körper mit Volumen 0. Skizzen quer über die Achse sind jetzt ein Fehler; das gilt
   auch für alte Modelle, die bisher einen leeren Körper ergaben. Beim Testen fiel auf: Klick auf einen Drehkörper griff die Rundung
-  eines anderen Körpers, wenn deren Kante zufällig in die Richtung zeigte; ownerOf prüft jetzt den Körper. Offen: die Nahtkante auf
-  Kugeln und Zylindern wird wie eine echte Kante gezeichnet und lässt sich greifen.
+  eines anderen Körpers, wenn deren Kante zufällig in die Richtung zeigte; ownerOf prüft jetzt den Körper.
 - 2026-10-31 Körperraster (0.14.1). Nach Rückmeldung kräftiger und über die Kante hinaus: 175 % um die Flächenmitte. Reine Darstellung.
 - 2026-10-31 Raster nach Shapr3D-Vergleich (0.14.0). Neue Skizzen auf einer Körperfläche haben ihren Ursprung in deren Mitte, damit
   Linien und Einrasten zusammenpassen; bestehende Skizzen behalten ihren. Auf runden Flächen legt ein Klick jetzt keine Skizze mehr

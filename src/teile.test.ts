@@ -3,7 +3,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
-import { newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
+import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
 import { ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
@@ -535,4 +535,23 @@ test('Griff: Kugel zieht am Radius, Rundung eines anderen Körpers bleibt unber�
   // Drehkörper ohne eigenen Griff: die Rundung des anderen Körpers darf nicht anspringen
   const dreh: Extrude = { ...rect(GROUND, [45, 2], [55, 8], 4, 0, false), rev: 360, body: 4 };
   expect(ownerOf([quader, rund, dreh], [50, 8, 0], [0, 1, 0], 0.15, 4)?.f.id).not.toBe(3);
+});
+
+test('Kantennetz: Nähte von Kugel und Zylinder fallen weg, echte Kanten bleiben', () => {
+  const mesh = { tolerance: 0.05, angularTolerance: 0.3 };
+  const kugel = shownEdges(buildBody([{ ...circle(GROUND, [0, 0], 10, 1, 0, false), rev: 360, ball: true }]).body!, mesh);
+  expect(kugel.edges).toEqual([]);
+  expect(kugel.lines).toEqual([]);
+  const zyl = shownEdges(buildBody([circle(GROUND, [0, 0], 5, 1, 10, false)]).body!, mesh);
+  expect(zyl.edges.length / 2).toBe(4); // Boden- und Deckelkreis aus je zwei Bögen, die Trennlinien der Halbzylinder fehlen
+  expect(zyl.lines.length).toBe(zyl.edges.filter((_, i) => i % 2).reduce((a, b) => a + b, 0) * 3);
+  const box = shownEdges(buildBody([rect(GROUND, [0, 0], [10, 10], 1, 10, false)]).body!, mesh);
+  expect(box.edges.length / 2).toBe(12);
+  expect(box.edges[2]).toBe(box.edges[1]); // Gruppen liegen lückenlos hintereinander
+  // Rundung am Kreis: Übergänge zum Zylinder und zum Deckel bleiben als echte Kanten
+  const rund = shownEdges(buildBody([circle(GROUND, [0, 0], 5, 1, 10, false), edge('fillet', 2, [5, 10, 0], [0, 0, 1], 1)]).body!, mesh);
+  expect(rund.edges.length / 2).toBe(6);
+  // Bohrung: nur die beiden Kreise an den Enden, beim Abziehen wird der Zylinder wieder eine Fläche mit Naht
+  const loch = shownEdges(buildBody([rect(GROUND, [-20, -20], [20, 20], 1, 10, false), circle(top(10), [0, 0], 4, 2, -10)]).body!, mesh);
+  expect(loch.edges.length / 2).toBe(12 + 2);
 });
