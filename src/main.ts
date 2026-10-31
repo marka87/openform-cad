@@ -732,17 +732,10 @@ const onBody = (t: Hit | null) => {
   const g = t?.grip?.f;
   return !!t && t.grip?.part !== 'plane' && !t.free && !(g && isExtrude(g) && isFlat(g) && !g.onFace);
 };
-function setWorkPlane(h: Hit | null) {
-  workHit = h && h.grip?.part !== 'plane' ? h : null;
-  faceGrid.visible = !!workHit && grid.visible;
-  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
-  lookBack = null;
-  if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
-  // Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
-  // die Linien bleiben auf dem Einrastraster der Skizzenebene
-  const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
-  const all = workHit.free ? new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)) : null;
-  const box = m ? new THREE.Box3().setFromObject(m) : all && !all.isEmpty() ? all : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
+const gridAllowed = () => !display.render && !display.section; // Raster schiene durch die Schnittfläche
+// Flächenraster in eine Ebene legen. Größe und Mitte nach dem Bauteil (Umriss in dieser Ebene + 10 mm Rand), auf volle 10 mm gerundet:
+// die Linien bleiben auf dem Einrastraster der Skizzenebene
+function placeFaceGrid(pl: Frame, box: THREE.Box3) {
   const loc = [0, 1, 2, 3, 4, 5, 6, 7].map(i => toLocal(pl, new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)));
   const lo = [0, 1].map(k => Math.min(...loc.map(q => q[k]))), hi = [0, 1].map(k => Math.max(...loc.map(q => q[k])));
   const [x, y] = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 20) * 10);
@@ -753,11 +746,40 @@ function setWorkPlane(h: Hit | null) {
   faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v))
     .setPosition(V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y).addScaledVector(V(pl.n), 0.02)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
+  return { x, y, size };
+}
+// Raster nur, wo gearbeitet wird: auf der Ebene, auf der gerade gezeichnet wird oder deren flache Skizze ausgewählt ist.
+// In der reinen Modellansicht keines; im leeren Modell bleibt der Boden zur Orientierung
+const SKETCH_TOOLS: Tool[] = ['rect', 'circle', 'ellipse', 'ngon', 'slot', 'line', 'arc', 'spline', 'aux', 'text', 'trim', 'plane'];
+let gridKey = '';
+function updateGrid() {
+  const sel = getSel(), sk = sel && isExtrude(sel) && isFlat(sel) && !movesAfter(features, features.indexOf(sel)).length ? sel : null;
+  const pl: Frame | null = workHit ? null : (drag?.kind === 'sketch' ? drag.pl as Frame : null) ?? poly?.pl ?? rect3?.pl ?? sk;
+  const ground = !!pl && Math.abs(pl.n[1]) > 0.999 && Math.abs(pl.o[1]) < 1e-6, other = !!pl && !ground;
+  const key = other ? [...pl.o, ...pl.n].join() : '';
+  if (key !== gridKey) {
+    gridKey = key;
+    if (other) placeFaceGrid(pl, new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)));
+  }
+  faceGrid.visible = gridAllowed() && (!!workHit || other);
+  grid.visible = fine.visible = gridAllowed() && !workHit && !other && (ground || SKETCH_TOOLS.includes(tool) || !features.length);
+}
+function setWorkPlane(h: Hit | null) {
+  workHit = h && h.grip?.part !== 'plane' ? h : null;
+  gridKey = '';
+  faceGrid.visible = !!workHit && gridAllowed();
+  workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
+  lookBack = null;
+  if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
+  const pl = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
+  const all = workHit.free ? new THREE.Box3().setFromObject(bodyGroup).union(new THREE.Box3().setFromObject(group)) : null;
+  const box = m ? new THREE.Box3().setFromObject(m) : all && !all.isEmpty() ? all : new THREE.Box3().setFromCenterAndSize(workHit.point, new THREE.Vector3(40, 40, 40));
+  const { x, y, size } = placeFaceGrid(pl, box);
   workPts = workPoints(workHit, pl);
   workMarks.geometry.setFromPoints(workPts.map(q => V(q.p)));
   workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
   workView = { c: V(pl.o).addScaledVector(V(pl.u), x).addScaledVector(V(pl.v), y), r: size / 2 };
-  showHint((grid.visible ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
+  showHint((gridAllowed() ? '' : 'Raster ist ausgeblendet, solange Schnitt oder Render an ist (unten links ausschalten) · ')
     + 'Raster auf der Fläche: hier weiterskizzieren · Leertaste = senkrecht draufschauen · P = Kanten des Körpers hierher projizieren · Doppelklick ins Leere oder Esc = zurück zum Boden');
 }
 // Rastpunkte der Fläche unter dem Raster: Flächenmitte (Schwerpunkt der Dreiecke), dazu aus den Kanten in dieser Ebene
@@ -2621,8 +2643,7 @@ function applyDisplay() {
   scene.environment = envMap;
   scene.environmentIntensity = display.render ? 1 : 0.3;
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-  grid.visible = fine.visible = !display.render && !display.section; // Raster schiene durch die Schnittfläche
-  faceGrid.visible = !!workHit && grid.visible;
+  faceGrid.visible = !!workHit && gridAllowed();
   workMarks.visible = faceGrid.visible && display.snap.showPts && display.snap.body;
   renderer.localClippingEnabled = !!display.section;
   if (bodyGroup.children.length && display.section) { // Schnittebene durch die Mitte aller Körper; Achsen wie in der Exportdatei (X, Y = −z, Z = y)
@@ -2776,7 +2797,8 @@ renderer.setAnimationLoop(now => {
   renderer.render(scene, camera);
   renderCube();
   updateScale();
-  originPlanes.visible = !display.render && !display.section;
+  originPlanes.visible = gridAllowed();
+  updateGrid();
   const view = camera.position.clone().sub(controls.target).normalize();
   for (const a of axes) a.line.visible = Math.abs(a.d.dot(view)) < 0.995; // Blick längs der Achse: sie wäre nur ein störender Strich durchs Bild
   originPlanes.scale.setScalar(pxSize());
