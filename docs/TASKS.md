@@ -16,6 +16,47 @@ Datenverlust gehen immer vor.
 ## Plan
 Status: TODO / DOING / DONE / BLOCKED(Grund)
 
+### 0. Befunde aus dem Audit 2026-11-02 — Claude, vor allem anderen
+Ganzes Repo gelesen (drei Prüfer, Funde 1–9 und 12–14 selbst am Code bestätigt, keiner in der
+laufenden App nachgestellt). Last: eine Person, ein Fenster, bis einige hundert Schritte.
+Muss beheben:
+- [ ] TODO A1 Sicherheit: präparierte `.ofc` führt Skript aus (Farbe ungeprüft ins HTML, main.ts:153
+      und :2426), keine CSP, `write_bytes` schreibt jeden Pfad (src-tauri/src/main.rs). Fix: `load()`
+      prüft Datei (IDs Zahlen, `features` Liste, Farbe `#rrggbb`), sonst ablehnen; CSP `script-src 'self'`.
+- [ ] TODO A2 Worker-Fehler nach den Schritten (Netz, Kanten, Messung) → kein `built`, App rechnet nie
+      mehr neu, alte Körper schon gelöscht (kernel.worker.ts:47-71). Fix: try/catch, immer `built`
+      senden; nach dem Löschen `body = null; bodies = new Map()`.
+- [ ] TODO A3 Datenverlust: A öffnen, B öffnen, Strg+Z, Strg+S → A landet in B.ofc (main.ts:2118, :155).
+      Fix: beim Öffnen einer `.ofc` Undo/Redo leeren statt `pushHistory()`.
+- [ ] TODO A4 Export überholt laufendes Neurechnen → Datei ohne letzte Änderung (main.ts:2128). Fix:
+      Export zurückhalten, solange gerechnet wird oder eine Änderung wartet.
+- [ ] TODO A5 Fremde/kaputte `.json` setzt `features` auf undefined, App steht; im Browser keine
+      Meldung (main.ts:153, :2124). Fix: Prüfung aus A1, Browser-Öffnen mit try/catch und Meldung.
+- [ ] TODO A6 Überarbeitete STEP mit gleichem Namen und gleicher Schritt-Nummer zeigt alte Geometrie
+      (kernel.worker.ts:49-51, Schlüssel kernel.ts:179). Fix: STEP-Text mit merken, bei Abweichung neu laden.
+- [ ] TODO A7 Speicherlecks je Neurechnen bis „memory out of bounds“: Hilfskörper bei Fläche versetzen
+      (topo.ts:450), Werkzeug bei gescheitertem Schnitt (kernel.ts:368, :218, :286, :302).
+      Fix: `finally { ….delete() }`.
+Sollte beheben:
+- [ ] TODO A8 Undo-Liste ohne Grenze, enthält ganzen STEP-Text (main.ts:152). Fix: höchstens 100.
+- [ ] TODO A9 Kaputte STEP wird bei jedem Neurechnen erneut gelesen (kernel.worker.ts:49). Fix: gescheiterte merken.
+- [ ] TODO A10 Muster/Übergang/Zug/Teilen suchen die Quelle in der ganzen Liste; Schritt vor seine
+      Quelle gezogen → Teil-Neurechnen ≠ volles Neurechnen (kernel.ts:266 u. a.). Fix: nur frühere Schritte.
+- [ ] TODO A11 Drucken und SVG kurz nacheinander vertauschen sich (`printNext`, main.ts:2135).
+- [ ] TODO A12 KI: Gewinde „constructor“ → Radius NaN (aiTools.ts:112). Fix: `Object.hasOwn`.
+- [ ] TODO A13 KI: zweimal Enter → zwei Anfragen, erste hängt, Modell überschrieben (ai.ts:128). Fix: Merker „läuft“.
+- [ ] TODO A14 KI: Zeitgrenze endet vor dem Lesen der Antwort → kann ewig hängen (ai.ts:47/62).
+- [ ] TODO A15 Test für die Dateiprüfung aus A1/A5 (Prüfung als reine Funktion nach model.ts).
+Schön zu haben:
+- [ ] TODO A16 `dot` doppelt (model.ts:147, topo.ts:113), `at` doppelt (aiTools.ts:100/116).
+- [ ] TODO A17 onMove/onDown/renderFeaturePanel je Zieh-Art bzw. Schritt-Typ teilen, nur wenn ohnehin dort gearbeitet wird.
+- [ ] TODO A18 KI: Voreinstellung wechseln leert den Schlüssel nicht → geht an den nächsten Server (ai.ts:94).
+- [ ] TODO A19 rund 18 Exporte nur in eigener Datei benutzt (PRESETS, SYSTEM, solidOf, fingerprint, …): `export` weg.
+Nicht selbst nachgeprüft, nur notiert: gespiegelter Teil-Drehkörper dreht falsch herum (model.ts:477),
+Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Verschieben des Körpers
+(kernel.ts:295), Muster über mehrere Körper (Anzeige/Rundung), Lecks in circleOf/cleanStep, keine
+Warnung vor ungespeicherten Änderungen.
+
 ### 1. Nie wieder kaputte Dateien — Claude
 - [x] Schale, Zug und Fläche löschen prüfen ihr Ergebnis
 - [x] Rundung und Fase prüfen ihr Ergebnis (0.5.0)
@@ -170,6 +211,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 Audit des ganzen Repos: 19 Funde, 7 davon „Muss beheben“ (Sicherheit über präparierte .ofc, Worker-Hänger, Datenverlust beim Speichern nach Undo, veralteter Export, kaputte Datei, alte STEP-Geometrie, Speicherlecks). Als Plan Punkt 0 (A1–A19) eingetragen, noch nichts behoben.
 - 2026-11-02 Abgleich nach 0.16.0: Typen, 111 Tests und Build grün, App startet fehlerfrei, alte Muster-Dateien bleiben lesbar. Korrigiert: CLAUDE.md (3MF und .ofc sind da), Installer-Stand, Teil 2 = Zahnbürstenständer, unklare Notiz „ohne Zuordnung“. Installer 0.16.0 gebaut.
 - 2026-10-31 Langloch (0.16.0). Abhängigkeiten im Löser taugen dafür nicht: parallel, gleich lang und tangential zusammen scheitern schon an
   einer neuen Länge. Deshalb eigene Regeln statt Löser, die Form hängt am Merkmal slot. Länge gemessen an Seite 0, das Ende bei Punkt 0 und 3
