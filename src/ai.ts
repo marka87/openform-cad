@@ -93,6 +93,7 @@ export function openAiSettings() {
     dlg.addEventListener('input', () => { saveSettings(read()); q('.res').textContent = ''; }); // altes Testergebnis passt nicht mehr
     dlg.querySelectorAll<HTMLButtonElement>('[data-p]').forEach(b => b.onclick = () => {
       const p = PRESETS[+b.dataset.p!];
+      if (q<HTMLInputElement>('.base').value.trim() !== p.s.base) q<HTMLInputElement>('.key').value = ''; // Schlüssel gehört zum alten Anbieter, nicht mitschicken (A18)
       q<HTMLInputElement>('.base').value = p.s.base; q<HTMLInputElement>('.model').value = p.s.model;
       q('.note').textContent = p.note; q('.res').textContent = '';
       saveSettings(read());
