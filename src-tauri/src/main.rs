@@ -8,9 +8,15 @@ fn read_text(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
 }
 
+// Erst daneben schreiben, dann umbenennen (ersetzt unter Windows die alte Datei): ein Absturz mitten im
+// Schreiben lässt die alte Datei heil (A20)
 #[tauri::command]
 fn write_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, data).map_err(|e| format!("{path}: {e}"))
+    let tmp = format!("{path}.tmp");
+    std::fs::write(&tmp, data).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{path}: {e}")
+    })
 }
 
 // Datei, mit der die App gestartet wurde (Doppelklick auf .ofc)
