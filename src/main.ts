@@ -142,18 +142,20 @@ function selectWhere(pass: (f: Extrude) => boolean, add = false) {
   refresh();
   return hit.length;
 }
-const undoStack: string[] = [], redoStack: string[] = [];
+// Jeder Stand merkt sich die Datei, zu der er gehört: Rückgängig über ein Öffnen hinweg darf nicht in die andere Datei speichern (A3)
+const undoStack: { s: string; path: string | null }[] = [], redoStack: typeof undoStack = [];
 let meta: Record<number, BodyMeta> = {}; // Name, Sichtbarkeit, Farbe, Werkstoff je Körper
 let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werden berechnet, neue Schritte kommen dorthin
 const live = () => roll === null ? features : features.slice(0, roll);
 function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else { features.splice(roll, 0, ...fs); roll += fs.length; } }
 let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
 const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims });
-function pushHistory() { undoStack.push(snapshot()); redoStack.length = 0; }
+function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); redoStack.length = 0; }
 function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; roll = d.roll ?? null; sheetDims = d.dims ?? []; }
 function restore(s: string) { load(s); selId = null; refresh(); }
-function undo() { if (undoStack.length) { redoStack.push(snapshot()); restore(undoStack.pop()!); } }
-function redo() { if (redoStack.length) { undoStack.push(snapshot()); restore(redoStack.pop()!); } }
+function undo() { if (undoStack.length) { redoStack.push({ s: snapshot(), path: filePath }); step(undoStack.pop()!); } }
+function redo() { if (redoStack.length) { undoStack.push({ s: snapshot(), path: filePath }); step(redoStack.pop()!); } }
+function step(h: { s: string; path: string | null }) { restore(h.s); if (h.path !== filePath) setFile(h.path); }
 // Fehlgeschlagenes automatisches Speichern (Speicher voll) bleibt im Hinweis sichtbar, sonst geht das Modell beim Neuladen verloren
 let saveWarning = '';
 function save() {
