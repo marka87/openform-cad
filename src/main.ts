@@ -11,7 +11,7 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
-import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
+import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
 import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -2119,15 +2119,23 @@ const sum = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i
 const markSaved = () => { try { localStorage.setItem('openform-saved', sum(snapshot())); } catch {} };
 const unsaved = () => features.length > 0 && localStorage.getItem('openform-saved') !== sum(snapshot());
 const discardOk = (what: string) => !unsaved() || confirm(`Das aktuelle Modell ist nicht gespeichert. ${what} trotzdem? (Strg+Z holt es danach zurück)`);
+// true = gespeichert (Schließen darf weiter), false = abgebrochen oder fehlgeschlagen
 async function saveModel(as = false) {
-  if (!isDesktop) { download('modell.ofc', new Blob([snapshot()], { type: 'application/json' })); return markSaved(); }
+  if (!isDesktop) { download('modell.ofc', new Blob([snapshot()], { type: 'application/json' })); markSaved(); return true; }
   try {
-    if (filePath && !as) { await writeFile(filePath, snapshot()); markSaved(); return showHint(`Gespeichert: ${baseName(filePath)}`); }
+    if (filePath && !as) { await writeFile(filePath, snapshot()); markSaved(); showHint(`Gespeichert: ${baseName(filePath)}`); return true; }
     const p = await saveAs(filePath ? baseName(filePath) : 'modell.ofc', snapshot());
     if (p) { setFile(p); markSaved(); showHint(`Gespeichert: ${baseName(p)}`); }
-  } catch (e) { alert('Speichern fehlgeschlagen: ' + e); }
+    return !!p;
+  } catch (e) { alert('Speichern fehlgeschlagen: ' + e); return false; }
 }
 $('bSave').onclick = () => saveModel();
+// Desktop: vor dem Schließen fragen, wenn das Modell nicht gespeichert ist (Rückmeldung des Nutzers 2026-11-02)
+void onCloseRequested(async () => {
+  if (!unsaved()) return true;
+  const a = await askSave('Das Modell ist nicht gespeichert. Vor dem Schließen speichern?');
+  return a === 'discard' || (a === 'save' && await saveModel());
+});
 const fileIn = $<HTMLInputElement>('fileIn');
 $('bOpen').onclick = async () => {
   if (!isDesktop) return fileIn.click();

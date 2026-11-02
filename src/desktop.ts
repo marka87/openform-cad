@@ -42,3 +42,14 @@ export async function setTitle(t: string) {
   document.title = t;
   if (isDesktop) await (await import('@tauri-apps/api/window')).getCurrentWindow().setTitle(t);
 }
+
+// Speichern / Nicht speichern / Abbrechen (Windows-Dialog). Je nach Version liefert der Dialog die Taste oder ihre Beschriftung
+export async function askSave(text: string): Promise<'save' | 'discard' | 'cancel'> {
+  const r = await (await dialog()).message(text, { title: 'OpenForm CAD', kind: 'warning', buttons: { yes: 'Speichern', no: 'Nicht speichern', cancel: 'Abbrechen' } });
+  return r === 'Yes' || r === 'Speichern' ? 'save' : r === 'No' || r === 'Nicht speichern' ? 'discard' : 'cancel';
+}
+
+// Vor dem Schließen des Fensters fragen; handler liefert false = Fenster bleibt offen
+export async function onCloseRequested(handler: () => Promise<boolean>) {
+  if (isDesktop) await (await import('@tauri-apps/api/window')).getCurrentWindow().onCloseRequested(async e => { if (!(await handler())) e.preventDefault(); });
+}

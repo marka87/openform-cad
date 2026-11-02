@@ -88,7 +88,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung; dabei prüfen, dass die App mit der neuen CSP startet und rechnet (A1) (0.16.1 gebaut am 2026-11-02, 9,9 MB, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
+      STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.16.2 gebaut am 2026-11-02, 9,9 MB, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -186,6 +186,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.16.2** Beim Schließen der Desktop-App: Rückfrage Speichern / Nicht speichern / Abbrechen, wenn das Modell nicht gespeichert ist
 - **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4) und fragt bei roten Schritten oder zurückgespultem Modell nach (A21); Rückfrage vor Öffnen und Neu, wenn das Modell nicht gespeichert ist, auch beim Start per Doppelklick (A22); überarbeitete STEP mit gleichem Namen zeigt die neue Geometrie (A6); KI-Schlüssel wird beim Wechsel des Anbieters geleert (A18)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
@@ -222,6 +223,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 Schließen (0.16.2), Rückmeldung des Nutzers: die Desktop-App schloss ohne Frage, erst beim nächsten Start fiel die ungespeicherte Arbeit auf. Meine Entscheidung aus A22 („Zwischenspeicher reicht“) war falsch. Jetzt `onCloseRequested` mit Windows-Dialog Speichern / Nicht speichern / Abbrechen; Speichern-unter abgebrochen oder fehlgeschlagen = Fenster bleibt offen. Neues Recht `core:window:allow-destroy` (sonst schließt das Fenster nach der Frage nicht). `saveModel` liefert jetzt true/false. Nur in der Exe prüfbar, nicht im Browser. CSP aus A1 vom Nutzer in der Exe bestätigt. Installer 0.16.2 gebaut.
 - 2026-11-02 A18 (0.16.1): Voreinstellung mit anderer Adresse leert das Schlüsselfeld (und damit den gespeicherten Schlüssel); gleicher Anbieter behält ihn. Von Hand eingetippte Adresse leert ihn bewusst nicht (Tippfehler korrigieren soll den Schlüssel nicht löschen). Im Browser: Groq + Schlüssel → Ollama = leer. Damit sind alle TODO aus Punkt 0 erledigt; offen nur die SPÄTER-Punkte und die CSP-Prüfung in der Exe.
 - 2026-11-02 A6 (0.16.1): Worker merkt sich den STEP-Text je Import; anderer Text bei gleicher Nummer → alten Körper freigeben, neu einlesen, Zwischenstand verwerfen (`dropCache` jetzt exportiert, sein Schlüssel enthält den Text bewusst nicht, das wäre bei jedem Ziehen teuer). Nachgestellt im Browser-Worker: Import 1 mit Quader 1000 mm³, dann gleiche Nummer mit Quader 2000 mm³ → alt 1000 (falsch), neu 2000, auch zurück auf A richtig.
 - 2026-11-02 A22 (0.16.1): Prüfsumme (FNV) des zuletzt gespeicherten oder geöffneten Stands in localStorage `openform-saved`; `discardOk` fragt vor Öffnen einer .ofc und vor Neu, wenn das Modell davon abweicht, auch beim Start per Doppelklick (dort steht noch der Zwischenspeicher der letzten Sitzung). Prüfsumme statt Kopie, weil STEP-Text sonst den Speicher doppelt füllt. Entschieden: beim Schließen keine Frage, der Zwischenspeicher behält die Arbeit; Strg+Z holt das verworfene Modell weiterhin zurück. Im Browser: ungespeichert → Frage, Nein behält; nach Speichern keine Frage.
