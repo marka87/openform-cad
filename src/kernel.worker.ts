@@ -43,9 +43,23 @@ const free = (r: { body: Shape3D | null; bodies: Map<number, Shape3D> }) => {
   for (const s of r.bodies.values()) s.delete();
 };
 
-const buildCache = newCache();
+let buildCache = newCache();
+// Jeder Auftrag bekommt eine Antwort, auch wenn er scheitert: sonst wartet main.ts ewig (busy) und rechnet nie mehr neu (A2)
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
+  try { await handle(data); } catch (e) {
+    console.warn('Auftrag fehlgeschlagen', data.type, e);
+    const why = e instanceof Error ? e.message : String(e);
+    if (data.type === 'build') {
+      body = null; bodies = new Map(); names = new Map(); buildCache = newCache(); // Stand unklar: nächster Lauf rechnet alles neu
+      post({ type: 'notice', text: `Neurechnen fehlgeschlagen: ${why}` });
+      post({ type: 'built', failed: [], errors: [], unsure: [], fixes: [], confirm: [], volume: 0, area: 0, meshes: [] });
+    } else if (data.type === 'check') post({ type: 'checked', errors: [] });
+    else if (data.type === 'project') post({ type: 'projected', lines: [] });
+    else post({ type: 'export', format: data.type === 'sheet' ? 'svg' : data.format, blob: null });
+  }
+};
+async function handle(data: ToWorker) {
   if (data.type === 'build') {
     for (const f of data.features) {
       if (f.type !== 'import' || imports.has(f.id)) continue;
@@ -54,6 +68,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
     if (body && bodies.size > 1) body.delete(); // Verbund; ein einzelner Körper wird unten mit gelöscht
     for (const s of bodies.values()) s.delete();
+    body = null; bodies = new Map(); // gelöscht: scheitert der Lauf unten, darf nichts mehr darauf zugreifen
     const r = buildBody(data.features, imports, buildCache);
     body = r.body; bodies = r.bodies; names = r.names;
     const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
@@ -101,4 +116,4 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     s.delete();
     post({ type: 'export', format: data.format, blob });
   }
-};
+}

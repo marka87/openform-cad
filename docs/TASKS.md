@@ -19,7 +19,7 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 ### 0. Befunde aus dem Audit 2026-11-02 — Claude, vor allem anderen
 Funde am Code gelesen und bestätigt, keiner in der laufenden App nachgestellt: erst nachstellen, dann beheben.
 Last: eine Person, ein Fenster, bis einige hundert Schritte. Reihenfolge von oben nach unten.
-- [ ] TODO A2 Worker-Fehler nach den Schritten (Netz, Kanten, Messung) → kein `built`, App rechnet nie
+- [x] DONE A2 Worker-Fehler nach den Schritten (Netz, Kanten, Messung) → kein `built`, App rechnet nie
       mehr neu, alte Körper schon gelöscht (kernel.worker.ts:47-71). Fix: try/catch um den ganzen Worker,
       nicht nur ums Neurechnen; beim Neurechnen immer `built` senden, nach dem Löschen `body = null; bodies = new Map()`.
 - [ ] TODO A3 Datenverlust: A öffnen, B öffnen, Strg+Z, Strg+S → A landet in B.ofc (main.ts:2118, :155).
@@ -186,6 +186,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
@@ -221,6 +222,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 A2 (0.16.1): nachgestellt mit Bau-Auftrag ohne `features` → keine Antwort, App hätte für immer „busy“. Jetzt fängt `onmessage` jeden Fehler: Bauen meldet „Neurechnen fehlgeschlagen“ und schickt ein leeres `built` (Zwischenstand verworfen), Prüfen/Projektion/Export antworten leer. Gelöschte Körper werden sofort auf null gesetzt. Im Browser: kaputter Auftrag → Meldung + Antwort, nächster Auftrag rechnet normal. Kern-Test: keiner, der Worker läuft in vitest nicht (Begründung, kein Versäumnis).
 - 2026-11-02 Punkt 0 überarbeitet. Fixes korrigiert: A1 auch Schrittnamen und CSP mit wasm-Recht, A3 Pfad im Undo statt Undo leeren (sonst neuer Datenverlust), A8 Grenze nach Größe. Neu: A20 atomares Speichern, A21 Export-Warnung, A22 Rückfrage, A23–A25. Gestrichen: A15 (in A5), A17, A19 (Umbau ohne Nutzen). Nur noch zehn Pakete vor Teil 2, der Rest SPÄTER: echte Teile zeigen mehr als weitere Prüfungen.
 - 2026-11-02 Audit des ganzen Repos: 19 Funde, 7 davon „Muss beheben“ (Sicherheit über präparierte .ofc, Worker-Hänger, Datenverlust beim Speichern nach Undo, veralteter Export, kaputte Datei, alte STEP-Geometrie, Speicherlecks). Als Plan Punkt 0 (A1–A19) eingetragen, noch nichts behoben.
 - 2026-11-02 Abgleich nach 0.16.0: Typen, 111 Tests und Build grün, App startet fehlerfrei, alte Muster-Dateien bleiben lesbar. Korrigiert: CLAUDE.md (3MF und .ofc sind da), Installer-Stand, Teil 2 = Zahnbürstenständer, unklare Notiz „ohne Zuordnung“. Installer 0.16.0 gebaut.
