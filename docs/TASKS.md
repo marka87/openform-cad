@@ -27,7 +27,7 @@ Last: eine Person, ein Fenster, bis einige hundert Schritte. Reihenfolge von obe
       versehentlichem Öffnen. Den Pfad nie aus einer geöffneten Datei übernehmen.
 - [x] DONE A20 Datenverlust: `write_bytes` schreibt direkt in die Zieldatei, ein Absturz dabei zerstört sie
       (src-tauri/src/main.rs:13). Fix: in Nachbardatei schreiben, dann umbenennen.
-- [ ] TODO A1 Sicherheit: präparierte `.ofc` führt Skript aus: Farbe (main.ts:2426) und Schrittname
+- [ ] DOING A1 (Namen und Farbe geschützt, CSP offen) Sicherheit: präparierte `.ofc` führt Skript aus: Farbe (main.ts:2426) und Schrittname
       (`nameOf`, main.ts:540, :1671 u. a.) ungeschützt im HTML, keine CSP, `write_bytes` schreibt jeden Pfad.
       Fix: Namen bei der Ausgabe schützen (`esc`), Farbe `#rrggbb` prüfen, dazu CSP
       `script-src 'self' 'wasm-unsafe-eval'`. Ohne das wasm-Recht lädt OpenCascade nicht; die WASM-Datei enthält
@@ -186,7 +186,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20)
+- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt (A1)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
@@ -222,6 +222,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 A1 Teil 1 (0.16.1): `esc()` nach model.ts (kernel.ts hatte schon einen, jetzt eine Stelle), alle `nameOf` in HTML (Seitenfeld, Muster-Ansicht, Knöpfe, Listen) geschützt, Körperfarbe nur als `#rrggbb`, sonst Standard. Im Browser mit präparierter Datei (Name und Farbe mit `<img onerror>`): nichts ausgeführt, Name als Text sichtbar. CSP folgt getrennt, sie kann das Laden von OpenCascade verhindern.
 - 2026-11-02 A20 (0.16.1): `write_bytes` schreibt nach `<datei>.tmp` und benennt dann um (Windows ersetzt dabei die Zieldatei), bei Fehler wird die .tmp entfernt. Absturz mitten im Schreiben nicht nachstellbar; `cargo check` grün, wirkt erst im nächsten Installer. Gilt für .ofc und alle Exporte der Desktop-App.
 - 2026-11-02 A3 (0.16.1): Undo/Redo-Einträge tragen den Dateipfad, `step()` setzt ihn beim Zurückholen. Undo bleibt erhalten (einzige Rettung nach versehentlichem Öffnen). Nachgestellt nur am Code: der Pfad existiert nur in der Desktop-App; im Browser geprüft, dass Neu → Undo → Redo weiter stimmt. Kein Kern-Test, Oberflächenlogik.
 - 2026-11-02 A2 (0.16.1): nachgestellt mit Bau-Auftrag ohne `features` → keine Antwort, App hätte für immer „busy“. Jetzt fängt `onmessage` jeden Fehler: Bauen meldet „Neurechnen fehlgeschlagen“ und schickt ein leeres `built` (Zwischenstand verworfen), Prüfen/Projektion/Export antworten leer. Gelöschte Körper werden sofort auf null gesetzt. Im Browser: kaputter Auftrag → Meldung + Antwort, nächster Auftrag rechnet normal. Kern-Test: keiner, der Worker läuft in vitest nicht (Begründung, kein Versäumnis).

@@ -90,6 +90,8 @@ export interface PatternDir { ax: Vec; n: number; d: number }
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
+// Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
+export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`);
 // Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
 // copy legt die Kopie einer Quellskizze an, pt/dir bilden Punkte und Richtungen der Quelle auf die Kopie ab, back zurück
 export type PatternCopy = { key: string; copy: (f: Extrude, id: number) => Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec; back: (p: Vec) => Vec; backDir: (d: Vec) => Vec };

@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -1602,7 +1602,7 @@ function renderFeaturePanel() {
   if (!f) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   if (isExtrude(f) && noFace(f)) {
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">${f.aux ? 'Bildet keine Fläche, dient zum Einrasten.' : 'Offene Linie, bildet keine Fläche (Klick auf den Anfangspunkt beim Zeichnen schließt zur Fläche).'} Punkte ziehen = ändern.</p>`
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">${f.aux ? 'Bildet keine Fläche, dient zum Einrasten.' : 'Offene Linie, bildet keine Fläche (Klick auf den Anfangspunkt beim Zeichnen schließt zur Fläche).'} Punkte ziehen = ändern.</p>`
       + (f.type === 'line' && bodyIds.includes(bodyOf(f)) ? linePlane(f, 0) ? `<button class="act cut">Körper hier teilen</button>` : `<p style="color:var(--muted);margin:4px 0">Teilen geht nur an einer geraden Linie.</p>` : '')
       + `<button class="del">Löschen</button>`;
     const cut = panel.querySelector<HTMLButtonElement>('.cut');
@@ -1614,14 +1614,14 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'sweep') {
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Profil #${f.profile} · Pfad ${f.closed ? 'geschlossen' : 'offen'}, ${f.closed ? f.pts.length : f.pts.length - 1} Abschnitte</p>` +
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Profil #${f.profile} · Pfad ${f.closed ? 'geschlossen' : 'offen'}, ${f.closed ? f.pts.length : f.pts.length - 1} Abschnitte</p>` +
       `<label>Abziehen <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label><button class="del">Löschen</button>`;
     panel.querySelector<HTMLInputElement>('.sub')!.onchange = e => { pushHistory(); f.sub = (e.target as HTMLInputElement).checked || undefined; refresh(); };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'pattern') return renderPatternPanel(f);
   if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
-    panel.innerHTML = `<h3>${nameOf(f)}</h3><button class="del">Löschen</button>`;
+    panel.innerHTML = `<h3>${esc(nameOf(f))}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'import') return renderImportPanel(f);
@@ -1633,13 +1633,13 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'offset') {
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><label>Versatz <input type="number" step="0.5" value="${uval(f.d)}"></label><button class="del">Löschen</button>`;
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><label>Versatz <input type="number" step="0.5" value="${uval(f.d)}"></label><button class="del">Löschen</button>`;
     const inp = panel.querySelector('input')!;
     inp.onchange = () => { const v = mmOf(inp); if (isFinite(v)) { pushHistory(); f.d = v; refresh(); } };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'remove') {
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n). Shift+Rechtsklick → weitere Fläche dazu.</p><button class="del">Löschen</button>`;
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n). Shift+Rechtsklick → weitere Fläche dazu.</p><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'text') {
@@ -1670,15 +1670,15 @@ function renderFeaturePanel() {
     (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
     (!loftTo && isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '');
-  panel.innerHTML = `<h3>${name} #${f.id}</h3>` +
+  panel.innerHTML = `<h3>${esc(name)} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
     (isSlot(f) ? `<details open class="cons"><summary>Maße</summary><label>Länge <input type="number" step="0.5" class="len" data-i="0" value="${uval(sideLen(f.pts!, 0))}"></label><label>Radius <input type="number" step="0.5" class="rad" data-i="1" value="${uval(arcR(f.pts!, 1))}"></label><button class="act free" title="Jede Seite und jeder Bogen lässt sich dann einzeln ändern">Freie Form</button></details>`
       : f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
     (f.rev && !f.ball ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
-    (loftTo ? `<button class="act loft">Übergang (Loft) zu ${nameOf(loftTo)} #${loftTo.id}</button>` : '') +
-    features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${nameOf(g)} #${g.id} – bearbeiten</button>`).join('') +
+    (loftTo ? `<button class="act loft">Übergang (Loft) zu ${esc(nameOf(loftTo))} #${loftTo.id}</button>` : '') +
+    features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${esc(nameOf(g))} #${g.id} – bearbeiten</button>`).join('') +
     `<button class="del">Löschen</button>` +
     (more ? `<details class="more"${moreOpen ? ' open' : ''}><summary>Mehr</summary>${more}</details>` : '');
   panel.querySelector<HTMLDetailsElement>('details.more')?.addEventListener('toggle', e => moreOpen = (e.target as HTMLDetailsElement).open);
@@ -1959,7 +1959,7 @@ function crossDir(p: Pattern): Vec {
 // Muster bearbeiten: je Richtung Anzahl, Abstand und ⇄ (dreht dieses Muster um, legt kein zweites an)
 function renderPatternPanel(f: Pattern) {
   if (f.rot || f.mir) { // Kreis-Muster: nur die Anzahl; Spiegeln: nichts einzustellen
-    panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
       + (f.rot ? `<label>Anzahl (360°) <input class="na" type="number" min="2" value="${f.a.n}"></label>` : '') + `<button class="del">Löschen</button>`;
     const na = panel.querySelector<HTMLInputElement>('.na');
     if (na) na.onchange = () => { const v = Math.round(parseFloat(na.value)); if (v >= 2) { pushHistory(); f.a.n = v; refresh(); } };
@@ -1968,7 +1968,7 @@ function renderPatternPanel(f: Pattern) {
   const row = (k: 'a' | 'b', label: string) => { const d = f[k] ?? { n: 1, d: 20 };
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
       <label>Abstand <input class="d${k}" type="number" step="0.5" value="${uval(d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
-  panel.innerHTML = `<h3>${nameOf(f)} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
+  panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
     + row('a', 'Richtung 1') + row('b', 'quer dazu') + `<button class="del">Löschen</button>`;
   for (const k of ['a', 'b'] as const) {
     const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
@@ -2365,8 +2365,8 @@ function renderPatView(title: string, axes: [string, string][], cross: boolean, 
   const num = (cls: string, v: number) => `<div class="f">Anzahl<div class="r"><input class="${cls}" type="number" min="1" value="${v}"><button class="st" data-c="${cls}" data-d="-1">−</button><button class="st" data-c="${cls}" data-d="1">+</button></div></div>`;
   const dist = (cls: string, v: number, flip: string) => `<div class="f">Abstand (${display.unit})<div class="r"><input class="${cls}" type="number" step="0.5" value="${uval(v)}"><button class="${flip}" title="Richtung umkehren">⇄</button></div></div>`;
   panel.classList.add('wide');
-  panel.innerHTML = `<h3>${title}<button class="x" title="Schließen (Esc)">✕</button></h3><div class="seg">${tab('lin', 'Reihe')}${tab('rot', 'Kreis')}${tab('mir', 'Spiegeln')}</div>
-    <label>${lab} <select class="ax">${axes.map(([v, t]) => `<option value="${v}"${v === patVals.ax ? ' selected' : ''}>${t}</option>`).join('')}${patRef ? `<option value="ref"${patVals.ax === 'ref' ? ' selected' : ''}>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>` +
+  panel.innerHTML = `<h3>${esc(title)}<button class="x" title="Schließen (Esc)">✕</button></h3><div class="seg">${tab('lin', 'Reihe')}${tab('rot', 'Kreis')}${tab('mir', 'Spiegeln')}</div>
+    <label>${lab} <select class="ax">${axes.map(([v, t]) => `<option value="${v}"${v === patVals.ax ? ' selected' : ''}>${esc(t)}</option>`).join('')}${patRef ? `<option value="ref"${patVals.ax === 'ref' ? ' selected' : ''}>${patRef.label}</option>` : ''}<option value="pick">Kante oder Fläche anklicken …</option></select></label>` +
     (m === 'lin' ? `<fieldset><legend>Richtung 1 (längs)</legend>${num('cnt', patVals.cnt)}${dist('dist', patVals.dist, 'flip')}</fieldset>` : '') +
     (m === 'lin' && cross ? `<fieldset><legend>Richtung 2 (quer)</legend>${num('cnt2', patVals.cnt2)}${dist('dist2', patVals.dist2, 'flip2')}</fieldset>` : '') +
     (m === 'rot' ? `<fieldset><legend>Auf 360° verteilt</legend>${num('cnt', patVals.cnt)}</fieldset>` : '') +
@@ -2425,7 +2425,7 @@ function renderBodyPanel(b: number) {
   panel.innerHTML = `<h3>Körper #${b}</h3>
     <label>Name <input class="nm" placeholder="Körper #${b}"></label>
     <label>Werkstoff <select class="mat"><option value="">–</option>${Object.keys(MATERIALS).map(m => `<option>${m}</option>`).join('')}</select></label>
-    <label>Farbe <input type="color" class="col" value="${bm.color ?? display.color}" style="width:40px;padding:0"></label>
+    <label>Farbe <input type="color" class="col" value="${/^#[0-9a-f]{6}$/i.test(bm.color ?? "") ? bm.color : display.color}" style="width:40px;padding:0"></label>
     <p class="info" style="margin:4px 0;color:var(--muted)"></p>
     <button class="gT">Verschieben (Griffe)</button><button class="gR">Drehen (Griffe)</button>
     <details class="vals"><summary>Genau verschieben / drehen</summary>
@@ -2435,7 +2435,7 @@ function renderBodyPanel(b: number) {
       <label>Winkel ° <input type="number" step="5" value="90" class="ang"></label><button class="rt">Drehen um Mitte</button>
       <label>Maßstab % <input type="number" step="10" value="200" class="sc"></label><button class="scl">Skalieren um Mitte</button>
     </details>` +
-    (planes.length ? `<label>an <select class="pl">${planes.map(p => `<option value="${p.id}">${nameOf(p)} #${p.id}</option>`).join('')}</select></label><button class="split">Teilen</button>`
+    (planes.length ? `<label>an <select class="pl">${planes.map(p => `<option value="${p.id}">${esc(nameOf(p))} #${p.id}</option>`).join('')}</select></label><button class="split">Teilen</button>`
       : `<p style="color:var(--muted)">Teilen: erst mit E eine Ebene anlegen</p>`) +
     (others.length ? `<label>mit <select class="other">${others.map(o => `<option value="${o}">Körper #${o}</option>`).join('')}</select></label>
     <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '');
