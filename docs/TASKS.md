@@ -17,45 +17,55 @@ Datenverlust gehen immer vor.
 Status: TODO / DOING / DONE / BLOCKED(Grund)
 
 ### 0. Befunde aus dem Audit 2026-11-02 — Claude, vor allem anderen
-Ganzes Repo gelesen (drei Prüfer, Funde 1–9 und 12–14 selbst am Code bestätigt, keiner in der
-laufenden App nachgestellt). Last: eine Person, ein Fenster, bis einige hundert Schritte.
-Muss beheben:
-- [ ] TODO A1 Sicherheit: präparierte `.ofc` führt Skript aus (Farbe ungeprüft ins HTML, main.ts:153
-      und :2426), keine CSP, `write_bytes` schreibt jeden Pfad (src-tauri/src/main.rs). Fix: `load()`
-      prüft Datei (IDs Zahlen, `features` Liste, Farbe `#rrggbb`), sonst ablehnen; CSP `script-src 'self'`.
+Funde am Code gelesen und bestätigt, keiner in der laufenden App nachgestellt: erst nachstellen, dann beheben.
+Last: eine Person, ein Fenster, bis einige hundert Schritte. Reihenfolge von oben nach unten.
 - [ ] TODO A2 Worker-Fehler nach den Schritten (Netz, Kanten, Messung) → kein `built`, App rechnet nie
-      mehr neu, alte Körper schon gelöscht (kernel.worker.ts:47-71). Fix: try/catch, immer `built`
-      senden; nach dem Löschen `body = null; bodies = new Map()`.
+      mehr neu, alte Körper schon gelöscht (kernel.worker.ts:47-71). Fix: try/catch um den ganzen Worker,
+      nicht nur ums Neurechnen; beim Neurechnen immer `built` senden, nach dem Löschen `body = null; bodies = new Map()`.
 - [ ] TODO A3 Datenverlust: A öffnen, B öffnen, Strg+Z, Strg+S → A landet in B.ofc (main.ts:2118, :155).
-      Fix: beim Öffnen einer `.ofc` Undo/Redo leeren statt `pushHistory()`.
-- [ ] TODO A4 Export überholt laufendes Neurechnen → Datei ohne letzte Änderung (main.ts:2128). Fix:
-      Export zurückhalten, solange gerechnet wird oder eine Änderung wartet.
+      Fix: Undo-Einträge merken sich den Dateipfad. Undo nicht leeren: es ist heute die einzige Rettung nach
+      versehentlichem Öffnen. Den Pfad nie aus einer geöffneten Datei übernehmen.
+- [ ] TODO A20 Datenverlust: `write_bytes` schreibt direkt in die Zieldatei, ein Absturz dabei zerstört sie
+      (src-tauri/src/main.rs:13). Fix: in Nachbardatei schreiben, dann umbenennen.
+- [ ] TODO A1 Sicherheit: präparierte `.ofc` führt Skript aus: Farbe (main.ts:2426) und Schrittname
+      (`nameOf`, main.ts:540, :1671 u. a.) ungeschützt im HTML, keine CSP, `write_bytes` schreibt jeden Pfad.
+      Fix: Namen bei der Ausgabe schützen (`esc`), Farbe `#rrggbb` prüfen, dazu CSP
+      `script-src 'self' 'wasm-unsafe-eval'`. Ohne das wasm-Recht lädt OpenCascade nicht; die WASM-Datei enthält
+      auch `eval`/`new Function`, deshalb in der gebauten Exe prüfen, im Browser greift die Regel nicht.
 - [ ] TODO A5 Fremde/kaputte `.json` setzt `features` auf undefined, App steht; im Browser keine
-      Meldung (main.ts:153, :2124). Fix: Prüfung aus A1, Browser-Öffnen mit try/catch und Meldung.
-- [ ] TODO A6 Überarbeitete STEP mit gleichem Namen und gleicher Schritt-Nummer zeigt alte Geometrie
-      (kernel.worker.ts:49-51, Schlüssel kernel.ts:179). Fix: STEP-Text mit merken, bei Abweichung neu laden.
-- [ ] TODO A7 Speicherlecks je Neurechnen bis „memory out of bounds“: Hilfskörper bei Fläche versetzen
-      (topo.ts:450), Werkzeug bei gescheitertem Schnitt (kernel.ts:368, :218, :286, :302).
-      Fix: `finally { ….delete() }`.
-Sollte beheben:
-- [ ] TODO A8 Undo-Liste ohne Grenze, enthält ganzen STEP-Text (main.ts:152). Fix: höchstens 100.
-- [ ] TODO A9 Kaputte STEP wird bei jedem Neurechnen erneut gelesen (kernel.worker.ts:49). Fix: gescheiterte merken.
-- [ ] TODO A10 Muster/Übergang/Zug/Teilen suchen die Quelle in der ganzen Liste; Schritt vor seine
+      Meldung (main.ts:153, :2124), auch ein kaputtes Autosave beim Start (:2868). Fix: Prüfung als reine Funktion
+      nach model.ts (`features` Liste, IDs Zahlen) mit Kern-Test, vor `pushHistory`; Browser-Öffnen mit try/catch
+      und Meldung. Alte Dateien müssen lesbar bleiben.
+- [ ] TODO A4 Export ohne die letzte Änderung, wenn nach der laufenden Berechnung noch eine wartet
+      (`pending`, main.ts:2129). Fix: Export zurückhalten, bis nichts mehr wartet. Erst nach A2, sonst wartet er
+      bei einem Hänger ewig.
+- [ ] TODO A21 Export warnt nicht bei fehlgeschlagenen Schritten und nicht im zurückgespulten Zustand: Datei
+      sieht fertig aus, ist es aber nicht (main.ts:329, kernel.worker.ts:96). Fix: Rückfrage wie bei ungültigen Körpern.
+- [ ] TODO A22 Keine Rückfrage bei ungespeicherten Änderungen beim Öffnen und Schließen; Doppelklick auf `.ofc`
+      überschreibt das automatische Speichern (main.ts:2871). Fix: Änderungsmerker und Rückfrage.
+- [ ] TODO A6 Zweite `.ofc` mit gleicher Import-Nummer und gleichem Namen, aber anderer STEP, direkt danach geöffnet →
+      still alte Geometrie (kernel.worker.ts:51, Schlüssel kernel.ts:179). Fix: STEP-Text mit vergleichen, bei Abweichung neu laden.
+- [ ] TODO A18 KI: Voreinstellung wechseln leert den Schlüssel nicht → geht an den nächsten Anbieter (ai.ts:94). Fix: Schlüssel leeren.
+
+Danach zurück zu Teil 2 unter Punkt 3 (Zahnbürstenständer). SPÄTER = nicht von selbst nehmen, erst wenn es beim Arbeiten stört
+oder ohnehin dort gearbeitet wird:
+- [ ] SPÄTER A7 Speicherlecks: Hilfskörper bei Fläche versetzen bei jedem Lauf (topo.ts:450), Werkzeug nur bei
+      gescheitertem Schnitt (kernel.ts:218, :286, :302, :368). replicad räumt per GC nach, Absturz nicht belegt. Fix: `finally { ….delete() }`.
+- [ ] SPÄTER A8 Undo-Liste ohne Grenze, enthält ganzen STEP-Text (main.ts:152). Fix: Grenze nach Größe, nicht nach Anzahl.
+- [ ] SPÄTER A9 Kaputte STEP wird bei jedem Neurechnen erneut gelesen (kernel.worker.ts:51). Fix: gescheiterte merken.
+- [ ] SPÄTER A10 Muster/Übergang/Zug/Teilen suchen die Quelle in der ganzen Liste; Schritt vor seine
       Quelle gezogen → Teil-Neurechnen ≠ volles Neurechnen (kernel.ts:266 u. a.). Fix: nur frühere Schritte.
-- [ ] TODO A11 Drucken und SVG kurz nacheinander vertauschen sich (`printNext`, main.ts:2135).
-- [ ] TODO A12 KI: Gewinde „constructor“ → Radius NaN (aiTools.ts:112). Fix: `Object.hasOwn`.
-- [ ] TODO A13 KI: zweimal Enter → zwei Anfragen, erste hängt, Modell überschrieben (ai.ts:128). Fix: Merker „läuft“.
-- [ ] TODO A14 KI: Zeitgrenze endet vor dem Lesen der Antwort → kann ewig hängen (ai.ts:47/62).
-- [ ] TODO A15 Test für die Dateiprüfung aus A1/A5 (Prüfung als reine Funktion nach model.ts).
-Schön zu haben:
-- [ ] TODO A16 `dot` doppelt (model.ts:147, topo.ts:113), `at` doppelt (aiTools.ts:100/116).
-- [ ] TODO A17 onMove/onDown/renderFeaturePanel je Zieh-Art bzw. Schritt-Typ teilen, nur wenn ohnehin dort gearbeitet wird.
-- [ ] TODO A18 KI: Voreinstellung wechseln leert den Schlüssel nicht → geht an den nächsten Server (ai.ts:94).
-- [ ] TODO A19 rund 18 Exporte nur in eigener Datei benutzt (PRESETS, SYSTEM, solidOf, fingerprint, …): `export` weg.
-Nicht selbst nachgeprüft, nur notiert: gespiegelter Teil-Drehkörper dreht falsch herum (model.ts:477),
+- [ ] SPÄTER A11 Drucken und SVG kurz nacheinander: beide folgen dem letzten Wunsch (`printNext`, main.ts:2138).
+- [ ] SPÄTER A12 KI: Gewinde „constructor“ → Radius NaN (aiTools.ts:112). Fix: `Object.hasOwn`.
+- [ ] SPÄTER A13 KI: zweimal Enter → zwei Anfragen, Modell überschrieben (ai.ts:128). Fix: Merker „läuft“.
+- [ ] SPÄTER A14 KI: Zeitgrenze endet vor dem Lesen der Antwort → kann ewig hängen (ai.ts:47/62).
+- [ ] SPÄTER A16 `dot` doppelt (model.ts:147, topo.ts:113), `at` doppelt (aiTools.ts:100/116).
+- [ ] SPÄTER A23 STEP ohne UTF-8 (z. B. Umlaute) lässt sich in der Desktop-App nicht öffnen (`read_text`, src-tauri/src/main.rs:8).
+- [ ] SPÄTER A24 Tests laufen nicht automatisch: der einzige GitHub-Workflow baut von Hand OpenCascade.
+- [ ] SPÄTER A25 Undo lässt die Mehrfachauswahl stehen (`multi`, main.ts:154).
+Nicht nachgeprüft, nur notiert: gespiegelter Teil-Drehkörper dreht falsch herum (model.ts:477),
 Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Verschieben des Körpers
-(kernel.ts:295), Muster über mehrere Körper (Anzeige/Rundung), Lecks in circleOf/cleanStep, keine
-Warnung vor ungespeicherten Änderungen.
+(kernel.ts:295), Muster über mehrere Körper (Anzeige/Rundung), Lecks in circleOf/cleanStep.
 
 ### 1. Nie wieder kaputte Dateien — Claude
 - [x] Schale, Zug und Fläche löschen prüfen ihr Ergebnis
@@ -78,7 +88,7 @@ Warnung vor ungespeicherten Änderungen.
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.16.0 gebaut am 2026-11-02, 9,9 MB, src-tauri/target/release/bundle/nsis/; noch nicht installiert)
+      STL, 3MF, Zeichnung (0.16.0 gebaut am 2026-11-02, 9,9 MB, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -211,6 +221,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 Punkt 0 überarbeitet. Fixes korrigiert: A1 auch Schrittnamen und CSP mit wasm-Recht, A3 Pfad im Undo statt Undo leeren (sonst neuer Datenverlust), A8 Grenze nach Größe. Neu: A20 atomares Speichern, A21 Export-Warnung, A22 Rückfrage, A23–A25. Gestrichen: A15 (in A5), A17, A19 (Umbau ohne Nutzen). Nur noch zehn Pakete vor Teil 2, der Rest SPÄTER: echte Teile zeigen mehr als weitere Prüfungen.
 - 2026-11-02 Audit des ganzen Repos: 19 Funde, 7 davon „Muss beheben“ (Sicherheit über präparierte .ofc, Worker-Hänger, Datenverlust beim Speichern nach Undo, veralteter Export, kaputte Datei, alte STEP-Geometrie, Speicherlecks). Als Plan Punkt 0 (A1–A19) eingetragen, noch nichts behoben.
 - 2026-11-02 Abgleich nach 0.16.0: Typen, 111 Tests und Build grün, App startet fehlerfrei, alte Muster-Dateien bleiben lesbar. Korrigiert: CLAUDE.md (3MF und .ofc sind da), Installer-Stand, Teil 2 = Zahnbürstenständer, unklare Notiz „ohne Zuordnung“. Installer 0.16.0 gebaut.
 - 2026-10-31 Langloch (0.16.0). Abhängigkeiten im Löser taugen dafür nicht: parallel, gleich lang und tangential zusammen scheitern schon an
