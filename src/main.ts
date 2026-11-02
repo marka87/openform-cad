@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { baseName, initialFile, isDesktop, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -151,7 +151,7 @@ function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else {
 let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
 const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims });
 function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); redoStack.length = 0; }
-function load(s: string) { const d = JSON.parse(s); features = d.features; nextId = d.nextId; meta = d.meta ?? {}; roll = d.roll ?? null; sheetDims = d.dims ?? []; }
+function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push({ s: snapshot(), path: filePath }); step(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push({ s: snapshot(), path: filePath }); step(redoStack.pop()!); } }
@@ -2118,8 +2118,10 @@ $('bOpen').onclick = async () => {
 };
 // .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
 function opened(name: string, text: string, path: string | null = null) {
+  const isStep = /\.(step|stp)$/i.test(name);
+  if (!isStep) try { parseModel(text); } catch (e) { return alert(`${baseName(name)} lässt sich nicht öffnen: ${e instanceof Error ? e.message : e}`); } // vor pushHistory: abgelehnt = nichts verändert
   pushHistory();
-  if (!/\.(step|stp)$/i.test(name)) { restore(text); return setFile(path); }
+  if (!isStep) { restore(text); return setFile(path); }
   const f: Import = { id: nextId, type: 'import', name: baseName(name), step: text, body: nextId++ };
   add(f); selId = f.id; refresh();
 }

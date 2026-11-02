@@ -760,3 +760,28 @@ export function coplanarBounds(pos: ArrayLike<number>, idx: ArrayLike<number>, n
   }
   return out;
 }
+
+// Modell aus .ofc/.json/Autosave prüfen, bevor etwas übernommen wird (A5): fremde oder kaputte Dateien werfen einen
+// verständlichen Fehler statt das Modell zu leeren. Bezüge auf andere Schritte müssen Zahlen sein, sie landen in der
+// Oberfläche (A1). Fehlende Nebenangaben alter Dateien (meta, roll, dims, nextId) werden ergänzt
+export function parseModel(text: string): { features: Feature[]; nextId: number; meta: Record<number, BodyMeta>; roll: number | null; dims: Dim[] } {
+  let d: any;
+  try { d = JSON.parse(text); } catch { throw new Error('Keine gültige Modelldatei (kein JSON)'); }
+  if (!d || typeof d !== 'object' || !Array.isArray(d.features)) throw new Error('Keine OpenForm-Datei (Schrittliste fehlt)');
+  const int = (v: unknown) => Number.isInteger(v);
+  d.features.forEach((f: any, i: number) => {
+    const bad = (what: string) => { throw new Error(`Schritt ${i + 1}: ${what}`); };
+    if (!f || typeof f !== 'object' || !int(f.id) || typeof f.type !== 'string') bad('ohne Nummer oder Art');
+    for (const k of ['body', 'profile', 'plane', 'of']) if (f[k] !== undefined && !int(f[k])) bad(`Bezug ${k} ist keine Zahl`);
+    if ((f.type === 'loft' || f.type === 'combine') && !(int(f.a) && int(f.b))) bad('Bezug a/b ist keine Zahl');
+    if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');
+    if (f.name !== undefined && typeof f.name !== 'string') bad('Name ist kein Text');
+  });
+  const max = Math.max(0, ...d.features.map((f: Feature) => f.id));
+  return {
+    features: d.features, nextId: int(d.nextId) && d.nextId > max ? d.nextId : max + 1,
+    meta: d.meta && typeof d.meta === 'object' ? d.meta : {},
+    roll: int(d.roll) && d.roll >= 0 && d.roll <= d.features.length ? d.roll : null,
+    dims: Array.isArray(d.dims) ? d.dims : [],
+  };
+}

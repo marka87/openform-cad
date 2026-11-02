@@ -4,7 +4,7 @@ import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad
 import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
-import { bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { parseModel, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -1090,4 +1090,16 @@ test('Muster: Rundung an der Quelle geht mit, jede Kopie hat eigene Flächenname
   expect(nm.filter(x => x.o.f === 3 && x.o.tag === 'fillet').map(x => x.o.at ?? '-').sort()).toEqual(['-', '2:1:0', '2:2:0']); // Rundung je Kopie
   const top2 = faceRef(nm, nm.find(x => x.o.at === '2:2:0' && x.o.tag === 'end')!.face)!;
   expect(resolveFace(top2, r.body!, nm).ok).toBe(true);                                // Bezug auf genau diese Kopie löst eindeutig auf
+});
+
+test('Datei öffnen (A5): alte Dateien gehen auf, fremde und präparierte werden mit Grund abgelehnt', () => {
+  const rect = { id: 3, type: 'rect', o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], p: { x: 0, y: 0, w: 10, h: 10 }, d: 5 };
+  const alt = parseModel(JSON.stringify({ features: [rect] }));               // alte Datei: ohne nextId, meta, roll, dims
+  expect([alt.nextId, alt.meta, alt.roll, alt.dims]).toEqual([4, {}, null, []]);
+  expect(parseModel(JSON.stringify({ features: [rect], nextId: 9, roll: 1 })).nextId).toBe(9);
+  expect(() => parseModel('{kaputt')).toThrow('kein JSON');
+  expect(() => parseModel('{"name":"package","version":"1.0"}')).toThrow('Schrittliste fehlt');
+  expect(() => parseModel(JSON.stringify({ features: [{ ...rect, id: '<img src=x>' }] }))).toThrow('Schritt 1: ohne Nummer');
+  expect(() => parseModel(JSON.stringify({ features: [rect, { id: 4, type: 'pattern', src: ['<b>'] }] }))).toThrow('Schritt 2: Quelle');
+  expect(() => parseModel(JSON.stringify({ features: [{ ...rect, body: '"><script>' }] }))).toThrow('Bezug body');
 });
