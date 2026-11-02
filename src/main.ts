@@ -286,6 +286,9 @@ function disposeGroup(gr: THREE.Object3D) {
 // Höchstens eine Berechnung gleichzeitig; Änderungen während des Rechnens werden zur nächsten zusammengefasst
 const worker = new Worker(new URL('./kernel.worker.ts', import.meta.url), { type: 'module' });
 const send = (m: ToWorker) => worker.postMessage(m);
+// Export erst, wenn nichts mehr wartet: sonst überholt er die laufende Berechnung und die Datei hat die letzte Änderung nicht (A4)
+let waitExport: ToWorker | null = null;
+const sendExport = (m: ToWorker) => { if (!busy && !pending) return send(m); waitExport = m; showNotice('Export wartet, bis fertig gerechnet ist …'); };
 let busy = false, pending = false;
 let pathPreview: Sweep | null = null; // Zug, dessen Pfad gerade gezeichnet wird: wird zur Vorschau mitberechnet
 function requestBuild() {
@@ -324,11 +327,12 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       if (data.fixes.some(([id, p]) => id === selId && 'd' in p)) renderPanel(); // neu gerechnete Tiefe (durch alles) im Feld zeigen
       rebuild(); save();
     } else if (pending) requestBuild();
+    if (!busy && !pending && waitExport) { send(waitExport); waitExport = null; }
   } else if (data.type === 'notice') showNotice(data.text);
   else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
-  else if (data.invalid?.length) { if (confirm(`Körper ${data.invalid.map(b => `#${b}`).join(', ')} ist ungültig, die Datei kann Löcher haben und sich nicht fertigen lassen. Trotzdem exportieren?`)) send({ type: 'export', format: data.format, force: true }); }
+  else if (data.invalid?.length) { if (confirm(`Körper ${data.invalid.map(b => `#${b}`).join(', ')} ist ungültig, die Datei kann Löcher haben und sich nicht fertigen lassen. Trotzdem exportieren?`)) sendExport({ type: 'export', format: data.format, force: true }); }
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
@@ -2130,8 +2134,8 @@ fileIn.onchange = async () => {
   fileIn.value = '';
   if (file) opened(file.name, await file.text());
 };
-$('bStl').onclick = () => send({ type: 'export', format: 'stl' });
-$('bStep').onclick = () => send({ type: 'export', format: 'step' });
+$('bStl').onclick = () => sendExport({ type: 'export', format: 'stl' });
+$('bStep').onclick = () => sendExport({ type: 'export', format: 'step' });
 // ---------- Zeichnung: Blatt als SVG oder drucken (PDF), Ansichten als DXF ----------
 let printNext = false; // nächstes Blatt drucken statt speichern
 function sheetInfo(format: 'A4' | 'A3') {
@@ -2140,7 +2144,7 @@ function sheetInfo(format: 'A4' | 'A3') {
 }
 function sheet(format: 'A4' | 'A3', print: boolean) {
   printNext = print;
-  send({ type: 'export', format: 'svg', info: sheetInfo(format), dims: sheetDims });
+  sendExport({ type: 'export', format: 'svg', info: sheetInfo(format), dims: sheetDims });
 }
 function editSheet() {
   if (!bodyIds.length) return alert('Noch kein Körper vorhanden.');
@@ -2155,7 +2159,7 @@ $('bSvg').onclick = e => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   showMenu(r.left, r.bottom + 4, [['Zeichnung bemaßen …', editSheet], null, ['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
     ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
-    ['Ansichten als DXF (1:1)', () => send({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => send({ type: 'export', format: '3mf' })], null, ['KI fragen …', () => askAi()], ['KI-Assistent einrichten …', openAiSettings]]);
+    ['Ansichten als DXF (1:1)', () => sendExport({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => sendExport({ type: 'export', format: '3mf' })], null, ['KI fragen …', () => askAi()], ['KI-Assistent einrichten …', openAiSettings]]);
 };
 // Drucken über einen unsichtbaren Rahmen; „Als PDF speichern“ im Druckdialog ergibt die PDF-Datei
 function printSVG(svg: string) {

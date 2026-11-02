@@ -36,7 +36,7 @@ Last: eine Person, ein Fenster, bis einige hundert Schritte. Reihenfolge von obe
       Meldung (main.ts:153, :2124), auch ein kaputtes Autosave beim Start (:2868). Fix: Prüfung als reine Funktion
       nach model.ts (`features` Liste, IDs Zahlen) mit Kern-Test, vor `pushHistory`; Browser-Öffnen mit try/catch
       und Meldung. Alte Dateien müssen lesbar bleiben.
-- [ ] TODO A4 Export ohne die letzte Änderung, wenn nach der laufenden Berechnung noch eine wartet
+- [x] DONE A4 Export ohne die letzte Änderung, wenn nach der laufenden Berechnung noch eine wartet
       (`pending`, main.ts:2129). Fix: Export zurückhalten, bis nichts mehr wartet. Erst nach A2, sonst wartet er
       bei einem Hänger ewig.
 - [ ] TODO A21 Export warnt nicht bei fehlgeschlagenen Schritten und nicht im zurückgespulten Zustand: Datei
@@ -186,7 +186,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5)
+- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
@@ -222,6 +222,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 A4 (0.16.1): Alle Exporte über `sendExport`: läuft eine Berechnung oder wartet eine Änderung, wird der Export gemerkt („Export wartet …“) und nach dem letzten `built` geschickt. Nachgestellt im Browser: Platte 300×200 mit 300 Löchern, Höhe 5 → 9, sofort STL. Alter Code: STL 5 mm hoch (falsch), neu: 9 mm, Export nach rund 17 s. OBJ nimmt weiter das Anzeigenetz und wartet nicht.
 - 2026-11-02 A5 (0.16.1): `parseModel` in model.ts prüft Liste, Nummern und Bezüge (body, profile, plane, of, a/b bei Loft/Verrechnen, src) und ergänzt fehlende Nebenangaben alter Dateien (nextId aus der höchsten Nummer, meta, roll, dims). `opened` prüft vor `pushHistory`, Ablehnung = Meldung, Modell unverändert; `load` (auch Autosave und Undo) nutzt dieselbe Prüfung. Kern-Test: alte Datei, fremdes und kaputtes JSON, präparierte Nummern. Im Browser über das Datei-Feld: package.json abgelehnt, gültige .ofc geht auf, Undo zurück. Aufgefallen, nicht geändert: Öffnen über den Knopf in der Desktop-App übergibt keinen Pfad, Strg+S fragt danach nach dem Speicherort.
 - 2026-11-02 A1 Teil 2 (0.16.1): CSP in tauri.conf.json (`script-src 'self' 'wasm-unsafe-eval'`, Stile inline erlaubt, connect-src ipc: für invoke und KI über das HTTP-Plugin; devCsp zusätzlich mit Vite-Websocket). Vorab im Browser (Chromium wie WebView2) am gebauten dist mit derselben Regel als meta: OpenCascade und Schrift laden, Quader rechnet 1,00 cm³, eval und eingeschleuster onerror gesperrt. In der Exe selbst noch nicht gesehen.
 - 2026-11-02 A1 Teil 1 (0.16.1): `esc()` nach model.ts (kernel.ts hatte schon einen, jetzt eine Stelle), alle `nameOf` in HTML (Seitenfeld, Muster-Ansicht, Knöpfe, Listen) geschützt, Körperfarbe nur als `#rrggbb`, sonst Standard. Im Browser mit präparierter Datei (Name und Farbe mit `<img onerror>`): nichts ausgeführt, Name als Text sichtbar. CSP folgt getrennt, sie kann das Laden von OpenCascade verhindern.
