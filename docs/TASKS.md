@@ -43,7 +43,7 @@ Last: eine Person, ein Fenster, bis einige hundert Schritte. Reihenfolge von obe
       sieht fertig aus, ist es aber nicht (main.ts:329, kernel.worker.ts:96). Fix: Rückfrage wie bei ungültigen Körpern.
 - [x] DONE A22 Keine Rückfrage bei ungespeicherten Änderungen beim Öffnen und Schließen; Doppelklick auf `.ofc`
       überschreibt das automatische Speichern (main.ts:2871). Fix: Änderungsmerker und Rückfrage.
-- [ ] TODO A6 Zweite `.ofc` mit gleicher Import-Nummer und gleichem Namen, aber anderer STEP, direkt danach geöffnet →
+- [x] DONE A6 Zweite `.ofc` mit gleicher Import-Nummer und gleichem Namen, aber anderer STEP, direkt danach geöffnet →
       still alte Geometrie (kernel.worker.ts:51, Schlüssel kernel.ts:179). Fix: STEP-Text mit vergleichen, bei Abweichung neu laden.
 - [ ] TODO A18 KI: Voreinstellung wechseln leert den Schlüssel nicht → geht an den nächsten Anbieter (ai.ts:94). Fix: Schlüssel leeren.
 
@@ -186,7 +186,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4) und fragt bei roten Schritten oder zurückgespultem Modell nach (A21); Rückfrage vor Öffnen und Neu, wenn das Modell nicht gespeichert ist, auch beim Start per Doppelklick (A22)
+- **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4) und fragt bei roten Schritten oder zurückgespultem Modell nach (A21); Rückfrage vor Öffnen und Neu, wenn das Modell nicht gespeichert ist, auch beim Start per Doppelklick (A22); überarbeitete STEP mit gleichem Namen zeigt die neue Geometrie (A6)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
 - **0.15.1** Nahtkanten auf Kugeln, Zylindern und Bohrungen ausgeblendet und nicht mehr greifbar
 - **0.15.0** Werkzeug Kugel (K); Vollkreis um seine Mitte wird beim Drehen zur Kugel; Skizze quer über die Drehachse meldet einen Fehler statt eines leeren Körpers
@@ -222,6 +222,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 A6 (0.16.1): Worker merkt sich den STEP-Text je Import; anderer Text bei gleicher Nummer → alten Körper freigeben, neu einlesen, Zwischenstand verwerfen (`dropCache` jetzt exportiert, sein Schlüssel enthält den Text bewusst nicht, das wäre bei jedem Ziehen teuer). Nachgestellt im Browser-Worker: Import 1 mit Quader 1000 mm³, dann gleiche Nummer mit Quader 2000 mm³ → alt 1000 (falsch), neu 2000, auch zurück auf A richtig.
 - 2026-11-02 A22 (0.16.1): Prüfsumme (FNV) des zuletzt gespeicherten oder geöffneten Stands in localStorage `openform-saved`; `discardOk` fragt vor Öffnen einer .ofc und vor Neu, wenn das Modell davon abweicht, auch beim Start per Doppelklick (dort steht noch der Zwischenspeicher der letzten Sitzung). Prüfsumme statt Kopie, weil STEP-Text sonst den Speicher doppelt füllt. Entschieden: beim Schließen keine Frage, der Zwischenspeicher behält die Arbeit; Strg+Z holt das verworfene Modell weiterhin zurück. Im Browser: ungespeichert → Frage, Nein behält; nach Speichern keine Frage.
 - 2026-11-02 A21 (0.16.1): `exportNow` fragt vor jedem Export (STEP, STL, 3MF, SVG, DXF) nach, wenn Schritte rot sind oder zurückgespult ist; nennt die Schrittnummern. Bereits bestätigter Export (force) fragt nicht erneut. Im Browser: Quader mit zu großer Rundung → Frage „Schritt #2 ist fehlgeschlagen …“, Nein = keine Datei, Ja = Datei. OBJ fragt nicht (Anzeigenetz).
 - 2026-11-02 A4 (0.16.1): Alle Exporte über `sendExport`: läuft eine Berechnung oder wartet eine Änderung, wird der Export gemerkt („Export wartet …“) und nach dem letzten `built` geschickt. Nachgestellt im Browser: Platte 300×200 mit 300 Löchern, Höhe 5 → 9, sofort STL. Alter Code: STL 5 mm hoch (falsch), neu: 9 mm, Export nach rund 17 s. OBJ nimmt weiter das Anzeigenetz und wartet nicht.

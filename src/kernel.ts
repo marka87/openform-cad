@@ -152,7 +152,7 @@ function snapshotOf(bodies: Map<number, Shape3D>, names: Map<number, Named>, ali
   return { bodies: new Map([...bodies].map(([k, s]) => [k, s.clone() as Shape3D])), names: new Map(names), alias: new Map(alias), failed: [...failed], errors: new Map(errors), fixes: new Map(fixes), unsure: [...unsure], confirm: new Map(confirm), moved: new Map(moved) };
 }
 const dropCache = (c: BuildCache) => { c.st?.bodies.forEach(s => s.delete()); c.end?.bodies.forEach(s => s.delete()); c.st = c.end = null; };
-export { newCache };
+export { newCache, dropCache };
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>(), cache?: BuildCache) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen

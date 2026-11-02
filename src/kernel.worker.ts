@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { shownEdges, newCache, buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
+import { shownEdges, newCache, dropCache, buildBody, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
@@ -30,6 +30,7 @@ const post = (m: FromWorker, transfer: Transferable[] = []) => postMessage(m, { 
 const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
 let body: Shape3D | null = null, bodies = new Map<number, Shape3D>(), names = new Map<number, Named>();
 const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit sie nicht bei jedem Ziehen neu geparst werden
+const importText = new Map<number, string>(); // STEP-Text je Import: gleiche Nummer, anderer Text (andere Datei geöffnet) = neu einlesen (A6)
 
 // Schrift für Text-Features gleich mitladen; fehlt sie, schlagen nur Texte sichtbar fehl
 const ready = opencascade({ locateFile: () => wasmUrl }).then(async oc => {
@@ -62,10 +63,13 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
 async function handle(data: ToWorker) {
   if (data.type === 'build') {
     for (const f of data.features) {
-      if (f.type !== 'import' || imports.has(f.id)) continue;
+      if (f.type !== 'import') continue;
+      if (imports.has(f.id) && importText.get(f.id) === f.step) continue;
+      if (imports.has(f.id)) { imports.get(f.id)!.delete(); imports.delete(f.id); dropCache(buildCache); buildCache.keys = []; } // Zwischenstand kennt den STEP-Text nicht
+      importText.set(f.id, f.step);
       try { imports.set(f.id, await loadStep(f.step, n => post({ type: 'notice', text: `${f.name}: ${n} überlappende Körper weggelassen (Zwischenstände aus dem Export)` }))); } catch (e) { console.warn('STEP-Import fehlgeschlagen', e); }
     }
-    for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); }
+    for (const [id, s] of imports) if (!data.features.some(f => f.id === id)) { s.delete(); imports.delete(id); importText.delete(id); }
     if (body && bodies.size > 1) body.delete(); // Verbund; ein einzelner Körper wird unten mit gelöscht
     for (const s of bodies.values()) s.delete();
     body = null; bodies = new Map(); // gelöscht: scheitert der Lauf unten, darf nichts mehr darauf zugreifen
