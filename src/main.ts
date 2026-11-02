@@ -2107,18 +2107,24 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; setFile(null); clearSel(); refresh(); } };
+$('bNew').onclick = () => { if (features.length && discardOk('Neu anfangen')) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; setFile(null); clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 // Modell als .ofc (dasselbe JSON wie im Autosave). Desktop: Speichern schreibt in die geöffnete Datei, sonst Dialog
 let filePath: string | null = null;
 function setFile(path: string | null) { filePath = path; void setTitle(path ? `${baseName(path)} – OpenForm CAD` : 'OpenForm CAD'); }
+// Ungespeicherte Änderungen (A22): Prüfsumme des zuletzt gespeicherten oder geöffneten Stands, dauerhaft, damit auch ein
+// Start per Doppelklick weiß, ob der Zwischenspeicher noch Arbeit enthält, die in keiner Datei steht
+const sum = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return String(h >>> 0); };
+const markSaved = () => { try { localStorage.setItem('openform-saved', sum(snapshot())); } catch {} };
+const unsaved = () => features.length > 0 && localStorage.getItem('openform-saved') !== sum(snapshot());
+const discardOk = (what: string) => !unsaved() || confirm(`Das aktuelle Modell ist nicht gespeichert. ${what} trotzdem? (Strg+Z holt es danach zurück)`);
 async function saveModel(as = false) {
-  if (!isDesktop) return download('modell.ofc', new Blob([snapshot()], { type: 'application/json' }));
+  if (!isDesktop) { download('modell.ofc', new Blob([snapshot()], { type: 'application/json' })); return markSaved(); }
   try {
-    if (filePath && !as) { await writeFile(filePath, snapshot()); return showHint(`Gespeichert: ${baseName(filePath)}`); }
+    if (filePath && !as) { await writeFile(filePath, snapshot()); markSaved(); return showHint(`Gespeichert: ${baseName(filePath)}`); }
     const p = await saveAs(filePath ? baseName(filePath) : 'modell.ofc', snapshot());
-    if (p) { setFile(p); showHint(`Gespeichert: ${baseName(p)}`); }
+    if (p) { setFile(p); markSaved(); showHint(`Gespeichert: ${baseName(p)}`); }
   } catch (e) { alert('Speichern fehlgeschlagen: ' + e); }
 }
 $('bSave').onclick = () => saveModel();
@@ -2131,8 +2137,9 @@ $('bOpen').onclick = async () => {
 function opened(name: string, text: string, path: string | null = null) {
   const isStep = /\.(step|stp)$/i.test(name);
   if (!isStep) try { parseModel(text); } catch (e) { return alert(`${baseName(name)} lässt sich nicht öffnen: ${e instanceof Error ? e.message : e}`); } // vor pushHistory: abgelehnt = nichts verändert
+  if (!isStep && !discardOk(`${baseName(name)} öffnen`)) return;
   pushHistory();
-  if (!isStep) { restore(text); return setFile(path); }
+  if (!isStep) { restore(text); markSaved(); return setFile(path); }
   const f: Import = { id: nextId, type: 'import', name: baseName(name), step: text, body: nextId++ };
   add(f); selId = f.id; refresh();
 }
