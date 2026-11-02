@@ -32,12 +32,12 @@ Status: TODO / DOING / DONE / BLOCKED(Grund)
 
 ### 3. Echte Teile — Nutzer, das Wichtigste
 - [x] Teil 1: Gehäuse mit Lochraster
-- [ ] TODO Teil 2, Feldnotizen führen
+- [ ] DOING Teil 2 (Zahnbürstenständer, begonnen 2026-10-31), Feldnotizen führen
 - [ ] TODO Teil 3, Feldnotizen führen
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung (0.7.1 gebaut, nicht installiert)
+      STL, 3MF, Zeichnung (0.16.0 gebaut am 2026-11-02, 9,9 MB, src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -101,10 +101,11 @@ Datenverlust = sofort ein Paket.
 - [Gehäuse] Wollte: Lochraster per KI über Groq | Passiert: 429 | Umweg: von Hand
   (Wiederholung eingebaut, nicht gegen Groq geprüft)
 
-### Teil 2: (Name, Datum, wofür)
-- [Teil 2?] Wollte: Kante abrunden an einem Teil mit vielen Mustern und Löchern | Passiert: dauerte
+### Ohne Zuordnung zu einem Teil
+- [?] Wollte: Kante abrunden an einem Teil mit vielen Mustern und Löchern | Passiert: dauerte
   einige Zeit | Umweg: gewartet (behoben in 0.7.0, am Teil des Nutzers noch nicht bestätigt)
 
+### Teil 2: Zahnbürstenständer, aus FreeCAD als STEP übernommen (2026-10-31; wofür: noch offen)
 - [Zahnbürstenständer] Wollte: STEP aus FreeCAD öffnen und auf der Seite weiterarbeiten | Passiert: Löcher
   fehlten, nach Doppelklick und Leertaste alles leer, nichts ging mehr | Umweg: keiner (behoben in 0.7.1)
 
@@ -169,6 +170,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-02 Abgleich nach 0.16.0: Typen, 111 Tests und Build grün, App startet fehlerfrei, alte Muster-Dateien bleiben lesbar. Korrigiert: CLAUDE.md (3MF und .ofc sind da), Installer-Stand, Teil 2 = Zahnbürstenständer, unklare Notiz „ohne Zuordnung“. Installer 0.16.0 gebaut.
 - 2026-10-31 Langloch (0.16.0). Abhängigkeiten im Löser taugen dafür nicht: parallel, gleich lang und tangential zusammen scheitern schon an
   einer neuen Länge. Deshalb eigene Regeln statt Löser, die Form hängt am Merkmal slot. Länge gemessen an Seite 0, das Ende bei Punkt 0 und 3
   bleibt stehen, damit die Richtung nicht davon abhängt, welche Seite man anfasst. Vorhandene Langlöcher bleiben freie Form.

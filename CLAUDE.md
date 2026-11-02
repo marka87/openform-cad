@@ -10,8 +10,7 @@ STEP/STL fertigungstauglich.
 ## Stack
 replicad / opencascade.js (WASM) · Three.js · TypeScript (ohne UI-Framework) · Vite · vitest ·
 Tauri 2 (Desktop, Toolchain gnullvm ohne Admin) · planegcs (Constraints) ·
-Feature-Historie als JSON · STEP, STL, OBJ, SVG, DXF
-(geplant: 3MF, eigenes Dateiformat `.ofc`)
+Feature-Historie als JSON (eigenes Dateiformat `.ofc`) · STEP, STL, 3MF, OBJ, SVG, DXF
 
 ## Harte Randbedingungen
 - Echte B-Rep-Volumenkörper. Keine Mesh-Behelfe für Kern-Operationen.
