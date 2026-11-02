@@ -288,7 +288,14 @@ const worker = new Worker(new URL('./kernel.worker.ts', import.meta.url), { type
 const send = (m: ToWorker) => worker.postMessage(m);
 // Export erst, wenn nichts mehr wartet: sonst überholt er die laufende Berechnung und die Datei hat die letzte Änderung nicht (A4)
 let waitExport: ToWorker | null = null;
-const sendExport = (m: ToWorker) => { if (!busy && !pending) return send(m); waitExport = m; showNotice('Export wartet, bis fertig gerechnet ist …'); };
+const sendExport = (m: ToWorker) => { if (!busy && !pending) return exportNow(m); waitExport = m; showNotice('Export wartet, bis fertig gerechnet ist …'); };
+// Rote Schritte oder zurückgespult: die Datei sähe fertig aus, ist es aber nicht → nachfragen (A21). force = schon bestätigt
+function exportNow(m: ToWorker) {
+  const bad = [...problems].filter(([, p]) => p.bad).map(([id]) => `#${id}`);
+  const why = [bad.length ? `Schritt ${bad.join(', ')} ist fehlgeschlagen und fehlt im Teil.` : '', roll !== null ? 'Das Modell ist zurückgespult, spätere Schritte fehlen.' : ''].filter(Boolean).join(' ');
+  if (m.type === 'export' && !m.force && why && !confirm(`${why} Trotzdem exportieren?`)) return;
+  send(m);
+}
 let busy = false, pending = false;
 let pathPreview: Sweep | null = null; // Zug, dessen Pfad gerade gezeichnet wird: wird zur Vorschau mitberechnet
 function requestBuild() {
@@ -327,7 +334,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       if (data.fixes.some(([id, p]) => id === selId && 'd' in p)) renderPanel(); // neu gerechnete Tiefe (durch alles) im Feld zeigen
       rebuild(); save();
     } else if (pending) requestBuild();
-    if (!busy && !pending && waitExport) { send(waitExport); waitExport = null; }
+    if (!busy && !pending && waitExport) { const m = waitExport; waitExport = null; exportNow(m); }
   } else if (data.type === 'notice') showNotice(data.text);
   else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
