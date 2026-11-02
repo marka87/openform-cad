@@ -88,7 +88,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung; dabei prüfen, dass die App mit der neuen CSP startet und rechnet (A1) (0.16.0 gebaut am 2026-11-02, 9,9 MB, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
+      STL, 3MF, Zeichnung; dabei prüfen, dass die App mit der neuen CSP startet und rechnet (A1) (0.16.1 gebaut am 2026-11-02, 9,9 MB, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
