@@ -2139,7 +2139,7 @@ void onCloseRequested(async () => {
 const fileIn = $<HTMLInputElement>('fileIn');
 $('bOpen').onclick = async () => {
   if (!isDesktop) return fileIn.click();
-  try { const f = await openFile(); if (f) opened(f.path, f.text); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
+  try { const f = await openFile(); if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
 };
 // .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
 function opened(name: string, text: string, path: string | null = null) {

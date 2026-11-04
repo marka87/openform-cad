@@ -13,7 +13,14 @@ fn read_text(path: String) -> Result<String, String> {
 #[tauri::command]
 fn write_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
     let tmp = format!("{path}.tmp");
-    std::fs::write(&tmp, data).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| {
+    // sync_all: erst wenn die Daten auf der Platte sind umbenennen, sonst kann ein Stromausfall eine leere Datei hinterlassen
+    let write = || -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(&data)?;
+        f.sync_all()
+    };
+    write().and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
         format!("{path}: {e}")
     })

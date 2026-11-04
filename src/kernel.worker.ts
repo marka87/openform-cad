@@ -52,6 +52,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     console.warn('Auftrag fehlgeschlagen', data.type, e);
     const why = e instanceof Error ? e.message : String(e);
     if (data.type === 'build') {
+      try { free({ body, bodies }); dropCache(buildCache); } catch {} // Körper und Zwischenstände freigeben, sonst wächst der WASM-Speicher bei jedem Fehlschlag
       body = null; bodies = new Map(); names = new Map(); buildCache = newCache(); // Stand unklar: nächster Lauf rechnet alles neu
       post({ type: 'notice', text: `Neurechnen fehlgeschlagen: ${why}` });
       post({ type: 'built', failed: [], errors: [], unsure: [], fixes: [], confirm: [], volume: 0, area: 0, meshes: [] });

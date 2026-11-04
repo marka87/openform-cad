@@ -63,6 +63,11 @@ oder ohnehin dort gearbeitet wird:
 - [ ] SPÄTER A23 STEP ohne UTF-8 (z. B. Umlaute) lässt sich in der Desktop-App nicht öffnen (`read_text`, src-tauri/src/main.rs:8).
 - [ ] SPÄTER A24 Tests laufen nicht automatisch: der einzige GitHub-Workflow baut von Hand OpenCascade.
 - [ ] SPÄTER A25 Undo lässt die Mehrfachauswahl stehen (`multi`, main.ts:154).
+- [x] DONE A26 (Audit 2026-11-04, 0.16.3) „Öffnen“-Knopf merkte sich den Pfad nicht, Strg+S fragte danach immer „Speichern unter“ (main.ts:2142).
+- [x] DONE A27 (0.16.3) Speichern ohne `sync_all` vor dem Umbenennen: Stromausfall direkt danach konnte eine leere Datei hinterlassen (src-tauri/src/main.rs).
+- [x] DONE A28 (0.16.3) Gescheitertes Neurechnen gab Körper und Zwischenstände im Worker nicht frei, WASM-Speicher wuchs bei jedem Fehlschlag (kernel.worker.ts:55).
+- [ ] SPÄTER A29 Wirft die Schließen-Rückfrage (`askSave`), schließt das Fenster nie (Tauri schließt erst nach dem Handler). Fix: try/catch, im Fehlerfall schließen.
+- [ ] SPÄTER A30 Ändern, sofort Strg+S, sofort schließen: nachgetragene Bezüge kommen nach dem Speichern an → überflüssige Rückfrage (main.ts:332).
 Nicht nachgeprüft, nur notiert: gespiegelter Teil-Drehkörper dreht falsch herum (model.ts:477),
 Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Verschieben des Körpers
 (kernel.ts:295), Muster über mehrere Körper (Anzeige/Rundung), Lecks in circleOf/cleanStep.
@@ -186,6 +191,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.16.3** Audit 2026-11-04: „Öffnen“ merkt sich den Pfad, Strg+S speichert wieder in die geöffnete Datei (A26); Speichern wartet, bis die Daten auf der Platte sind (A27); gescheitertes Neurechnen gibt den Speicher frei (A28)
 - **0.16.2** Beim Schließen der Desktop-App: Rückfrage Speichern / Nicht speichern / Abbrechen, wenn das Modell nicht gespeichert ist
 - **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4) und fragt bei roten Schritten oder zurückgespultem Modell nach (A21); Rückfrage vor Öffnen und Neu, wenn das Modell nicht gespeichert ist, auch beim Start per Doppelklick (A22); überarbeitete STEP mit gleichem Namen zeigt die neue Geometrie (A6); KI-Schlüssel wird beim Wechsel des Anbieters geleert (A18)
 - **0.16.0** Langloch bleibt beim Ändern ein Langloch: Länge und Radius gemeinsam, Punkte und Bögen ziehen die Enden; „Freie Form“ erlaubt einzelne Seiten
@@ -223,6 +229,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-04 Audit-Fixes (0.16.3): A26 Pfad beim Öffnen über den Knopf übergeben (seit A3 sicher, weil Rückgängig den Pfad je Eintrag mitführt; der Satz „Pfad nie aus einer geöffneten Datei übernehmen“ in A3 war zu weit gefasst). A27 `File::create` + `write_all` + `sync_all`, dann `rename`. A28 im Fehlerzweig des Workers `free` + `dropCache` vor dem Zurücksetzen. 112 Tests grün, tsc und cargo check sauber; Exe nicht neu gebaut, nicht von Hand geprüft. A29/A30 als SPÄTER notiert.
 - 2026-11-02 Schließen (0.16.2), Rückmeldung des Nutzers: die Desktop-App schloss ohne Frage, erst beim nächsten Start fiel die ungespeicherte Arbeit auf. Meine Entscheidung aus A22 („Zwischenspeicher reicht“) war falsch. Jetzt `onCloseRequested` mit Windows-Dialog Speichern / Nicht speichern / Abbrechen; Speichern-unter abgebrochen oder fehlgeschlagen = Fenster bleibt offen. Neues Recht `core:window:allow-destroy` (sonst schließt das Fenster nach der Frage nicht). `saveModel` liefert jetzt true/false. Nur in der Exe prüfbar, nicht im Browser. CSP aus A1 vom Nutzer in der Exe bestätigt. Installer 0.16.2 gebaut.
 - 2026-11-02 A18 (0.16.1): Voreinstellung mit anderer Adresse leert das Schlüsselfeld (und damit den gespeicherten Schlüssel); gleicher Anbieter behält ihn. Von Hand eingetippte Adresse leert ihn bewusst nicht (Tippfehler korrigieren soll den Schlüssel nicht löschen). Im Browser: Groq + Schlüssel → Ollama = leer. Damit sind alle TODO aus Punkt 0 erledigt; offen nur die SPÄTER-Punkte und die CSP-Prüfung in der Exe.
 - 2026-11-02 A6 (0.16.1): Worker merkt sich den STEP-Text je Import; anderer Text bei gleicher Nummer → alten Körper freigeben, neu einlesen, Zwischenstand verwerfen (`dropCache` jetzt exportiert, sein Schlüssel enthält den Text bewusst nicht, das wäre bei jedem Ziehen teuer). Nachgestellt im Browser-Worker: Import 1 mit Quader 1000 mm³, dann gleiche Nummer mit Quader 2000 mm³ → alt 1000 (falsch), neu 2000, auch zurück auf A richtig.
