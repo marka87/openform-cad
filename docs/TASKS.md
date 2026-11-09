@@ -280,6 +280,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.19.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 F7 Benannte Maße (0.19.0, noch kein Installer). Entscheidung Datei: `params` {Name: mm} im Modell (nur wenn vorhanden), je Schritt
   `ex` {Pfad: {e: Ausdruck, u: mm je Eingabe-Einheit}}; ältere Versionen ignorieren beides und behalten die Zahlen. Rechner `evalExpr` ohne eval
   (CSP): Zahlen (Komma geht), Namen, + − × ÷, Klammern. Bindung ohne Umbau der ~25 Feld-Handler: Seitenfeld merkt vor dem Handler den Schritt,
