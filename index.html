@@ -99,6 +99,10 @@
   #bareBtn { position:fixed; left:12px; bottom:14px; display:none; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:5px 10px; cursor:pointer; font:inherit; }
   body.bare #bareBtn { display:block; }
   @media (min-height:900px) { #tree { max-height:45vh; } }
+  /* L1: Seitenfeld endet über dem Baum und scrollt, statt unten aus dem Fenster zu laufen */
+  #panel { max-height:calc(65vh - 72px); overflow-y:auto; overscroll-behavior:contain; }
+  @media (min-height:900px) { #panel { max-height:calc(55vh - 72px); } }
+  body.bare #panel, #panel:has(~ #tree.mini) { max-height:calc(100vh - 110px); }
   #palette { position:fixed; top:70px; left:50%; transform:translateX(-50%); width:340px; background:var(--panel);
     border:1px solid var(--accent); border-radius:12px; padding:8px; display:none; z-index:10; }
   #palette input { width:100%; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }

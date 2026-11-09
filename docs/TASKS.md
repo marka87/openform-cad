@@ -137,8 +137,15 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
 - [x] DONE F6 (0.19.0) Lippe/Falz: Seitenfeld der Schale „Rand“ = Lippe (Kiste) oder Falz (Deckel), Breite/Höhe/Spiel (Vorgabe halbe Wand, 2 mm, 0,2 mm).
 - [x] DONE F7 (0.19.0) Benannte Maße: Liste „Parameter“ unter den Schritten (Name = Wert); jedes Maßfeld im Seitenfeld nimmt Namen und Rechnungen (breite/2 + 3), gebundene Maße rechnen bei Änderung neu.
-- [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht.
-- [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen.
+- [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht. (erst nach 3d)
+- [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen. (erst nach 3d)
+
+### 3d. Layout für alle Auflösungen, vom Nutzer freigegeben 2026-11-09 — Claude, vor F8
+Vorbild: HTML-Beispiel (Raster aus Leisten, Splitter, 3D-Ansicht in der Mitte). Prüfziel: 1080p bei 100 % und 125 %, 1366×768, 4K bei 200 %.
+- [x] DONE L1 (0.21.1) Seitenfeld scrollt — Seitenfeld scrollbar (hat heute keine Höhengrenze, lange Felder laufen unten aus dem Fenster).
+- [ ] TODO L2 Feste Leisten statt schwebender: links Werkzeuge, rechts Baum + Eigenschaften mit Splitter, Breiten ziehbar und gemerkt;
+      3D-Ansicht nimmt den Rest (wird kleiner statt verdeckt); bei Platzmangel schrumpfen die Leisten selbst (links nur Symbole). Mindestgröße 1024×576.
+- [ ] TODO L3 Obere Werkzeugleiste: bei wenig Platz erst nur Symbole, dann Gruppen ins Menü „⋯ Mehr“, nie umbrechen; danach Prüfung aller Größen in der Exe.
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
@@ -236,6 +243,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.21.1** Seitenfeld scrollt und endet über dem Baum (L1)
 - **0.21.0** Vier Skins zur Auswahl (Graphit, Hell, Nacht, Kontrast) unter den Ansichten
 - **0.20.0** Leisten mit Tab (oder Knopf „Leisten aus“) ausblenden, Baum einklappbar und auf hohen Bildschirmen höher, Parameter-Zeile passt in den Baum
 - **0.19.0** Benannte Maße/Parameter (F7); Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
@@ -283,6 +291,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 L1 (0.21.1, PATCH): #panel bekommt max-height (65 vh − 72 px, ab 900 px Höhe 55 vh) und scrollt; ohne Baum (Tab, eingeklappt) fast volle Höhe. Browser 1366×700: Körper-Feld mit offenen Abschnitten 672 px Inhalt, 381 px sichtbar, endet bei 395 px über dem Baum (482 px), scrollt. L1–L3 als Abschnitt 3d geplant, F8/F9 danach.
 - 2026-11-09 Installer 0.21.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Skins (0.21.0): Nutzer wählte nach einer HTML-Vorschau „alle zur Auswahl“. index.html: alle festen Farben auf Variablen
   (--field, --hover, --hover2, --onaccent, --cube, --shadow, --blur), je Skin ein Satz unter :root[data-skin]; Leisten bekommen Schatten/Glas,
