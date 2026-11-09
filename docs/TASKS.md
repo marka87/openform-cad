@@ -115,7 +115,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 ### 3b. Ideen, vom Nutzer alle 8 freigegeben 2026-11-09 — Claude, in dieser Reihenfolge
 Video des Nutzers aus Shapr3D (Kante runden/fasen, 18 s): Pfeil an der Kante, Maßfeld daneben, Vorschau beim Ziehen,
 an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Ziehen selbst entspricht E1.
-- [ ] TODO I1 Fläche füllen (Lochraster): Fläche anklicken, Lochmaß, Abstand, Randabstand → Anzahl je Richtung wird
+- [x] DONE I1 (0.18.0) Fläche füllen (Lochraster): Fläche anklicken, Lochmaß, Abstand, Randabstand → Anzahl je Richtung wird
       gerechnet, Raster sitzt mittig. Ergebnis ist ein normales Muster (bleibt bearbeitbar).
 - [ ] TODO I2 Größtmögliche Rundung/Fase: schlägt sie fehl, das größte noch machbare Maß suchen und anbieten.
 - [ ] TODO I3 Muster von der Mitte aus: Taste beim Ziehen = beidseitig gleich weit.
@@ -220,6 +220,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
 - **0.17.1** Pfeile kleiner und behalten beim Zoomen ihre Bildschirmgröße (vorher riesig nach dem Hineinzoomen)
 - **0.17.0** Muster und Ziehen wie Shapr3D: Klick auf ein Exemplar markiert das ganze Muster samt Quelle (M1); ⇕-Pfeil an ausgewählter Skizze bzw. Fläche, bei einem Muster an der Quelle (M2); Muster direkt am Modell: 4 Pfeile aus der Skizzenmitte, Ziehen legt es an, danach 2 Pfeile quer für das Raster (M3); Felder „Abstand ▾ / Gesamt“ und Anzahl am Pfeil (M4); Kante: ⇔-Pfeil und Feld „Rundung ▾ / Fase“ mit Maß (E1)
@@ -261,6 +262,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 I1 Fläche füllen (0.18.0): Knopf im Muster-Feld (neue Reihe und bestehendes Muster mit einer Quelle), Rand eintippen. `fillGrid` (model.ts, Kern-Test) rechnet Anzahl und Startmitte je Richtung; die Fläche kommt als Kasten aus dem Anzeigenetz des Körpers (Punkte in der Skizzenebene mit gleicher Normale), Quelle wird auf die erste Stelle verschoben, Achsen = X/Y der Skizze. shortcut: Kasten statt echtem Umriss, bei runden oder L-Flächen fallen Ecklöcher heraus. Im Browser: Platte 60 × 30, Loch R3, Rand 3, Abstand 10 → 5 × 2, Mitten 10–50 / 10–20 (mittig).
 - 2026-11-09 Audit-Fixes (0.17.2): A31 bei bestehender Rundung/Fase keine Suche nach der Außenrichtung (der alte Kantenpunkt liegt nicht mehr am Körper, die Suche lief immer durch alle Dreiecke). A32 `drag.made` merkt ein neu angelegtes Muster bzw. eine neue Richtung, Abstand 0 beim Loslassen = wieder weg. A33 `arrow` am Drag: Klick ohne Ziehen setzt die Kantenauswahl nicht neu. 112 Tests grün, tsc sauber; im Browser nicht durchgeklickt, weil dort das Modell des Nutzers offen ist (eigener Speicher unter 127.0.0.1 war nicht erreichbar).
 - 2026-11-09 Pfeile (0.17.1), Rückmeldung des Nutzers mit Bild: ⇕-Pfeil nach dem Hineinzoomen riesig. Ursache: Griffe wurden beim Neuzeichnen in Pixelgröße angelegt und wuchsen beim Zoomen mit. Jetzt `scaleHandles()` im Bildlauf: jeder Griff merkt sich Ankerpunkt und Pixelgröße und skaliert um den Anker; gilt auch für die alten Muster-Pfeile und Skizzenpunkte. Alle Pfeile etwa ein Drittel kleiner. Geprüft im Browser am Modell des Nutzers (nur ausgewählt und gezoomt, nichts geändert).
 - 2026-11-09 E1 (0.17.0, gleiche Nummer, noch kein Installer): Wunsch des Nutzers mit Bildern aus Shapr3D. Das Verhalten (weg = Rundung, hinein = Fase) gab es schon, es fehlte das Sichtbare: Pfeil aus zwei Kegeln an der Kante, Feld am Pfeil. Ohne Rundung legt erst das getippte Maß an (`editDim` mit eigener Übernahme `apply`, sonst hätte Tippen im Seitenfeld beim Verlassen schon angelegt); Wort umschalten = Art für die nächste bzw. bestehende Rundung/Fase (mit Rückgängig). Nach dem Runden liegt der Kantenpunkt nicht mehr am Körper: Pfeil dann quer zur Kante zum Betrachter. Bei Kanten, deren Außenrichtung zum Betrachter zeigt, sieht der Pfeil wie ein Punkt aus. Im Browser: Fase 3 getippt, auf Rundung umgeschaltet, am Pfeil auf 5,5 gezogen.

@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -2104,6 +2104,49 @@ function crossDir(p: Pattern): Vec {
   return c.map(x => x / l) as Vec;
 }
 // Muster bearbeiten: je Richtung Anzahl, Abstand und ⇄ (dreht dieses Muster um, legt kein zweites an)
+// Fläche füllen (I1): Rand eingeben, Raster mit dem eingestellten Abstand füllt die Fläche unter der Skizze, mittig
+let fillMargin = 3;
+const fillHtml = () => `<fieldset><legend>Fläche füllen</legend><label>Rand (${display.unit}) <input class="rand" type="number" step="0.5" value="${uval(fillMargin)}"></label><button class="act fill">Fläche füllen</button></fieldset>`;
+function wireFill(src: () => Extrude | null, gaps: () => number[], p: Pattern | null) {
+  const b = panel.querySelector<HTMLButtonElement>('.fill'), r = panel.querySelector<HTMLInputElement>('.rand');
+  if (!b || !r) return;
+  r.onchange = () => { const v = mmOf(r); if (isFinite(v) && v >= 0) fillMargin = v; };
+  b.onclick = () => { const s = src(); if (s) fillFace(s, p, gaps().map(Math.abs)); };
+}
+// Fläche, auf der eine Skizze liegt, als Kasten in ihren Ebenenkoordinaten, aus dem Anzeigenetz ihres Körpers
+// shortcut: Kasten statt echtem Umriss; bei runden oder L-förmigen Flächen landen Ecklöcher außerhalb → Umriss vom Kern holen, wenn ein Teil das braucht
+function faceBox(f: Extrude) {
+  const M = moveMatrix(movesAfter(live(), live().indexOf(f))), o = V(f.o).applyMatrix4(M), [n, u, v] = [f.n, f.u, f.v].map(d => V(d).transformDirection(M));
+  const box = [Infinity, -Infinity, Infinity, -Infinity], p = new THREE.Vector3(), q = new THREE.Vector3();
+  for (const m of bodyGroup.children as THREE.Mesh[]) {
+    if (m.userData.body !== bodyOf(f)) continue;
+    const P = m.geometry.attributes.position, N = m.geometry.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      if (q.fromBufferAttribute(N, i).dot(n) < 0.999 || Math.abs(p.fromBufferAttribute(P, i).sub(o).dot(n)) > 0.01) continue;
+      const a = p.dot(u), c = p.dot(v);
+      box[0] = Math.min(box[0], a); box[1] = Math.max(box[1], a); box[2] = Math.min(box[2], c); box[3] = Math.max(box[3], c);
+    }
+  }
+  return box[0] < box[1] && box[2] < box[3] ? box : null;
+}
+const shiftSketch = (f: Extrude, du: number, dv: number) => {
+  if (f.type === 'rect') { f.p.x += du; f.p.y += dv; } else if (f.type === 'circle') { f.p.cx += du; f.p.cy += dv; }
+  else f.pts = f.pts!.map(([x, y, ...r]) => [x + du, y + dv, ...r]);
+  delete f.src; // verschoben: wandert nicht mehr mit einer Projektion
+};
+function fillFace(src: Extrude, p: Pattern | null, gaps: number[]) {
+  const box = faceBox(src);
+  if (!box) return showHint('Unter der Skizze liegt keine ebene Körperfläche');
+  const g = fillGrid(box, halfExt(src), fillMargin, gaps);
+  if (!g[0] || !g[1]) return showHint('Die Form passt mit diesem Rand nicht auf die Fläche');
+  const [cx, cy] = sketchMid(src);
+  pushHistory();
+  shiftSketch(src, g[0].start - cx, g[1].start - cy);
+  const a: PatternDir = { ax: src.u, n: g[0].n, d: gaps[0] }, b: PatternDir = { ax: src.v, n: g[1].n, d: gaps[1] };
+  if (p) { p.a = a; p.b = b; } else { p = { id: nextId++, type: 'pattern', src: [src.id], a, b, body: bodyOf(src) }; add(p); patView = null; }
+  clearSel(); selId = p.id; refresh();
+  showNotice(`Fläche gefüllt: ${g[0].n} × ${g[1].n}`);
+}
 function renderPatternPanel(f: Pattern) {
   if (f.rot || f.mir) { // Kreis-Muster: nur die Anzahl; Spiegeln: nichts einzustellen
     panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
@@ -2116,7 +2159,8 @@ function renderPatternPanel(f: Pattern) {
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
       <label>${patTotal ? 'Gesamt' : 'Abstand'} <input class="d${k}" type="number" step="0.5" value="${uval(patTotal ? d.d * Math.max(1, d.n - 1) : d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
   panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
-    + row('a', 'Richtung 1') + row('b', 'quer dazu') + `<button class="del">Löschen</button>`;
+    + row('a', 'Richtung 1') + row('b', 'quer dazu') + (f.src.length === 1 ? fillHtml() : '') + `<button class="del">Löschen</button>`;
+  wireFill(() => { const s = getById(f.src[0]); return s && isExtrude(s) ? s : null; }, () => [f.a.d, f.b && f.b.n > 1 ? f.b.d : f.a.d], f);
   for (const k of ['a', 'b'] as const) {
     const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
     const set = (fn: (d: PatternDir) => void) => { pushHistory(); fn(dir()); refresh(); };
@@ -2568,6 +2612,11 @@ function renderSketchPat(f: Extrude) {
       if (mode === 'lin' && patVals.cnt2 > 1) p.b = { ax: crossDir(p), n: patVals.cnt2, d: patVals.dist2 };
       pushHistory(); add(p); clearSel(); selId = p.id; patRef = null; refresh();
     });
+  if (patView?.mode === 'lin' && targets.length === 1) { // Fläche füllen mit den Abständen aus den Feldern (I1)
+    panel.querySelector('.run')!.insertAdjacentHTML('beforebegin', fillHtml());
+    const num = (c: string) => parseFloat(panel.querySelector<HTMLInputElement>(c)?.value ?? '') * U();
+    wireFill(() => f, () => [num('.dist'), num('.dist2')], null);
+  }
 }
 // Ganzer Körper: je Exemplar Kopie aller Schritte + Bewegung (bodyCopy); Kreis: gleichmäßig auf 360°
 function renderBodyPat(b: number) {

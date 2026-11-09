@@ -4,7 +4,7 @@ import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad
 import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
-import { parseModel, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { parseModel, fillGrid, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -1035,6 +1035,15 @@ test('Text aus der mitgelieferten Schrift: erhaben auf dem Boden, graviert in de
   expect(measureVolume(r.body!)).toBeLessThan(2000 - 1);                       // Gravur nimmt Material weg
   expect(measureVolume(r.body!)).toBeGreaterThan(2000 - 6 * 6);
   expect(buildBody([box(), T(3, TOPO, '  ', -1, 1)]).errors.get(3)).toBe('Kein Text eingegeben');
+});
+
+test('Fläche füllen (I1): Anzahl je Richtung, Raster mittig, Rand eingehalten, passt nicht = null', () => {
+  // Fläche 60 × 30, Loch Radius 3, Rand 4, Mittenabstand 10: nutzbar für Mitten u 7..53 → 5 Stück (Spanne 40), v 7..23 → 2 Stück (Spanne 10)
+  const [u, v] = fillGrid([0, 60, 0, 30], [3, 3], 4, [10, 10]);
+  expect(u).toEqual({ n: 5, start: 10 });
+  expect(v).toEqual({ n: 2, start: 10 });
+  expect(fillGrid([0, 10, 0, 30], [3, 3], 4, [10, 10])[0]).toBeNull();            // zu schmal für Rand + Loch
+  expect(fillGrid([0, 60, 0, 30], [3, 3], 4, [100, 100])[0]).toEqual({ n: 1, start: 30 }); // Abstand größer als die Fläche: eines, mittig
 });
 
 test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, flache Quelle ergibt nichts', () => {

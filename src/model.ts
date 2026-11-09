@@ -95,6 +95,16 @@ export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)
 // Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
 // copy legt die Kopie einer Quellskizze an, pt/dir bilden Punkte und Richtungen der Quelle auf die Kopie ab, back zurück
 export type PatternCopy = { key: string; copy: (f: Extrude, id: number) => Extrude; pt: (p: Vec) => Vec; dir: (d: Vec) => Vec; back: (p: Vec) => Vec; backDir: (d: Vec) => Vec };
+// Raster, das eine Fläche füllt (I1): Fläche als Kasten [u0, u1, v0, v1], Form mit halber Ausdehnung h je Richtung,
+// Rand m bis zur Formkante, Mittenabstand s je Richtung. Je Richtung Anzahl und Mitte der ersten Form, das Raster sitzt mittig; null = passt nicht
+export function fillGrid(box: number[], h: number[], m: number, s: number[]) {
+  return [0, 1].map(k => {
+    const lo = box[2 * k] + m + h[k], hi = box[2 * k + 1] - m - h[k];
+    if (hi < lo - 1e-9 || !(s[k] > 0)) return null;
+    const n = Math.floor((hi - lo) / s[k] + 1e-9) + 1;
+    return { n, start: (lo + hi - (n - 1) * s[k]) / 2 };
+  });
+}
 export function patternCopies(p: Pattern): PatternCopy[] {
   const O: Vec = [0, 0, 0], same = (d: Vec) => d;
   if (p.mir) {
