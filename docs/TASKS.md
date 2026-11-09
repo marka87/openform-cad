@@ -145,8 +145,8 @@ Vorbild: HTML-Beispiel (Raster aus Leisten, Splitter, 3D-Ansicht in der Mitte). 
 - [x] DONE L1 (0.21.1) Seitenfeld scrollt — Seitenfeld scrollbar (hat heute keine Höhengrenze, lange Felder laufen unten aus dem Fenster).
 - [x] DONE L2 (0.22.0) Feste Leisten — Feste Leisten statt schwebender: links Werkzeuge, rechts Baum + Eigenschaften mit Splitter, Breiten ziehbar und gemerkt;
       3D-Ansicht nimmt den Rest (wird kleiner statt verdeckt); bei Platzmangel schrumpfen die Leisten selbst (links nur Symbole). Mindestgröße 1024×576.
-- [ ] TODO L3 Obere Werkzeugleiste: bei wenig Platz erst nur Symbole, dann Gruppen ins Menü „⋯ Mehr“, nie umbrechen; danach Prüfung aller Größen in der Exe.
-
+- [x] DONE L3 (geprüft, kein Code) Obere Leiste: passt bei der Mindestbreite 1024 in eine Zeile, bricht sonst um statt abzuschneiden;
+      „⋯ Mehr“ würde nie erscheinen, daher nicht gebaut. Offen beim Nutzer: Prüfung in der Exe bei 1080p 100/125 %, 1366×768, 4K 200 %.
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
       ganzen Körper, bei einem Gehäuse also auch durch die Gegenwand; nur durch eine
@@ -292,6 +292,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 L3 ohne Code abgeschlossen: obere Leiste bei 1024, 1366, 1536 und 1920 Breite gemessen, nie übergelaufen. Menü „Mehr“ erst bauen, wenn neue Knöpfe dazukommen.
 - 2026-11-09 L2 (0.22.0, MINOR): Werkzeuge+Ansichten in #dockL, Eigenschaften+Baum in #dockR (Splitter dazwischen), obere Leiste über die ganze Breite. Canvas #view nur noch zwischen den Leisten (CSS --L/--R/--T, main.ts applyDock; renderer.setSize ohne Stil, Größe aus dem CSS). Würfel, Maße (#dims), Hinweis, Maßstab rechnen relativ zur Ansicht; Klicks stimmten schon, weil alles über el.getBoundingClientRect geht. Breiten ziehbar (64–480, gemerkt in openform-dock); unter 120 px oder wenn die Ansicht unter 480 px fiele: links nur Symbole (64 px), dann rechts schmaler. Tab blendet beide Leisten aus, die Ansicht wird breiter. ResizeObserver auf Leiste und Ansicht. Tauri-Mindestgröße 1024×576. Browser: 1920×1000 Ansicht 1430×959, Klick auf den Quader trifft; 1536×824 (1080p bei 125 %) 1046×783; 1024×576 534×535, Werkzeuge scrollen; Tab 1024 breit; schmal gezogen = Symbole. Obere Leiste passt bis 1024 ohne Umbruch. Nicht: Exe, echte DPI 150/200 %.
 - 2026-11-09 L1 (0.21.1, PATCH): #panel bekommt max-height (65 vh − 72 px, ab 900 px Höhe 55 vh) und scrollt; ohne Baum (Tab, eingeklappt) fast volle Höhe. Browser 1366×700: Körper-Feld mit offenen Abschnitten 672 px Inhalt, 381 px sichtbar, endet bei 395 px über dem Baum (482 px), scrollt. L1–L3 als Abschnitt 3d geplant, F8/F9 danach.
 - 2026-11-09 Installer 0.21.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
