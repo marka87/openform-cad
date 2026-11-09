@@ -283,6 +283,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.21.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Skins (0.21.0): Nutzer wählte nach einer HTML-Vorschau „alle zur Auswahl“. index.html: alle festen Farben auf Variablen
   (--field, --hover, --hover2, --onaccent, --cube, --shadow, --blur), je Skin ein Satz unter :root[data-skin]; Leisten bekommen Schatten/Glas,
   wo der Skin sie hat. main.ts: SKINS mit Hintergrund, Raster (Farben stecken in der GridHelper-Geometrie → bei Wechsel neu erzeugt) und
