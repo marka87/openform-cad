@@ -245,6 +245,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.22.2** Linke Leiste aufgeräumt: ▾ verdeckt die Taste nicht mehr, Ansichten als Raster mit zwei Spalten, Einheit und Skin je eine Zeile
 - **0.22.1** Rippe: keine Riesenplatte mehr bei einer Linie auf der Wandfläche, Meldung mit Anleitung; auf einer Körperfläche gezeichnet geht die Wand bündig nach innen (R1)
 - **0.22.0** Feste Leisten links und rechts mit Splittern, 3D-Ansicht nimmt den Rest, bei Platzmangel links nur Symbole; Mindestgröße 1024×576 (L2)
 - **0.21.1** Seitenfeld scrollt und endet über dem Baum (L1)
@@ -295,6 +296,10 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Linke Leiste (0.22.2, PATCH, Nutzer-Screenshot Exe 0.22.0): In der festen Leiste lagen ▾ und Tastenkürzel beide float:right,
+  das ▾ (margin −6 px) verdeckte die Taste (R, N, M, L). Jetzt Knopf als Flex-Zeile, ▾ und Taste in fester Spalte rechts. Ansichten-Bereich als
+  Raster 2 Spalten, Überschriften/Schieber/Einheit/Skin/„Leisten aus“ über die ganze Breite, Auswahlfeld rechts. Browser 1920×990 und 1100×990 (Hell):
+  keine Überdeckung ▾/Taste (gemessen), nichts abgeschnitten.
 - 2026-11-09 R1 (0.22.1, PATCH): ribSolid misst, wie weit das gewählte Stück quer zur Linie reicht (Ecken der Hüllbox auf die Querrichtung);
   mehr als 2·Länge + 2·Dicke + 5 mm = Riesenplatte → abgelehnt mit Anleitung („Linie auf eine Ebene quer durch das Teil legen …“). Skizze auf einer
   Körperfläche: Wand von −Dicke bis 0 entlang n statt mittig, Probe in der Wandmitte. Kern-Test mit dem Fall des Nutzers (senkrechte Linie auf der

@@ -226,6 +226,24 @@
   #hint { left:calc(var(--L) + (100vw - var(--L) - var(--R)) / 2); max-width:calc(100vw - var(--L) - var(--R) - 40px); }
   #scale { right:calc(var(--R) + 16px); }
   #snapMenu { left:calc(var(--L) + 8px); }
+  /* Werkzeugknopf als Zeile: Symbol, Name, (Art), ▾, Taste rechtsbündig in fester Spalte; vorher überdeckte ▾ die Taste */
+  #dockL #toolbar button { display:flex; align-items:center; gap:0; }
+  #dockL #toolbar button svg { flex:none; }
+  #dockL #toolbar small.mode { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  #dockL #toolbar .dd { float:none; order:2; margin:0 0 0 auto; flex:none; }
+  #dockL #toolbar kbd { float:none; order:3; flex:none; width:14px; margin-left:8px; text-align:right; }
+  #dockL #toolbar button:not(:has(.dd)) kbd { margin-left:auto; }
+  /* Ansichten: zwei gleiche Spalten, Auswahlfelder je eine ganze Zeile mit dem Feld rechts */
+  #dockL #views { display:grid; grid-template-columns:1fr 1fr; gap:2px 4px; padding:6px 8px 8px; align-items:center; }
+  #dockL #views button { display:flex; align-items:center; gap:6px; padding:3px 6px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  #dockL #views button svg { margin:0; }
+  #dockL #views .vg, #dockL #views #secOff, #dockL #views label:has(select), #dockL #views #bBare { grid-column:1 / -1; }
+  #dockL #views label:has(select) { display:flex; justify-content:space-between; padding:1px 6px; }
+  #dockL #views label select { min-width:100px; padding:1px 3px; }
+  #dockL #views label:has(#bodyColor) { padding-left:6px; }
+  #dockL #views #bBare { justify-content:center; color:var(--muted); border:1px solid var(--line); margin-top:4px; }
+  body.rail #dockL #views { grid-template-columns:1fr; padding:4px; }
+  body.rail #dockL #toolbar button, body.rail #dockL #views button { justify-content:center; }
   /* schmal (gezogen oder Platzmangel): links nur Symbole */
   body.rail #toolbar button { font-size:0; padding:5px 0; text-align:center; }
   body.rail #toolbar button svg { margin:0; width:18px; height:18px; }
