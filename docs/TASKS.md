@@ -137,6 +137,8 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
 - [x] DONE F6 (0.19.0) Lippe/Falz: Seitenfeld der Schale „Rand“ = Lippe (Kiste) oder Falz (Deckel), Breite/Höhe/Spiel (Vorgabe halbe Wand, 2 mm, 0,2 mm).
 - [x] DONE F7 (0.19.0) Benannte Maße: Liste „Parameter“ unter den Schritten (Name = Wert); jedes Maßfeld im Seitenfeld nimmt Namen und Rechnungen (breite/2 + 3), gebundene Maße rechnen bei Änderung neu.
+- [ ] TODO R1 Rippe gegen Fehlbedienung: Stück, das entlang der Linie über sie hinausreicht, ablehnen (verständliche Meldung, wie man
+      die Linie legt); Skizze auf einer Körperfläche: Wand von der Fläche nach innen statt mittig. Fall des Nutzers als Kern-Test.
 - [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht. (erst nach 3d)
 - [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen. (erst nach 3d)
 
@@ -292,6 +294,10 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.22.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
+- 2026-11-09 Feldnotiz Rippe (Nutzer, 0.21.0): Linie senkrecht auf der Wandfläche eines L-Winkels gezeichnet → riesige Platte über die ganze Länge
+  („Monster“). Ursache: Skizze auf einer Körperfläche statt quer durch das Profil; die Rippe liegt dann in der Wandebene und das gewählte Stück
+  reicht weit über die Linie hinaus. Neu nötig: R1 unten.
 - 2026-11-09 L3 ohne Code abgeschlossen: obere Leiste bei 1024, 1366, 1536 und 1920 Breite gemessen, nie übergelaufen. Menü „Mehr“ erst bauen, wenn neue Knöpfe dazukommen.
 - 2026-11-09 L2 (0.22.0, MINOR): Werkzeuge+Ansichten in #dockL, Eigenschaften+Baum in #dockR (Splitter dazwischen), obere Leiste über die ganze Breite. Canvas #view nur noch zwischen den Leisten (CSS --L/--R/--T, main.ts applyDock; renderer.setSize ohne Stil, Größe aus dem CSS). Würfel, Maße (#dims), Hinweis, Maßstab rechnen relativ zur Ansicht; Klicks stimmten schon, weil alles über el.getBoundingClientRect geht. Breiten ziehbar (64–480, gemerkt in openform-dock); unter 120 px oder wenn die Ansicht unter 480 px fiele: links nur Symbole (64 px), dann rechts schmaler. Tab blendet beide Leisten aus, die Ansicht wird breiter. ResizeObserver auf Leiste und Ansicht. Tauri-Mindestgröße 1024×576. Browser: 1920×1000 Ansicht 1430×959, Klick auf den Quader trifft; 1536×824 (1080p bei 125 %) 1046×783; 1024×576 534×535, Werkzeuge scrollen; Tab 1024 breit; schmal gezogen = Symbole. Obere Leiste passt bis 1024 ohne Umbruch. Nicht: Exe, echte DPI 150/200 %.
 - 2026-11-09 L1 (0.21.1, PATCH): #panel bekommt max-height (65 vh − 72 px, ab 900 px Höhe 55 vh) und scrollt; ohne Baum (Tab, eingeklappt) fast volle Höhe. Browser 1366×700: Körper-Feld mit offenen Abschnitten 672 px Inhalt, 381 px sichtbar, endet bei 395 px über dem Baum (482 px), scrollt. L1–L3 als Abschnitt 3d geplant, F8/F9 danach.
