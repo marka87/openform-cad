@@ -25,6 +25,7 @@ export interface Extrude extends Frame {
   axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
   thru?: boolean;            // Schnitt durch den ganzen Körper: d rechnet der Kern bei jedem Lauf neu
+  rib?: number;              // Linie: Rippe (F5) mit dieser Dicke, quer zur Linie bis an den Körper
   thread?: { D: number; P: number }; // Kreis: echtes Gewinde (F4), Nenn-Ø D und Steigung P; Bolzen = Außen-, Bohrung = Innengewinde
   mid?: boolean;             // Rechteck aus der Mitte gezogen: Maßänderungen lassen die Mitte stehen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …

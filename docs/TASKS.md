@@ -134,7 +134,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F2 (0.19.0) STL/3MF/OBJ über „Öffnen“ als Referenz: halbdurchsichtig, anklickbar zum Messen und Skizzieren, ohne Griffe; kein Körper, nicht im Export.
 - [x] DONE F3 (0.19.0) Referenzbild über „Öffnen“ (PNG/JPG/WebP): auf XY/XZ/YZ-Ebene, Breite und Mitte im Seitenfeld, Maßstab mit 2 Punkten + echter Länge.
 - [x] DONE F4 (0.19.0) Echtes Gewinde M3–M20 und 1/4"-20 (ISO-Profil 60°): Auswahl „Gewinde“ im Seitenfeld eines extrudierten Kreises; Bolzen = Außen-, Bohrung = Innengewinde.
-- [ ] TODO F5 Rippe/Steg: Linie zeichnen → Wand mit Dicke bis zum Körper.
+- [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
 - [ ] TODO F6 Lippe/Falz für Deckel: umlaufende Stufe an einer Kante einer Schale, mit Spiel.
 - [ ] TODO F7 Benannte Maße (Parameter): Name = Wert, in Maßfeldern statt Zahl verwendbar.
 - [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht.
@@ -235,7 +235,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.19.0** Echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
+- **0.19.0** Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
@@ -280,6 +280,13 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 F5 Rippe (0.19.0, gleiche Nummer, noch kein Installer): Merkmal `rib` (Dicke) an einer offenen Linie, kein neuer Schritt-Typ.
+  Kern (`ribSolid`): Streifen von der Linie quer zur Sehne weg, mittig auf der Skizzenebene, Körper abziehen; von den Stücken bleibt das an der
+  Linie (Abstand zu einem Punkt knapp neben der ersten Seite). Seite automatisch: die, auf der der Körper den Streifen begrenzt; läuft er auf
+  beiden ins Leere → Fehler „trifft den Körper nicht“. Linie darf in der Luft liegen, die Wand reicht bis an den Körper. Seitenfeld der Linie:
+  Knopf „Rippe“, dann Feld „Dicke“ (0 = weg), Baum heißt „Rippe“. Kern-Test: Winkel 40×5 + Wand, Rippe schräg = Dreieck × 3 mm, andersherum
+  gezeichnet gleich, waagrecht in der Luft = Rechteck bis an den Körper, weit weg = Fehler. Browser: 7,50 → 8,63 cm³ (3 mm) → 9,38 (5 mm) → 7,50 (0),
+  jeweils sofort. Nicht: Ziehen an der Wand (nur Tippen), stark gebogene Linienzüge (Richtung quer zur Sehne, shortcut), Zoll, Exe.
 - 2026-11-09 F4 Gewinde fertig (0.19.0, gleiche Nummer, noch kein Installer). Ursache der „leeren Ansicht“: kein Hänger, sondern die verdreht
   extrudierte Nocke. Sie bestand aus 48 verdrehten Spline-Flächen; ein Bolzen M10 × 5 mm ergab 8 Mio. Dreiecke, Netz und Kantennetz je ~150 s.
   Neu: jede Ecke des ISO-Profils (Spitze P/8, Grund P/4, 60°) auf einer Schraubenlinie (`makeHelix`), dazwischen Regelflächen (`loft` ruled),

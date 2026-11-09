@@ -680,7 +680,7 @@ function nameOf(f: Feature) {
   if (f.type === 'text') return `Text „${f.text.length > 12 ? f.text.slice(0, 12) + '…' : f.text}“`;
   if (!isExtrude(f)) return f.type === 'fillet' ? 'Rundung' : 'Fase';
   if (f.aux) return 'Hilfslinie';
-  if (f.type === 'line') return 'Linie';
+  if (f.type === 'line') return f.rib ? 'Rippe' : 'Linie';
   if (f.ball) return 'Kugel';
   if (f.rev) return f.sub ? 'Nut' : 'Drehkörper';
   if (isSlot(f)) return 'Langloch';
@@ -1821,8 +1821,13 @@ function renderFeaturePanel() {
   panel.style.display = 'block';
   if (isExtrude(f) && noFace(f)) {
     panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">${f.aux ? 'Bildet keine Fläche, dient zum Einrasten.' : 'Offene Linie, bildet keine Fläche (Klick auf den Anfangspunkt beim Zeichnen schließt zur Fläche).'} Punkte ziehen = ändern.</p>`
-      + (f.type === 'line' && bodyIds.includes(bodyOf(f)) ? linePlane(f, 0) ? `<button class="act cut">Körper hier teilen</button>` : `<p style="color:var(--muted);margin:4px 0">Teilen geht nur an einer geraden Linie.</p>` : '')
+      + (f.type === 'line' && bodyIds.includes(bodyOf(f)) ? (f.rib ? `<label title="Wand mittig auf der Skizzenebene, quer zur Linie bis an den Körper; 0 = keine Rippe">Rippe, Dicke <input type="number" step="0.5" min="0" class="rib" value="${uval(f.rib)}"></label>`
+        : `<button class="act rib" title="Wand mittig auf der Skizzenebene, quer zur Linie bis an den Körper">Rippe</button>`)
+        + (linePlane(f, 0) ? `<button class="act cut">Körper hier teilen</button>` : `<p style="color:var(--muted);margin:4px 0">Teilen geht nur an einer geraden Linie.</p>`) : '')
       + `<button class="del">Löschen</button>`;
+    const rib = panel.querySelector<HTMLElement>('.rib');
+    if (rib instanceof HTMLButtonElement) rib.onclick = () => { pushHistory(); f.rib = 3; refresh(); };
+    else if (rib instanceof HTMLInputElement) rib.onchange = () => { const v = mmOf(rib); if (!isFinite(v) || v < 0) return refresh(); pushHistory(); if (v > 0) f.rib = v; else delete f.rib; refresh(); };
     const cut = panel.querySelector<HTMLButtonElement>('.cut');
     if (cut) cut.onclick = () => { // Schnittebene senkrecht durch die Linie (ausgeblendet) + Teilen; beide Hälften sind eigene Körper
       const pl = linePlane(f, nextId++)!;

@@ -648,3 +648,20 @@ test('Gewinde (F4): Bolzen M10 außen, Bohrung M10 innen, gültig und Volumen zw
   expect(measureVolume(innen.body!)).toBeLessThan(glatt - 50);
   expect(measureVolume(innen.body!)).toBeGreaterThan(18000 - Math.PI * 25 * 15); // nicht mehr als ein Loch mit Nenn-Ø
 }, 60000);
+
+test('Rippe (F5): Linie im Winkel wird Wand bis an den Körper, Seite automatisch, ohne Körper in Reichweite Fehler', () => {
+  const XY: Frame = { o: [0, 0, 0], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
+  const boden = rect(GROUND, [0, -10], [40, 10], 1, 5, false), wand = rect(GROUND, [0, -10], [5, 10], 2, 40, false);
+  const linie = (pts: number[][], rib = 3) => ({ ...XY, id: 3, type: 'line', p: {}, pts, d: 0, open: true, rib }) as Extrude;
+  const r = buildBody([boden, wand, linie([[5, 30], [35, 5]])]);
+  expect([...r.errors]).toEqual([]);
+  expect(valid(r.body!)).toBe(true);
+  expect(measureVolume(r.body!)).toBeCloseTo(7500 + 0.5 * 30 * 25 * 3, 1); // Dreieck im Winkel, 3 mm dick
+  // andersherum gezeichnet: gleiche Seite
+  expect(measureVolume(buildBody([boden, wand, linie([[35, 5], [5, 30]])]).body!)).toBeCloseTo(8625, 1);
+  // Linie über dem Winkel, nicht berührend: Wand reicht trotzdem bis an den Körper
+  expect(measureVolume(buildBody([boden, wand, linie([[5, 30], [35, 30]], 2)]).body!)).toBeCloseTo(7500 + 30 * 25 * 2, 1);
+  // weit weg vom Körper: Fehler statt still nichts
+  const weg = buildBody([boden, wand, { ...linie([[100, 100], [120, 100]]), o: [0, 0, 50] }]);
+  expect(weg.errors.get(3)).toMatch(/trifft den Körper nicht/);
+});

@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, makeCylinder, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -82,6 +82,32 @@ export function solidOf(f: Extrude): Shape3D {
     s.delete(); s = next;
   }
   return s;
+}
+
+// Rippe (F5): offene Linie als Wand der Dicke rib, mittig auf der Skizzenebene. Die Wand reicht quer zur Linie (in der Ebene) bis an
+// den Körper: Streifen von der Linie weg, Körper abziehen, das Stück an der Linie bleibt. Seite = die, auf der der Körper den Streifen
+// begrenzt; begrenzt er beide, die kleinere. Probe für „an der Linie“: Mitte der ersten Seite, knapp daneben.
+// shortcut: Richtung quer zur Sehne vom ersten zum letzten Punkt; bei stark gebogenen Linienzügen ungenau → Richtung je Abschnitt
+function ribSolid(g: Extrude, body: Shape3D): Shape3D {
+  const t = g.rib!, pts = g.pts!, a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (L < 1e-6 || t <= 0) throw new Error('Linie zu kurz für eine Rippe');
+  const m = [(a[1] - b[1]) / L, (b[0] - a[0]) / L], [lo, hi] = body.boundingBox.bounds, D = 2 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) + 10;
+  const at = (x: number, y: number) => makeVertex(g.o.map((o, i) => o + x * g.u[i] + y * g.v[i]) as Vec);
+  const q = [(a[0] + pts[1][0]) / 2, (a[1] + pts[1][1]) / 2];
+  let best: { s: Shape3D; v: number; open: boolean } | null = null;
+  for (const k of [1, -1]) {
+    const far = (p: number[]) => [p[0] + k * D * m[0], p[1] + k * D * m[1]];
+    const slab = solidOf({ ...g, type: 'poly', p: {}, pts: [...pts.slice(0, -1), [b[0], b[1]], far(b), far(a)], open: undefined, rib: undefined, cons: undefined, onFace: false, thru: undefined, o: g.o.map((o, i) => o - t / 2 * g.n[i]) as Vec, d: t });
+    const full = measureVolume(slab), rest = slab.cut(body) as Shape3D, probe = at(q[0] + k * 0.05 * m[0], q[1] + k * 0.05 * m[1]);
+    slab.delete();
+    const near = (rest.solids ?? []).map(s => ({ s, dist: measureDistanceBetween(s, probe) })).sort((x, y) => x.dist - y.dist)[0];
+    probe.delete();
+    const v = near ? measureVolume(near.s) : 0, open = v > full * 0.999; // nichts begrenzt: Streifen läuft ins Leere
+    if (near && near.dist < 0.1 && (!best || best.open && !open || best.open === open && v < best.v)) { best?.s.delete(); best = { s: near.s.clone() as Shape3D, v, open }; }
+    rest.delete();
+  }
+  if (!best || best.open) { best?.s.delete(); throw new Error('Rippe trifft den Körper nicht – Linie näher an den Körper legen'); }
+  return best.s;
 }
 
 // Gewinde (F4): ISO-Profil (60°, Spitze P/8 und Grund P/4 flach). Jede Profilecke läuft auf einer Schraubenlinie, zwischen je zwei
@@ -410,11 +436,14 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           anchor(f.id, { sure: r.sure, ...changed && { patch: { pts: p.pts, open: !p.closed } } });
           continue;
         }
-        if (isFlat(g) || (isCut(g) && !body)) continue;
+        if (g.type === 'line' && g.rib && body) { s = ribSolid(g, body); nS = s.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'seg' as const, i } })); }
+        else if (isFlat(g) || (isCut(g) && !body)) continue;
+        else {
         const depth = g.thru && body && isCut(g) ? thruDepth(g, body) : 0;
         if (depth && Math.abs(depth + g.d) > 1e-6) anchor(f.id, { sure: true, patch: { d: -depth } });
         s = solidOf(depth ? { ...g, d: -depth - 1 } : g); // 1 mm überstehen, sonst bleibt am Boden eine Haut
         nS = nameSolid(g, s);
+        }
       }
       if (!body) { bodies.set(k, s); names.set(k, nS); continue; }
       done(...boolean((isExtrude(f) && isCut(f)) || (f.type === 'sweep' && f.sub) || (f.type === 'text' && f.d < 0) ? 'cut' : 'fuse', body, names.get(k) ?? [], s, nS));
