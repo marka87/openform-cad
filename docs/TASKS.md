@@ -112,6 +112,19 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [x] DONE E1 (0.17.0) Kante wie Shapr3D: ⇔-Pfeil an markierter Kante bzw. Rundung/Fase (wegziehen = runden, hineinschieben = fasen,
       wie bisher beim Ziehen der Kante), daneben „Rundung ▾ / Fase“ zum Umschalten und das Maß zum Tippen.
 
+### 3b. Ideen, vom Nutzer alle 8 freigegeben 2026-11-09 — Claude, in dieser Reihenfolge
+Video des Nutzers aus Shapr3D (Kante runden/fasen, 18 s): Pfeil an der Kante, Maßfeld daneben, Vorschau beim Ziehen,
+an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Ziehen selbst entspricht E1.
+- [ ] TODO I1 Fläche füllen (Lochraster): Fläche anklicken, Lochmaß, Abstand, Randabstand → Anzahl je Richtung wird
+      gerechnet, Raster sitzt mittig. Ergebnis ist ein normales Muster (bleibt bearbeitbar).
+- [ ] TODO I2 Größtmögliche Rundung/Fase: schlägt sie fehl, das größte noch machbare Maß suchen und anbieten.
+- [ ] TODO I3 Muster von der Mitte aus: Taste beim Ziehen = beidseitig gleich weit.
+- [ ] TODO I4 Einzelne Exemplare weglassen: Shift+Klick auf eine Kopie nimmt sie heraus (und wieder hinein).
+- [ ] TODO I5 Durch alles beim Ziehen: Bohrung über den Boden hinaus gezogen rastet auf „durch alles“ ein.
+- [ ] TODO I6 Bis zur Fläche ziehen: Höhe rastet beim Ziehen an anderen ebenen Flächen ein.
+- [ ] TODO I7 Bohrungsvorlagen für den 3D-Druck: Gewindeeinsatz M3/M4, Mutternfalle, selbstschneidend.
+- [ ] TODO I8 Zuletzt geöffnete Dateien unter „Öffnen“ (Desktop).
+
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
       ganzen Körper, bei einem Gehäuse also auch durch die Gegenwand; nur durch eine
