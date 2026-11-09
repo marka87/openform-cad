@@ -95,7 +95,6 @@
   #tree.mini { max-height:36px; overflow:hidden; }
   #tree.mini #treeTgl { transform:rotate(180deg); }
   /* Tab: Leisten ausblenden (Werkzeuge, Ansichten, Baum); oben, Seitenfeld und Würfel bleiben */
-  body.bare #toolbar, body.bare #views, body.bare #tree { display:none; }
   #bareBtn { position:fixed; left:12px; bottom:14px; display:none; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:5px 10px; cursor:pointer; font:inherit; }
   body.bare #bareBtn { display:block; }
   @media (min-height:900px) { #tree { max-height:45vh; } }
@@ -202,9 +201,41 @@
   #scale div { height:6px; border:2px solid var(--muted); border-top:none; margin-bottom:3px; }
   #hud { position:fixed; pointer-events:none; background:var(--accent); color:var(--onaccent); font-weight:600; border-radius:6px;
     padding:2px 6px; display:none; }
+
+  /* ---------- L2: feste Leisten. --T Höhe oben, --L/--R Breite links/rechts (main.ts: applyDock); die 3D-Ansicht nimmt den Rest ---------- */
+  :root { --T:46px; --L:230px; --R:260px; }
+  #view { position:fixed; left:var(--L); top:var(--T); width:calc(100vw - var(--L) - var(--R)); height:calc(100vh - var(--T)); }
+  #top { left:0; right:0; top:0; width:auto; margin:0; border-radius:0; border-width:0 0 1px; justify-content:center; box-shadow:none; z-index:4; }
+  #dockL, #dockR { position:fixed; top:var(--T); bottom:0; display:flex; flex-direction:column; background:var(--panel); z-index:3; min-height:0; }
+  #dockL { left:0; width:var(--L); border-right:1px solid var(--line); }
+  #dockR { right:0; width:var(--R); border-left:1px solid var(--line); }
+  #dockL #toolbar { position:static; display:flex; flex-direction:column; width:auto; max-height:none; flex:1; min-height:0; overflow-y:auto; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; background:transparent; }
+  #dockL #views { position:static; width:auto; flex:none; border:0; border-top:1px solid var(--line); border-radius:0; box-shadow:none; backdrop-filter:none; background:transparent; }
+  #dockR #panel { position:static; width:auto; flex:0 1 auto; max-height:var(--pH, 60%); min-height:0; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; background:transparent; }
+  #dockR #tree { position:static; width:auto; flex:1 1 0; min-height:60px; max-height:none; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; background:transparent; }
+  #dockR #tree.mini { flex:none; height:36px; }
+  #panel[style*="none"] + #splitP { display:none; }
+  #splitL, #splitR { position:fixed; top:var(--T); bottom:0; width:6px; cursor:col-resize; z-index:5; }
+  #splitL { left:calc(var(--L) - 3px); } #splitR { right:calc(var(--R) - 3px); }
+  #splitP { height:6px; flex:none; cursor:row-resize; border-top:1px solid var(--line); }
+  #splitL:hover, #splitR:hover, #splitP:hover, .drag { background:var(--accent); opacity:.6; }
+  body.bare #dockL, body.bare #dockR, body.bare #splitL, body.bare #splitR { display:none; }
+  #cube { left:calc(var(--L) + 12px); top:calc(var(--T) + 12px); }
+  #cubeTurn { left:calc(var(--L) + 110px); top:calc(var(--T) + 30px); }
+  #dims { inset:auto; left:var(--L); top:var(--T); right:var(--R); bottom:0; }
+  #hint { left:calc(var(--L) + (100vw - var(--L) - var(--R)) / 2); max-width:calc(100vw - var(--L) - var(--R) - 40px); }
+  #scale { right:calc(var(--R) + 16px); }
+  #snapMenu { left:calc(var(--L) + 8px); }
+  /* schmal (gezogen oder Platzmangel): links nur Symbole */
+  body.rail #toolbar button { font-size:0; padding:5px 0; text-align:center; }
+  body.rail #toolbar button svg { margin:0; width:18px; height:18px; }
+  body.rail #toolbar kbd, body.rail #toolbar .dd, body.rail #toolbar small.mode, body.rail #toolbar .grp, body.rail #views .vg, body.rail #views label, body.rail #views #secOff { display:none; }
+  body.rail #views button { font-size:0; padding:3px; }
+  body.rail #views button svg { margin:0; }
 </style>
 </head>
 <body>
+<div id="dockL">
 <div id="toolbar">
   <button data-tool="select">Auswählen / Ziehen <kbd>V</kbd></button>
   <div class="grp">Skizze</div>
@@ -231,6 +262,26 @@
   <div class="grp">Prüfen</div>
   <button data-tool="measure">Messen <small class="mode"></small><kbd>M</kbd><span class="dd" data-menu="measure" title="Art des Messens (auch Rechtsklick)">▾</span></button>
 </div>
+<div id="views">
+  <div class="vg">Kameraperspektiven</div>
+  <button data-view="iso" title="Taste 0">Iso</button><button data-view="top" title="Taste 2">Oben</button>
+  <button data-view="front" title="Taste 1">Vorne</button><button data-view="right" title="Taste 3">Rechts</button>
+  <div class="vg">Darstellungsmodi</div>
+  <button data-view="fit" title="Taste F">Einpassen</button>
+  <button data-show="wire">Draht</button><button data-show="glass">Transparent</button>
+  <div class="vg">Struktur &amp; Rendering</div>
+  <button data-show="edges" class="on">Kanten</button>
+  <button data-show="section" title="Schnitt durch die Mitte: aus → X → Y → Z">Schnitt</button><button data-show="render">Render</button>
+  <label title="Farbe des Körpers"><input type="color" id="bodyColor" value="#c9ced6"></label>
+  <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
+  <div class="vg">Systemeinstellungen</div>
+  <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
+  <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
+  <label title="Farben der Oberfläche">Skin <select id="skin"><option value="graphit">Graphit</option><option value="hell">Hell</option><option value="nacht">Nacht</option><option value="kontrast">Kontrast</option></select></label>
+  <button id="bBare" title="Werkzeuge, Ansichten und Baum ausblenden (Tab)">Leisten aus</button>
+</div>
+</div>
+<div id="splitL" title="Breite ziehen"></div>
 <div id="top">
   <button id="bNew" title="Neues, leeres Modell">Neu</button>
   <button id="bOpen" title=".ofc öffnen oder .step/.stp importieren (Strg+O)">Öffnen</button>
@@ -245,7 +296,12 @@
   <button id="bSvg" title="Zeichnungsblatt (SVG, PDF), DXF, OBJ">Zeichnung / mehr ▾</button>
   <input id="fileIn" type="file" accept=".ofc,.json,.step,.stp,.stl,.obj,.3mf,.png,.jpg,.jpeg,.webp" hidden>
 </div>
+<div id="splitR" title="Breite ziehen"></div>
+<div id="dockR">
 <div id="panel"></div>
+<div id="splitP" title="Höhe ziehen"></div>
+<div id="tree"></div>
+</div>
 <div id="hud"></div>
 <div id="snapTip"></div>
 <div id="ctx"></div>
@@ -267,26 +323,7 @@
 </div>
 <div id="cube" title="Doppelklick = Standardansicht"></div>
 <div id="cubeTurn"><button data-turn="1" title="Ansicht um 90° nach links drehen">↺</button><button data-turn="-1" title="Ansicht um 90° nach rechts drehen">↻</button></div>
-<div id="tree"></div>
 <div id="dims"></div>
-<div id="views">
-  <div class="vg">Kameraperspektiven</div>
-  <button data-view="iso" title="Taste 0">Iso</button><button data-view="top" title="Taste 2">Oben</button>
-  <button data-view="front" title="Taste 1">Vorne</button><button data-view="right" title="Taste 3">Rechts</button>
-  <div class="vg">Darstellungsmodi</div>
-  <button data-view="fit" title="Taste F">Einpassen</button>
-  <button data-show="wire">Draht</button><button data-show="glass">Transparent</button>
-  <div class="vg">Struktur &amp; Rendering</div>
-  <button data-show="edges" class="on">Kanten</button>
-  <button data-show="section" title="Schnitt durch die Mitte: aus → X → Y → Z">Schnitt</button><button data-show="render">Render</button>
-  <label title="Farbe des Körpers"><input type="color" id="bodyColor" value="#c9ced6"></label>
-  <input type="range" id="secOff" min="-1" max="1" step="0.01" value="0" title="Schnittebene verschieben" style="width:100%">
-  <div class="vg">Systemeinstellungen</div>
-  <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
-  <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
-  <label title="Farben der Oberfläche">Skin <select id="skin"><option value="graphit">Graphit</option><option value="hell">Hell</option><option value="nacht">Nacht</option><option value="kontrast">Kontrast</option></select></label>
-  <button id="bBare" title="Werkzeuge, Ansichten und Baum ausblenden (Tab)">Leisten aus</button>
-</div>
 <button id="bareBtn" title="Leisten wieder zeigen (Tab)">☰ Leisten</button>
 <div id="palette"><input placeholder="Werkzeug oder Befehl suchen …"><div></div></div>
 <div id="scale"><div></div><span></span></div>

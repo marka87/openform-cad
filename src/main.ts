@@ -2759,6 +2759,7 @@ function toggleBare() {
   const on = document.body.classList.toggle('bare');
   try { localStorage.setItem('openform-bare', on ? '1' : ''); } catch {}
   showNotice(on ? 'Leisten ausgeblendet · Tab oder ☰ unten links zeigt sie wieder' : HINTS[tool]);
+  resize(); wake(); // 3D-Ansicht nimmt den frei gewordenen Platz
 }
 $('bBare').onclick = $('bareBtn').onclick = () => toggleBare();
 try { if (localStorage.getItem('openform-bare')) document.body.classList.add('bare'); if (localStorage.getItem('openform-treeMini')) tree.classList.add('mini'); } catch {}
@@ -3392,8 +3393,46 @@ palIn.onkeydown = e => {
 };
 palIn.onblur = () => setTimeout(closePalette, 150);
 
-function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+// L2: feste Leisten links/rechts mit ziehbarer Breite (gemerkt); die 3D-Ansicht bekommt den Rest. Wird es zu eng,
+// geht links auf Symbole und rechts wird schmaler, bevor die 3D-Ansicht unter 480 px fällt
+const dock = { L: 230, R: 260, P: 0 };
+try { Object.assign(dock, JSON.parse(localStorage.getItem('openform-dock') ?? '{}')); } catch {}
+function applyDock() {
+  const bare = document.body.classList.contains('bare'), W = innerWidth, MINV = 480;
+  let L = bare ? 0 : dock.L, R = bare ? 0 : dock.R;
+  const rail = !bare && (L < 120 || W - L - R < MINV);
+  if (rail) L = 64;
+  if (!bare && W - L - R < MINV) R = Math.max(200, W - L - MINV);
+  document.body.classList.toggle('rail', rail);
+  const s = document.documentElement.style;
+  s.setProperty('--L', `${L}px`); s.setProperty('--R', `${R}px`); s.setProperty('--T', `${$('top').offsetHeight}px`);
+  if (dock.P) s.setProperty('--pH', `${dock.P}px`);
+}
+function resize() {
+  applyDock();
+  const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight);
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+el.id = 'view';
 addEventListener('resize', resize); resize();
+const saveDock = () => { try { localStorage.setItem('openform-dock', JSON.stringify(dock)); } catch {} };
+for (const [id, k] of [['splitL', 'L'], ['splitR', 'R']] as const) {
+  const sp = $(id);
+  sp.onpointerdown = e => {
+    sp.setPointerCapture(e.pointerId); sp.classList.add('drag');
+    const x0 = e.clientX, w0 = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--${k}`));
+    sp.onpointermove = m => { const d = (m.clientX - x0) * (k === 'L' ? 1 : -1); dock[k] = Math.round(Math.max(k === 'L' ? 64 : 200, Math.min(480, w0 + d))); resize(); wake(); };
+    sp.onpointerup = () => { sp.onpointermove = null; sp.classList.remove('drag'); saveDock(); };
+  };
+}
+$('splitP').onpointerdown = e => {
+  const sp = $('splitP'), top = $('dockR').getBoundingClientRect().top, H = $('dockR').clientHeight;
+  sp.setPointerCapture(e.pointerId); sp.classList.add('drag');
+  sp.onpointermove = m => { dock.P = Math.round(Math.max(80, Math.min(H - 80, m.clientY - top))); applyDock(); };
+  sp.onpointerup = () => { sp.onpointermove = null; sp.classList.remove('drag'); saveDock(); };
+};
+const ro = new ResizeObserver(() => { resize(); wake(); }); // obere Leiste bricht um, Fenster oder Leisten ändern die Größe
+ro.observe($('top')); ro.observe(el);
 // Nur zeichnen, wenn sich etwas tut: nach jeder Eingabe, Kernantwort oder Kamerabewegung noch kurz, sonst einmal je Sekunde als Sicherung.
 // Der Schatten hängt nur an den Körpern: beim reinen Drehen der Kamera bleibt er liegen (2048² je Bild wäre die teuerste Arbeit)
 let awake = 0, lastDraw = 0;

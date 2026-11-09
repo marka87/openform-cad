@@ -143,7 +143,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 ### 3d. Layout für alle Auflösungen, vom Nutzer freigegeben 2026-11-09 — Claude, vor F8
 Vorbild: HTML-Beispiel (Raster aus Leisten, Splitter, 3D-Ansicht in der Mitte). Prüfziel: 1080p bei 100 % und 125 %, 1366×768, 4K bei 200 %.
 - [x] DONE L1 (0.21.1) Seitenfeld scrollt — Seitenfeld scrollbar (hat heute keine Höhengrenze, lange Felder laufen unten aus dem Fenster).
-- [ ] TODO L2 Feste Leisten statt schwebender: links Werkzeuge, rechts Baum + Eigenschaften mit Splitter, Breiten ziehbar und gemerkt;
+- [x] DONE L2 (0.22.0) Feste Leisten — Feste Leisten statt schwebender: links Werkzeuge, rechts Baum + Eigenschaften mit Splitter, Breiten ziehbar und gemerkt;
       3D-Ansicht nimmt den Rest (wird kleiner statt verdeckt); bei Platzmangel schrumpfen die Leisten selbst (links nur Symbole). Mindestgröße 1024×576.
 - [ ] TODO L3 Obere Werkzeugleiste: bei wenig Platz erst nur Symbole, dann Gruppen ins Menü „⋯ Mehr“, nie umbrechen; danach Prüfung aller Größen in der Exe.
 
@@ -243,6 +243,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.22.0** Feste Leisten links und rechts mit Splittern, 3D-Ansicht nimmt den Rest, bei Platzmangel links nur Symbole; Mindestgröße 1024×576 (L2)
 - **0.21.1** Seitenfeld scrollt und endet über dem Baum (L1)
 - **0.21.0** Vier Skins zur Auswahl (Graphit, Hell, Nacht, Kontrast) unter den Ansichten
 - **0.20.0** Leisten mit Tab (oder Knopf „Leisten aus“) ausblenden, Baum einklappbar und auf hohen Bildschirmen höher, Parameter-Zeile passt in den Baum
@@ -291,6 +292,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 L2 (0.22.0, MINOR): Werkzeuge+Ansichten in #dockL, Eigenschaften+Baum in #dockR (Splitter dazwischen), obere Leiste über die ganze Breite. Canvas #view nur noch zwischen den Leisten (CSS --L/--R/--T, main.ts applyDock; renderer.setSize ohne Stil, Größe aus dem CSS). Würfel, Maße (#dims), Hinweis, Maßstab rechnen relativ zur Ansicht; Klicks stimmten schon, weil alles über el.getBoundingClientRect geht. Breiten ziehbar (64–480, gemerkt in openform-dock); unter 120 px oder wenn die Ansicht unter 480 px fiele: links nur Symbole (64 px), dann rechts schmaler. Tab blendet beide Leisten aus, die Ansicht wird breiter. ResizeObserver auf Leiste und Ansicht. Tauri-Mindestgröße 1024×576. Browser: 1920×1000 Ansicht 1430×959, Klick auf den Quader trifft; 1536×824 (1080p bei 125 %) 1046×783; 1024×576 534×535, Werkzeuge scrollen; Tab 1024 breit; schmal gezogen = Symbole. Obere Leiste passt bis 1024 ohne Umbruch. Nicht: Exe, echte DPI 150/200 %.
 - 2026-11-09 L1 (0.21.1, PATCH): #panel bekommt max-height (65 vh − 72 px, ab 900 px Höhe 55 vh) und scrollt; ohne Baum (Tab, eingeklappt) fast volle Höhe. Browser 1366×700: Körper-Feld mit offenen Abschnitten 672 px Inhalt, 381 px sichtbar, endet bei 395 px über dem Baum (482 px), scrollt. L1–L3 als Abschnitt 3d geplant, F8/F9 danach.
 - 2026-11-09 Installer 0.21.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Skins (0.21.0): Nutzer wählte nach einer HTML-Vorschau „alle zur Auswahl“. index.html: alle festen Farben auf Variablen
