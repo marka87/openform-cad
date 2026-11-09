@@ -25,6 +25,7 @@ export interface Extrude extends Frame {
   axisLine?: { p: Vec; d: Vec }; // … oder eine beliebige Gerade in der Skizzenebene (z. B. eine Körperkante): Punkt p, Richtung d
   sub?: boolean;             // Drehkörper abziehen (Nut) statt vereinigen
   thru?: boolean;            // Schnitt durch den ganzen Körper: d rechnet der Kern bei jedem Lauf neu
+  thread?: { D: number; P: number }; // Kreis: echtes Gewinde (F4), Nenn-Ø D und Steigung P; Bolzen = Außen-, Bohrung = Innengewinde
   mid?: boolean;             // Rechteck aus der Mitte gezogen: Maßänderungen lassen die Mitte stehen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
@@ -139,6 +140,8 @@ function allCopies(p: Pattern): PatternCopy[] {
   return out;
 }
 // Kernlochdurchmesser für metrische Regelgewinde in mm
+// Echtes Gewinde (F4): Nenn-Ø und Steigung (metrisch Regelgewinde, Stativ 1/4"-20 UNC). Kreis: Bolzen = Nenn-Ø, Bohrung = Kern-Ø D − 1,0825·P
+export const THREAD_SPECS: Record<string, { D: number; P: number }> = { M3: { D: 3, P: 0.5 }, M4: { D: 4, P: 0.7 }, M5: { D: 5, P: 0.8 }, M6: { D: 6, P: 1 }, M8: { D: 8, P: 1.25 }, M10: { D: 10, P: 1.5 }, M12: { D: 12, P: 1.75 }, M16: { D: 16, P: 2 }, M20: { D: 20, P: 2.5 }, '1/4"-20': { D: 6.35, P: 1.27 } };
 export const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
 // 3D-Druck (I7): Bohrung Ø und Tiefe in mm, übliche Werte (Drucker streuen, bei Bedarf im Feld anpassen). Einschmelzmutter: Ø nach gängigen
 // Herstellerangaben, Tiefe = Länge + 1 mm; direkt in Kunststoff = Schraube schneidet sich ihr Gewinde selbst; Durchgang = ISO 273 mittel

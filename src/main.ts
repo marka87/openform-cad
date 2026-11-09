@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -1910,6 +1910,7 @@ function renderFeaturePanel() {
     (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
     (!loftTo && isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '') +
+    (SHOW_THREADS && f.type === 'circle' && !f.rev && !f.p.ry && !isFlat(f) ? `<label title="Bolzen = Außengewinde, Bohrung = Innengewinde; setzt den Ø">Gewinde <select class="thd"><option value="">–</option>${Object.keys(THREAD_SPECS).map(m => `<option${f.thread && THREAD_SPECS[m].D === f.thread.D && THREAD_SPECS[m].P === f.thread.P ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></label>` : '') +
     (['rect', 'poly', 'line'].includes(f.type) && !f.smooth ? `<label title="Punkt anklicken = nur diese Ecke">${corner?.id === f.id ? `Ecke (Punkt ${corner.i + 1})` : 'Alle Ecken'} <input type="number" step="0.5" value="${uval(2)}" class="cr"></label><button class="act crR">Runden</button><button class="act crF">Fasen</button>` : '');
   panel.innerHTML = `<h3>${esc(name)} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
@@ -1965,6 +1966,13 @@ function renderFeaturePanel() {
   });
   const thru = panel.querySelector<HTMLInputElement>('.thru');
   if (thru) thru.onchange = () => { pushHistory(); if (thru.checked) f.thru = true; else delete f.thru; refresh(); };
+  const thd = panel.querySelector<HTMLSelectElement>('.thd');
+  if (thd) thd.onchange = () => { // echtes Gewinde (F4): Bolzen bekommt den Nenn-Ø, Bohrung den Kern-Ø
+    pushHistory();
+    const T = THREAD_SPECS[thd.value];
+    if (!T) delete f.thread; else { f.thread = { ...T }; f.p.r = (isCut(f) ? T.D - 1.0825 * T.P : T.D) / 2; }
+    refresh();
+  };
   panel.querySelectorAll<HTMLButtonElement>('.crR, .crF').forEach(b => b.onclick = () => {
     const g = roundCorners(f, corner?.id === f.id ? [corner.i] : null, mmOf(panel.querySelector<HTMLInputElement>('.cr')!), b.classList.contains('crF'));
     if (!g) return showNotice('Geht nicht: Seite zu kurz für dieses Maß, oder keine Ecke (Bögen bleiben)');
@@ -2157,6 +2165,8 @@ function patDims(f: Pattern) {
   }
 }
 // Feld am Kanten-Pfeil (E1): „Rundung ▾“ bzw. „Fase ▾“ und Maß; Wort = Art umschalten, Zahl = tippen (über das Seitenfeld .r)
+// shortcut: F4 Gewinde im Browser noch nicht fertig (Körper erscheint nicht, siehe TASKS.md F4) → Auswahl erst einschalten, wenn geklärt
+const SHOW_THREADS = false;
 let corner: { id: number; i: number } | null = null; // angeklickter Eckpunkt einer Skizze: nur diese Ecke runden/fasen (F1)
 let edgeKind: EdgeOp['type'] = 'fillet'; // Art für markierte Kanten, die noch keine Rundung haben
 function edgeDims() {

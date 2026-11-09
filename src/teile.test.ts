@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { parseModel, roundCorners, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { parseModel, roundCorners, THREAD_SPECS, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -623,3 +623,20 @@ test('Skizzen-Ecken runden und fasen (F1)', () => {
   const v = { ...eine, pts: [[0, 0], [20, 0], [20, 10], [0, 10]], cons: [{ t: 'len' as const, i: 1, val: 10 }, { t: 'len' as const, i: 3, val: 10 }, { t: 'h' as const, i: 2 }] };
   expect(roundCorners(v, [2], 2)!.cons).toEqual([{ t: 'len', i: 4, val: 10 }, { t: 'h', i: 3 }]);
 });
+
+test('Gewinde (F4): Bolzen M10 außen, Bohrung M10 innen, gültig und Volumen zwischen Kern und voll', () => {
+  const T = THREAD_SPECS.M10, bolzen = circle(GROUND, [0, 0], 5, 1, 20, false);
+  const voll = measureVolume(buildBody([bolzen]).body!), g = buildBody([{ ...bolzen, thread: T }]);
+  expect([...g.errors]).toEqual([]);
+  expect(valid(g.body!)).toBe(true);
+  const v = measureVolume(g.body!), kern = Math.PI * (5 - 0.6134 * T.P) ** 2 * 20;
+  expect(v).toBeLessThan(voll - 50);
+  expect(v).toBeGreaterThan(kern);
+  const top: Frame = { ...GROUND, o: [0, 20, 0] }, block = rect(GROUND, [-15, -15], [15, 15], 2, 20, false);
+  const loch = circle(top, [0, 0], (T.D - 1.0825 * T.P) / 2, 3, -15, true), glatt = measureVolume(buildBody([block, loch]).body!);
+  const innen = buildBody([block, { ...loch, thread: T }]);
+  expect([...innen.errors]).toEqual([]);
+  expect(valid(innen.body!)).toBe(true);
+  expect(measureVolume(innen.body!)).toBeLessThan(glatt - 50);
+  expect(measureVolume(innen.body!)).toBeGreaterThan(18000 - Math.PI * 25 * 15); // nicht mehr als ein Loch mit Nenn-Ø
+}, 60000);
