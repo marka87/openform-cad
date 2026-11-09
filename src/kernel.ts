@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, makeCylinder, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, makeCylinder, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -84,20 +84,24 @@ export function solidOf(f: Extrude): Shape3D {
   return s;
 }
 
-// Gewinde (F4): Querschnitt als „Nocke“ (Radius folgt dem 60°-Dreieck über eine Umdrehung, glatt als Spline) und um 360°·h/P
-// verdreht extrudiert = Gewindebolzen in einem Stück, ohne Boolesche Operation. Bolzen: Kreis = Nenn-Ø, Kern 0,6134·P tiefer.
-// Bohrung: Werkzeug von Kern-Ø (Kreis) bis Nenn-Ø, der Schnitt hinterlässt das Innengewinde. Eine Rille entlang einer Schraubenlinie
-// (genericSweep) war bei OCCT unzuverlässig: je nach Höhe leerer oder unveränderter Körper. Gerechnet in Z am Ursprung, dann gedreht.
-// shortcut: spitzes V ohne Abflachung, vom Spline leicht gerundet, kein Spiel für den Druck → bei klemmenden Teilen Ø im Feld anpassen
+// Gewinde (F4): ISO-Profil (60°, Spitze P/8 und Grund P/4 flach). Jede Profilecke läuft auf einer Schraubenlinie, zwischen je zwei
+// liegt eine Regelfläche; mit zwei Deckeln ergibt das den Gewindegang als Körper, dazu der Kern-Zylinder, auf die Höhe zugeschnitten.
+// Bolzen: Kreis = Nenn-Ø, Kern 0,5413·P tiefer. Bohrung: Werkzeug von Kern-Ø (Kreis) bis Nenn-Ø, der Schnitt hinterlässt das Innengewinde.
+// Verworfen: verdreht extrudierte Nocke (Netz 8 Mio. Dreiecke für 5 mm, Minuten im Worker) und Rille per genericSweep (unzuverlässig).
+// Gerechnet in Z am Ursprung, dann gedreht; rechtsgängig.
+// shortcut: Grundprofil ohne Spiel für den Druck → bei klemmenden Teilen Ø im Feld anpassen
 function threaded(f: Extrude): Shape3D {
-  const { D, P } = f.thread!, r = f.p.r, h = Math.abs(f.d), N = 48;
-  const [lo, hi] = isCut(f) ? [r, Math.max(D / 2, r + 0.3 * P)] : [r - 0.6134 * P, r];
-  const pts = Array.from({ length: N }, (_, i) => { const t = i / N, q = lo + (hi - lo) * (1 - Math.abs(2 * t - 1)); return [q * Math.cos(2 * Math.PI * t), q * Math.sin(2 * Math.PI * t)] as [number, number]; });
-  const pen = draw(pts[0]);
-  for (let i = 1; i <= N; i++) pen.smoothSplineTo(pts[i % N]);
-  const twist = pen.close().sketchOnPlane('XY').extrude(h, { twistAngle: 360 * h / P }) as Shape3D, core = makeCylinder(lo - 0.05, h, [0, 0, 0], [0, 0, 1]); // rechtsgängig
-  let out = twist.fuse(core); // Kern liegt ganz innen, ändert nichts; erst die Boolesche Operation ergänzt, was der Prüfung (BRepCheck) am verdrehten Körper fehlt
-  twist.delete(); core.delete();
+  const { D, P } = f.thread!, r = f.p.r, h = Math.abs(f.d);
+  const [lo, hi] = isCut(f) ? [r, Math.max(D / 2, r + 0.3 * P)] : [r - 0.5413 * P, r];
+  const fl = 0.3125 * P, ov = 0.1 * P, r0 = lo - ov, ext = fl * ov / (hi - lo); // Fuß um ov in den Kern verlängert, sonst berühren sich Gang und Kern nur
+  const prof = [[r0, -ext], [hi, fl], [hi, fl + P / 8], [r0, 2 * fl + P / 8 + ext]]; // (Radius, Höhe) bei Winkel 0
+  const H = h + 2 * P, z0 = -P, th = 2 * Math.PI * H / P; // Gang über beide Enden hinaus, dann zugeschnitten
+  const hel = prof.map(([q, z]) => makeHelix(P, H, q, [0, 0, z0 + z]));
+  const cap = (a: number, dz: number) => makePolygon(prof.map(([q, z]) => [q * Math.cos(a), q * Math.sin(a), z0 + z + dz] as Vec));
+  const ridge = makeSolid([...hel.map((w, i) => loft([w, hel[(i + 1) % 4]], { ruled: true }, true) as unknown as Face), cap(0, 0), cap(th, H)]);
+  const core = makeCylinder(lo, H, [0, 0, z0]), clip = makeCylinder(hi + 1, h), full = ridge.fuse(core) as Shape3D;
+  let out = full.intersect(clip) as Shape3D;
+  hel.forEach(w => w.delete()); ridge.delete(); core.delete(); clip.delete(); full.delete();
   const n = f.n.map(x => x * Math.sign(f.d)), C = [0, 1, 2].map(i => f.o[i] + f.p.cx * f.u[i] + f.p.cy * f.v[i]);
   const ax = [-n[1], n[0], 0], s2 = Math.hypot(ax[0], ax[1]), ang = Math.atan2(s2, n[2]) * 180 / Math.PI; // Drehung z → n um z × n
   if (ang > 1e-9) out = out.rotate(ang, [0, 0, 0], s2 > 1e-12 ? ax as Vec : [1, 0, 0]);

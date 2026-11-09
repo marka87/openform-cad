@@ -629,9 +629,17 @@ test('Gewinde (F4): Bolzen M10 außen, Bohrung M10 innen, gültig und Volumen zw
   const voll = measureVolume(buildBody([bolzen]).body!), g = buildBody([{ ...bolzen, thread: T }]);
   expect([...g.errors]).toEqual([]);
   expect(valid(g.body!)).toBe(true);
-  const v = measureVolume(g.body!), kern = Math.PI * (5 - 0.6134 * T.P) ** 2 * 20;
+  // ISO-Profil nachgerechnet: Gang = Trapez (Fuß 0,75·P, Spitze P/8, Tiefe 0,5413·P), je Umdrehung Fläche · 2π · Schwerpunkt-Radius (Pappus)
+  const lo = 5 - 0.5413 * T.P, t = 5 - lo, A = 0.4375 * T.P * t, rs = lo + t * (0.75 + 0.25) / (3 * 0.875);
+  const v = measureVolume(g.body!), soll = Math.PI * lo ** 2 * 20 + A * 2 * Math.PI * rs * 20 / T.P;
   expect(v).toBeLessThan(voll - 50);
-  expect(v).toBeGreaterThan(kern);
+  expect(v / soll).toBeCloseTo(1, 3);
+  // schnell genug für den Worker: das verdrehte Vorgängermodell brauchte für 5 mm über 2 Minuten nur fürs Netz
+  const t0 = performance.now(), netz = g.body!.mesh({ tolerance: 0.05, angularTolerance: 0.2 });
+  expect(performance.now() - t0).toBeLessThan(5000);
+  expect(netz.triangles.length / 3).toBeLessThan(50000);
+  const step = forExport(g.body!).blobSTEP();
+  expect(step.size).toBeGreaterThan(1000);
   const top: Frame = { ...GROUND, o: [0, 20, 0] }, block = rect(GROUND, [-15, -15], [15, 15], 2, 20, false);
   const loch = circle(top, [0, 0], (T.D - 1.0825 * T.P) / 2, 3, -15, true), glatt = measureVolume(buildBody([block, loch]).body!);
   const innen = buildBody([block, { ...loch, thread: T }]);
