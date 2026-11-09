@@ -128,6 +128,9 @@ let drag: any = null, ready = false;
 const multi = new Set<number>();  // weitere ausgewählte Features (Strg/Shift+Klick)
 let edgeSel: { at: Vec; dir: Vec; body?: number }[] = []; // angeklickte Kanten, zum gemeinsamen Runden/Fasen
 const clearSel = () => { selId = selBody = null; multi.clear(); edgeSel = []; };
+// Muster und ihre Quellen gelten zusammen als markiert: Klick auf ein Exemplar zeigt alle, auch die Quelle (M1)
+const isSel = (id: number) => id === selId || multi.has(id);
+const marked = (id: number) => isSel(id) || live().some(p => p.type === 'pattern' && !p.hidden && (p.id === id ? p.src.some(isSel) : p.src.includes(id) && isSel(p.id)));
 // Strg/Shift+Klick: Schritt in die Auswahl aufnehmen oder herausnehmen; fällt der erste weg, rückt der nächste nach
 function toggleSel(id: number) {
   if (selId === null) selId = id;
@@ -169,7 +172,8 @@ const HELP = 'Fläche ziehen = extrudieren / Größe ändern · Kante wegziehen 
 function hoverHint(h: { face: Hit | null; edge: EdgeHit | null }) {
   if (!hintAuto || drag) return;
   const g = h.face?.grip, f = g && g.f;
-  const text = ray.intersectObjects(handles.children)[0] ? 'ziehen = Punkt verschieben'
+  const hh = ray.intersectObjects(handles.children)[0]?.object.userData;
+  const text = hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung' : hh?.pk ? 'ziehen = Abstand des Musters ändern' : hh ? 'ziehen = Punkt verschieben'
     : h.edge ? 'ziehen = runden · hinein = fasen'
     : !h.face ? 'ziehen = Rahmen auswählen · rechts ziehen = drehen'
     : !g || g.part === 'import' ? 'ziehen = Fläche versetzen'
@@ -187,6 +191,12 @@ function showNotice(text: string) { notice = text; showHint(text); }
 const getById = (id: number) => features.find(f => f.id === id);
 const getSel = () => selId === null ? undefined : getById(selId);
 
+// Mitte einer Skizze in ihren Ebenenkoordinaten (Pfeile von Ziehen und Muster)
+const sketchMid = (f: Extrude) => f.type === 'circle' ? [f.p.cx, f.p.cy] : f.type === 'rect' ? [f.p.x + f.p.w / 2, f.p.y + f.p.h / 2]
+  : (c => [0, 1].map(k => c.reduce((a, p) => a + p[k], 0) / c.length))(contour(f.pts!, f.smooth));
+// Halbe Ausdehnung längs X und Y der Skizze, von der Mitte aus (Muster-Pfeile sitzen knapp außerhalb)
+const halfExt = (f: Extrude) => { const [cx, cy] = sketchMid(f); return f.type === 'circle' ? [f.p.r, f.p.ry ?? f.p.r] : f.type === 'rect' ? [Math.abs(f.p.w) / 2, Math.abs(f.p.h) / 2]
+  : [0, 1].map(k => Math.max(...contour(f.pts!, f.smooth).map(p => Math.abs(p[k] - (k ? cy : cx))))); };
 function shapeOf(f: Extrude) {
   const s = new THREE.Shape(), p = f.p;
   if (f.type === 'rect') {
@@ -205,7 +215,7 @@ function buildMesh(f: Extrude, kind: 'sketch' | 'preview' | 'outline' | 'add' | 
     g = new THREE.ExtrudeGeometry(shapeOf(f), { depth: Math.abs(f.d), bevelEnabled: false, curveSegments: 64 });
     if (f.d < 0) g.translate(0, 0, f.d);
   }
-  const sel = f.id === selId;
+  const sel = marked(f.id);
   const mat = new THREE.MeshStandardMaterial({
     color: kind === 'add' ? 0x4cd964 : kind === 'cut' ? 0xff4d4d : sel ? 0xff9a3c : 0x4da3ff, transparent: true,
     opacity: kind === 'outline' ? 0 : kind === 'add' || kind === 'cut' ? 0.3 : 0.4, depthWrite: false, depthTest: kind !== 'cut',
@@ -355,7 +365,7 @@ function rebuild() {
     if (f.type === 'import' || f.hidden) return;
     const M = moveMatrix(movesAfter(L, i));
     if (f.type === 'pattern') { // Kopien flacher Skizzen zeigen (Körper-Kopien rechnet der Kern), ausgewählt als Umriss; Klick wählt das Muster
-      const on = f.id === selId || multi.has(f.id);
+      const on = marked(f.id);
       for (const src of f.src.map(id => L.find(g => g.id === id))) {
         if (!src || !isExtrude(src) || src.hidden || noFace(src) || !isFlat(src) && !on) continue;
         for (const P of patternCopies(f)) {
@@ -372,7 +382,7 @@ function rebuild() {
       : noFace(f) ? auxLine(f)
       : isFlat(f) ? buildMesh(f, 'sketch')
       : drag?.kind === 'push' && drag.started && (drag.f === f || drag.more?.some((o: { f: Feature }) => o.f === f)) ? buildMesh(f, isCut(f) ? 'cut' : 'add')
-      : f.id === selId || multi.has(f.id) ? buildMesh(f, 'outline') : null;
+      : marked(f.id) ? buildMesh(f, 'outline') : null;
     if (!o) return;
     if (o.matrixAutoUpdate) o.updateMatrix();
     o.matrixAutoUpdate = false;
@@ -393,12 +403,24 @@ function rebuild() {
     m.userData.i = i;
     handles.add(m);
   });
+  // ⇕-Pfeil über der Mitte der ausgewählten Skizze bzw. ihrer Deckfläche: ziehen = hoch oder hinein (M2)
+  const ps = s?.type === 'pattern' ? getById(s.src[0]) : s; // Muster ausgewählt: Pfeil an der Quelle, alle Kopien folgen
+  if (ps && isExtrude(ps) && !noFace(ps) && !ps.rev && !ps.hidden) {
+    const [cx, cy] = sketchMid(ps), r = pxSize(), M = moveMatrix(movesAfter(live(), live().indexOf(ps)));
+    for (const k of [1, -1]) {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(10 * r, 18 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
+      m.position.copy(V(ps.o).addScaledVector(V(ps.u), cx).addScaledVector(V(ps.v), cy).addScaledVector(V(ps.n), ps.d + (k > 0 ? 44 : 24) * r));
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), V(ps.n).multiplyScalar(k));
+      m.applyMatrix4(M); m.renderOrder = 1; m.userData.push = ps.id;
+      handles.add(m);
+    }
+  }
   // Muster: Pfeil je Richtung am letzten Exemplar, ziehen = Abstand (T6.6)
   const src = s?.type === 'pattern' ? getById(s.src[0]) : undefined;
   if (s?.type === 'pattern' && !s.rot && !s.mir && src && isExtrude(src)) for (const k of ['a', 'b'] as const) {
     const d = s[k];
     if (!d || d.n < 2) continue;
-    const c = src.type === 'circle' ? [src.p.cx, src.p.cy] : src.type === 'rect' ? [src.p.x + src.p.w / 2, src.p.y + src.p.h / 2] : [0, 0];
+    const c = sketchMid(src);
     const dir = V(d.ax).multiplyScalar(Math.sign(d.d) || 1), r = pxSize();
     const m = new THREE.Mesh(new THREE.ConeGeometry(7 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
     m.position.copy(V(src.o).addScaledVector(V(src.u), c[0]).addScaledVector(V(src.v), c[1]).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 30 * r));
@@ -407,6 +429,22 @@ function rebuild() {
     m.renderOrder = 1;
     m.userData.pk = k;
     handles.add(m);
+  }
+  // Neue Muster-Richtung direkt am Modell (M3): Skizze im Muster-Werkzeug = 4 Pfeile (±X, ±Y der Skizze), Muster mit einer Richtung = 2 Pfeile quer
+  const fresh = s && isExtrude(s) && !noFace(s) && patView?.mode === 'lin' && patView.key === `s${s.id}` ? s : null;
+  const one = s?.type === 'pattern' && !s.rot && !s.mir && (!s.b || s.b.n < 2) && src && isExtrude(src) ? s : null;
+  const base = fresh ?? (one ? src as Extrude : null);
+  if (base) {
+    const [cx, cy] = sketchMid(base), [hu, hv] = halfExt(base), r = pxSize(), M = moveMatrix(movesAfter(live(), live().indexOf(fresh ?? one!)));
+    const dirs: [Vec, number][] = one ? [[crossDir(one), 0], [crossDir(one).map(x => -x) as Vec, 0]] : [[base.u, hu], [base.u.map(x => -x) as Vec, hu], [base.v, hv], [base.v.map(x => -x) as Vec, hv]];
+    for (const [ax, h] of dirs) {
+      const off = one ? Math.abs(V(ax).dot(V(base.u))) * hu + Math.abs(V(ax).dot(V(base.v))) * hv : h;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(8 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+      m.position.copy(V(base.o).addScaledVector(V(base.u), cx).addScaledVector(V(base.v), cy).addScaledVector(V(base.n), base.d).addScaledVector(V(ax), off + 24 * r));
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), V(ax));
+      m.applyMatrix4(M); m.renderOrder = 1; m.userData.pnew = ax;
+      handles.add(m);
+    }
   }
   handles.updateMatrixWorld(true);
   buildDims();
@@ -1282,6 +1320,12 @@ function onDown(e: PointerEvent) {
     const f: Shell = { id: nextId++, type: 'shell', at: h.point.toArray() as Vec, t: 1, body: h.body };
     pushHistory(); add(f); selId = f.id; setTool('select'); refresh();
     return;
+  } else if (hp?.object.userData.push) { // ⇕-Pfeil: wie die Fläche ziehen, aber immer die ganze Skizze, kein Teilbereich (whole)
+    const f = getById(hp.object.userData.push) as Extrude;
+    drag = { kind: 'push', f, f0: structuredClone(f), part: 'end', k: 1, whole: true, P0: hp.object.position.clone(), D: V(f.n).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(f)))), sx: e.clientX, sy: e.clientY, started: false };
+  } else if (hp?.object.userData.pnew) { // Pfeil einer neuen Muster-Richtung: Muster bzw. Richtung 2 entsteht beim ersten Ziehen (M3)
+    const s = getSel()!, ax: Vec = hp.object.userData.pnew;
+    drag = { kind: 'patd', f: s.type === 'pattern' ? s : null, src: s, ax, k: s.type === 'pattern' ? 'b' : 'a', d0: 0, P0: hp.object.position.clone(), D: V(ax).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(s)))), sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp?.object.userData.pk) { // Pfeil eines Musters: Abstand ziehen
     const f = getSel() as Pattern, k: 'a' | 'b' = hp.object.userData.pk;
     drag = { kind: 'patd', f, k, d0: f[k]!.d, P0: hp.object.position.clone(), D: V(f[k]!.ax).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(f)))), sx: e.clientX, sy: e.clientY, started: false };
@@ -1397,7 +1441,7 @@ function onMove(e: PointerEvent) {
         if (q) { nextId++; add(q); multi.delete(g.id); multi.add(q.id); }
         return { f: q || g, f0: structuredClone(q || g) };
       });
-      const r = drag.kind === 'push' && Math.abs(drag.f.d) < 1e-6 && regionFeature(features, drag.f, drag.P0.toArray(), nextId);
+      const r = drag.kind === 'push' && !drag.whole && Math.abs(drag.f.d) < 1e-6 && regionFeature(features, drag.f, drag.P0.toArray(), nextId);
       if (r) { nextId++; add(r); drag.f = r; drag.f0 = structuredClone(r); selId = r.id; } // nur den Bereich ziehen
     }
     if (drag.kind === 'offset') { // Fläche versetzen: Abstand entlang der Normalen, Feature entsteht beim ersten Ziehen
@@ -1434,6 +1478,11 @@ function onMove(e: PointerEvent) {
       return showHud(e, `Abstand: ${len(drag.f.off)}`);
     }
     if (drag.kind === 'patd') { // letztes Exemplar folgt der Maus, Abstand = Weg / (Anzahl − 1)
+      if (!drag.f || (drag.f[drag.k]?.n ?? 0) < 2) { // neue Richtung (M3)
+        const d: PatternDir = { ax: drag.ax, n: Math.max(3, drag.k === 'a' ? patVals.cnt : patVals.cnt2), d: 0 };
+        if (drag.f) drag.f.b = d;
+        else { drag.f = { id: nextId++, type: 'pattern', src: patTargets(drag.src).map(g => g.id), a: d, body: bodyOf(drag.src) } satisfies Pattern; add(drag.f); patView = null; clearSel(); selId = drag.f.id; }
+      }
       const s = lineParam(drag.P0, drag.D), dir = drag.f[drag.k];
       if (s === null) return;
       dir.d = snap(drag.d0 + s / (dir.n - 1), e, pullStep()) || drag.d0;
@@ -1829,7 +1878,7 @@ function bindCons(f: Extrude) {
 
 // Maßzahlen an den Seiten der ausgewählten Skizze; festgelegte Maße orange, waagrecht/senkrecht als — / |
 const dims = $('dims');
-let dimLabels: { el: HTMLElement; p: THREE.Vector3; q: THREE.Vector3; b?: THREE.Vector3 }[] = []; // p = Stelle an der Skizze (mit b: Anfang und Ende der Seite), q = Punkt nach außen
+let dimLabels: { el: HTMLElement; p: THREE.Vector3; q: THREE.Vector3; b?: THREE.Vector3; plain?: boolean }[] = []; // plain = nur hinsetzen, ohne Maßlinie (Felder am Muster-Pfeil) // p = Stelle an der Skizze (mit b: Anfang und Ende der Seite), q = Punkt nach außen
 const SVG = 'http://www.w3.org/2000/svg', dimSvg = document.createElementNS(SVG, 'svg'), dimStroke = document.createElementNS(SVG, 'path'), dimHeads = document.createElementNS(SVG, 'path');
 dimStroke.setAttribute('class', 'st'); dimSvg.append(dimStroke, dimHeads);
 let dimsLive = false; // Maße gehören zur Vorschau beim Zeichnen
@@ -1852,6 +1901,7 @@ function buildDims(of?: Extrude, live = false) {
   dimLabels = [];
   dimsLive = live;
   const f = of ?? getSel();
+  if (f?.type === 'pattern') return patDims(f);
   if (!f || !isExtrude(f) || f.smooth || f.p.ry) return;
   const M = live ? new THREE.Matrix4() : moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
   const label = (text: string, at: number[], out: number[], target: string, lock = false, end?: number[]) => {
@@ -1883,6 +1933,26 @@ function buildDims(of?: Extrude, live = false) {
     label(`${fmt(sideLen(pts, i))}${c('h') ? ' —' : ''}${c('v') ? ' |' : ''}`, a, [(b[1] - a[1]) * turn, (a[0] - b[0]) * turn], `.cons input.len[data-i="${i}"]`, c('len'), b);
   });
 }
+// Felder am Muster-Pfeil (M4): „Abstand ▾“ bzw. „Gesamt ▾“ mit Wert, dazu die Anzahl. Wort = umschalten, Zahl = tippen (über das Seitenfeld)
+// Gespeichert wird immer der Abstand; Gesamt = Abstand × (Anzahl − 1)
+let patTotal = false;
+function patDims(f: Pattern) {
+  const src = getById(f.src[0]);
+  if (f.rot || f.mir || !src || !isExtrude(src)) return;
+  const [cx, cy] = sketchMid(src), M = moveMatrix(movesAfter(live(), live().indexOf(f))), r = pxSize();
+  for (const k of ['a', 'b'] as const) {
+    const d = f[k];
+    if (!d || d.n < 2) continue;
+    const dir = V(d.ax).multiplyScalar(Math.sign(d.d) || 1), el = document.createElement('span');
+    el.innerHTML = `<i>${patTotal ? 'Gesamt' : 'Abstand'} ▾</i> <b data-t=".d${k}">${fmt(Math.abs(patTotal ? d.d * (d.n - 1) : d.d))}</b> · <b data-t=".n${k}">${d.n}×</b>`;
+    el.title = 'Abstand/Gesamt anklicken = umschalten · Zahl anklicken = tippen';
+    el.onmousedown = e => e.preventDefault();
+    el.onclick = e => { e.stopPropagation(); const t = (e.target as HTMLElement).dataset.t; if (t) editDim(el, t); else { patTotal = !patTotal; renderPanel(); buildDims(); } };
+    dims.append(el);
+    const p = V(src.o).addScaledVector(V(src.u), cx).addScaledVector(V(src.v), cy).addScaledVector(V(src.n), src.d).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 46 * r);
+    dimLabels.push({ el, p: p.clone().applyMatrix4(M), q: p.add(dir).applyMatrix4(M), plain: true });
+  }
+}
 // Maß an der Skizze bearbeiten: Eingabefeld an Ort und Stelle, Enter übernimmt, Esc bricht ab
 function editDim(span: HTMLSpanElement, target: string) {
   const field = panel.querySelector<HTMLInputElement>(target);
@@ -1909,7 +1979,13 @@ function updateDims() {
   let lines = '', heads = '';
   const line = (x0: number, y0: number, x1: number, y1: number) => { lines += `M${x0} ${y0}L${x1} ${y1}`; };
   const arrow = (x: number, y: number, dx: number, dy: number) => { heads += `M${x} ${y}L${x - dx * 9 - dy * 3} ${y - dy * 9 + dx * 3}L${x - dx * 9 + dy * 3} ${y - dy * 9 - dx * 3}Z`; };
-  for (const { el, p, q, b } of dimLabels) {
+  for (const { el, p, q, b, plain } of dimLabels) {
+    if (plain) { // hinter dem Pfeil, in Pfeilrichtung versetzt
+      const s = scr(p), t = scr(q), ol = Math.hypot(t.x - s.x, t.y - s.y) || 1;
+      el.style.display = s.z > 1 ? 'none' : '';
+      el.style.left = `${s.x + (t.x - s.x) / ol * el.offsetWidth / 2}px`; el.style.top = `${s.y + (t.y - s.y) / ol * el.offsetHeight / 2}px`;
+      continue;
+    }
     const s = scr(p), t = scr(q), E = b && scr(b), behind = s.z > 1 || (E && E.z > 1);
     const ol = Math.hypot(t.x - s.x, t.y - s.y) || 1, ox = (t.x - s.x) / ol, oy = (t.y - s.y) / ol;
     const L = E ? Math.hypot(E.x - s.x, E.y - s.y) : 0;
@@ -1978,15 +2054,15 @@ function renderPatternPanel(f: Pattern) {
   }
   const row = (k: 'a' | 'b', label: string) => { const d = f[k] ?? { n: 1, d: 20 };
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
-      <label>Abstand <input class="d${k}" type="number" step="0.5" value="${uval(d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
+      <label>${patTotal ? 'Gesamt' : 'Abstand'} <input class="d${k}" type="number" step="0.5" value="${uval(patTotal ? d.d * Math.max(1, d.n - 1) : d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
   panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
     + row('a', 'Richtung 1') + row('b', 'quer dazu') + `<button class="del">Löschen</button>`;
   for (const k of ['a', 'b'] as const) {
     const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
     const set = (fn: (d: PatternDir) => void) => { pushHistory(); fn(dir()); refresh(); };
     const n = panel.querySelector<HTMLInputElement>(`.n${k}`)!, d = panel.querySelector<HTMLInputElement>(`.d${k}`)!;
-    n.onchange = () => { const v = Math.round(parseFloat(n.value)); if (v >= 1) set(x => x.n = v); };
-    d.onchange = () => { const v = mmOf(d); if (isFinite(v) && v) set(x => x.d = v); };
+    n.onchange = () => { const v = Math.round(parseFloat(n.value)); if (v >= 1) set(x => { if (patTotal && x.n > 1 && v > 1) x.d = x.d * (x.n - 1) / (v - 1); x.n = v; }); }; // Gesamt bleibt stehen
+    d.onchange = () => { const v = mmOf(d); if (isFinite(v) && v) set(x => x.d = patTotal && x.n > 1 ? v / (x.n - 1) : v); };
     panel.querySelector<HTMLButtonElement>(`.f${k}`)!.onclick = () => set(x => x.d = -x.d);
   }
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -2421,8 +2497,9 @@ function renderPatView(title: string, axes: [string, string][], cross: boolean, 
   for (const c of ['.back', '.x']) q<HTMLButtonElement>(c)!.onclick = () => { patView = null; patRef = null; renderPanel(); };
 }
 // Skizze: ein Muster-Schritt, bleibt bearbeitbar; Rundungen der Quelle gehen im Kern mit. Mehrfachauswahl wird gemeinsam vervielfältigt
+const patTargets = (f: Extrude) => [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g) && !noFace(g))];
 function renderSketchPat(f: Extrude) {
-  const targets = [f, ...[...multi].map(getById).filter((g): g is Extrude => !!g && isExtrude(g) && !noFace(g))];
+  const targets = patTargets(f);
   renderPatView(`${nameOf(f)} #${f.id} vervielfältigen`, [...lineOptions(), ['u', 'X-Achse der Skizze'], ['v', 'Y-Achse der Skizze'], ['X', 'Welt X'], ['Y', 'Welt Y'], ['Z', 'Welt Z']], true,
     targets.length > 1 ? `Wirkt auf alle ${targets.length} ausgewählten Skizzen` : '', () => { patPickFor = f.id; }, (mode, a) => {
       // u/v liegen in der Fläche der Skizze (Seitenwand ohne Raten der Weltachse), Kreis dann um den Skizzenursprung

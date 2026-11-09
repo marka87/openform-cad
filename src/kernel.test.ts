@@ -1043,6 +1043,8 @@ test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, fla
   let r = buildBody([box(), h, p]);
   expect(r.errors.size).toBe(0);
   expect(measureVolume(r.body!)).toBeCloseTo(2000 - 6 * Math.PI * 4, 0);  // Original + 5 Kopien
+  const left = buildBody([box(), h, { ...p, a: { ax: [-1, 0, 0], n: 3, d: 4 } }]); // Pfeil nach links am Modell (M3): Achse umgedreht, Abstand positiv
+  expect(measureVolume(left.body!)).toBeCloseTo(measureVolume(r.body!), 3);
   r = buildBody([box(), { ...h, d: -6 }, p]);
   expect(measureVolume(r.body!)).toBeCloseTo(2000 - 6 * Math.PI * 6, 0);  // tiefer gebohrt: alle Kopien mit
   r = buildBody([box(), { ...h, d: 0 }, p]);

@@ -96,6 +96,17 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
       STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.16.3 gebaut am 2026-11-04, 9,9 MB; Strg+S nach „Öffnen“ ohne Dialog (A26), liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
+### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
+- [x] DONE M1 (Fehler, zuerst; 0.17.0) Klick auf ein beliebiges Exemplar eines Musters markiert alle, Ziehen schiebt alle
+      zusammen hoch oder hinein. Laut Nutzer geht das heute nicht.
+- [x] DONE M2 (0.17.0) ⇕-Pfeil in der Mitte einer ausgewählten flachen Skizze bzw. Körperfläche, entlang der Normalen;
+      ziehen = wie Fläche ziehen (hoch = extrudieren, runter = hineindrücken).
+- [x] DONE M3 (0.17.0) Muster direkt am Modell: Skizze auswählen → „Muster“ → 4 Pfeile aus ihrer Mitte (±u, ±v);
+      ziehen legt das Muster in diese Richtung an (3 Stück, Abstand folgt der Maus), Pfeil quer = Raster.
+      Seitenfeld bleibt für Kreis, Spiegeln und Kante als Richtung. Dateiformat unverändert.
+- [x] DONE M4 (0.17.0) Felder am Pfeil: „Abstand ▾ / Gesamt“ und „Anzahl“; gespeichert wird der Abstand,
+      Gesamt = Abstand × (Anzahl − 1).
+
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
       ganzen Körper, bei einem Gehäuse also auch durch die Gegenwand; nur durch eine
@@ -191,6 +202,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.17.0** Muster und Ziehen wie Shapr3D: Klick auf ein Exemplar markiert das ganze Muster samt Quelle (M1); ⇕-Pfeil an ausgewählter Skizze bzw. Fläche, bei einem Muster an der Quelle (M2); Muster direkt am Modell: 4 Pfeile aus der Skizzenmitte, Ziehen legt es an, danach 2 Pfeile quer für das Raster (M3); Felder „Abstand ▾ / Gesamt“ und Anzahl am Pfeil (M4)
 - **0.16.3** Audit 2026-11-04: „Öffnen“ merkt sich den Pfad, Strg+S speichert wieder in die geöffnete Datei (A26); Speichern wartet, bis die Daten auf der Platte sind (A27); gescheitertes Neurechnen gibt den Speicher frei (A28)
 - **0.16.2** Beim Schließen der Desktop-App: Rückfrage Speichern / Nicht speichern / Abbrechen, wenn das Modell nicht gespeichert ist
 - **0.16.1** Fehler aus dem Audit (Punkt 0): Worker antwortet immer, auch wenn ein Auftrag scheitert (A2); Rückgängig über Öffnen/Neu hinweg speichert in die richtige Datei (A3); Speichern über Nachbardatei, Absturz zerstört die Datei nicht mehr (A20); Namen und Farbe aus Dateien werden nicht mehr als HTML ausgeführt, CSP sperrt fremde Skripte (A1); fremde oder kaputte Dateien werden mit Grund abgelehnt, das Modell bleibt (A5); Export wartet, bis fertig gerechnet ist (A4) und fragt bei roten Schritten oder zurückgespultem Modell nach (A21); Rückfrage vor Öffnen und Neu, wenn das Modell nicht gespeichert ist, auch beim Start per Doppelklick (A22); überarbeitete STEP mit gleichem Namen zeigt die neue Geometrie (A6); KI-Schlüssel wird beim Wechsel des Anbieters geleert (A18)
@@ -229,6 +241,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 M1–M4 (0.17.0), Wunsch des Nutzers mit Bildern aus Shapr3D. M1 nachgestellt: Klick in eine kopierte Bohrung markierte nur die Quelle, Klick auf eine flache Kopie ließ die Quelle unmarkiert; jetzt `marked()`: Muster und Quellen gelten zusammen als ausgewählt (nur Anzeige, Ziehen ging schon immer auf alle). M2 Pfeil aus zwei Kegeln in Blau über der Skizzenmitte; Ziehen = wie Fläche ziehen, aber `whole` (nie nur ein Teilbereich, sonst drückte der Pfeil eines Rechtecks mit Kreis in der Mitte nur den Kreis). M3 neue Pfeile nur im Muster-Werkzeug (Reihe) bzw. bei einem Muster mit einer Richtung; Muster entsteht beim ersten Ziehen über die bestehende Abstands-Ziehlogik (`patd`), Dateiformat unverändert. Weiße Pfeile waren auf dem hellen Körper unsichtbar, deshalb orange. M4 `patTotal` gilt für Seitenfeld und Felder am Pfeil; Anzahl ändern im Gesamt-Modus hält die Gesamtlänge. Kern-Test: Muster mit umgedrehter Achse = gleiches Ergebnis. Im Browser durchgeklickt (3 × 3 per Ziehen, Gesamt, Anzahl 5 getippt); Pfeile wachsen beim Zoomen nicht mit (wie die alten Muster-Pfeile), Zoll nicht von Hand geprüft.
 - 2026-11-04 Audit-Fixes (0.16.3): A26 Pfad beim Öffnen über den Knopf übergeben (seit A3 sicher, weil Rückgängig den Pfad je Eintrag mitführt; der Satz „Pfad nie aus einer geöffneten Datei übernehmen“ in A3 war zu weit gefasst). A27 `File::create` + `write_all` + `sync_all`, dann `rename`. A28 im Fehlerzweig des Workers `free` + `dropCache` vor dem Zurücksetzen. 112 Tests grün, tsc und cargo check sauber; Installer 0.16.3 auf Wunsch gebaut, nicht von Hand geprüft. A29/A30 als SPÄTER notiert.
 - 2026-11-02 Schließen (0.16.2), Rückmeldung des Nutzers: die Desktop-App schloss ohne Frage, erst beim nächsten Start fiel die ungespeicherte Arbeit auf. Meine Entscheidung aus A22 („Zwischenspeicher reicht“) war falsch. Jetzt `onCloseRequested` mit Windows-Dialog Speichern / Nicht speichern / Abbrechen; Speichern-unter abgebrochen oder fehlgeschlagen = Fenster bleibt offen. Neues Recht `core:window:allow-destroy` (sonst schließt das Fenster nach der Frage nicht). `saveModel` liefert jetzt true/false. Nur in der Exe prüfbar, nicht im Browser. CSP aus A1 vom Nutzer in der Exe bestätigt. Installer 0.16.2 gebaut.
 - 2026-11-02 A18 (0.16.1): Voreinstellung mit anderer Adresse leert das Schlüsselfeld (und damit den gespeicherten Schlüssel); gleicher Anbieter behält ihn. Von Hand eingetippte Adresse leert ihn bewusst nicht (Tippfehler korrigieren soll den Schlüssel nicht löschen). Im Browser: Groq + Schlüssel → Ollama = leer. Damit sind alle TODO aus Punkt 0 erledigt; offen nur die SPÄTER-Punkte und die CSP-Prüfung in der Exe.
