@@ -408,10 +408,11 @@ function rebuild() {
   if (ps && isExtrude(ps) && !noFace(ps) && !ps.rev && !ps.hidden) {
     const [cx, cy] = sketchMid(ps), r = pxSize(), M = moveMatrix(movesAfter(live(), live().indexOf(ps)));
     for (const k of [1, -1]) {
-      const m = new THREE.Mesh(new THREE.ConeGeometry(10 * r, 18 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
-      m.position.copy(V(ps.o).addScaledVector(V(ps.u), cx).addScaledVector(V(ps.v), cy).addScaledVector(V(ps.n), ps.d + (k > 0 ? 44 : 24) * r));
+      const m = new THREE.Mesh(new THREE.ConeGeometry(6 * r, 12 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
+      m.position.copy(V(ps.o).addScaledVector(V(ps.u), cx).addScaledVector(V(ps.v), cy).addScaledVector(V(ps.n), ps.d + (k > 0 ? 30 : 17) * r));
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), V(ps.n).multiplyScalar(k));
       m.applyMatrix4(M); m.renderOrder = 1; m.userData.push = ps.id;
+      m.userData.a = V(ps.o).addScaledVector(V(ps.u), cx).addScaledVector(V(ps.v), cy).addScaledVector(V(ps.n), ps.d).applyMatrix4(M);
       handles.add(m);
     }
   }
@@ -422,10 +423,11 @@ function rebuild() {
     if (!d || d.n < 2) continue;
     const c = sketchMid(src);
     const dir = V(d.ax).multiplyScalar(Math.sign(d.d) || 1), r = pxSize();
-    const m = new THREE.Mesh(new THREE.ConeGeometry(7 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
-    m.position.copy(V(src.o).addScaledVector(V(src.u), c[0]).addScaledVector(V(src.v), c[1]).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 30 * r));
+    const m = new THREE.Mesh(new THREE.ConeGeometry(6 * r, 16 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+    m.position.copy(V(src.o).addScaledVector(V(src.u), c[0]).addScaledVector(V(src.v), c[1]).addScaledVector(V(d.ax), d.d * (d.n - 1)).addScaledVector(dir, 22 * r));
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    m.applyMatrix4(moveMatrix(movesAfter(live(), live().indexOf(s)))); // Körper später verschoben/gedreht: Pfeil geht mit
+    const Ms = moveMatrix(movesAfter(live(), live().indexOf(s)));
+    m.applyMatrix4(Ms); m.userData.a = m.position.clone().addScaledVector(dir.clone().transformDirection(Ms), -22 * r); // Körper später verschoben/gedreht: Pfeil geht mit
     m.renderOrder = 1;
     m.userData.pk = k;
     handles.add(m);
@@ -439,24 +441,36 @@ function rebuild() {
     const dirs: [Vec, number][] = one ? [[crossDir(one), 0], [crossDir(one).map(x => -x) as Vec, 0]] : [[base.u, hu], [base.u.map(x => -x) as Vec, hu], [base.v, hv], [base.v.map(x => -x) as Vec, hv]];
     for (const [ax, h] of dirs) {
       const off = one ? Math.abs(V(ax).dot(V(base.u))) * hu + Math.abs(V(ax).dot(V(base.v))) * hv : h;
-      const m = new THREE.Mesh(new THREE.ConeGeometry(8 * r, 22 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
-      m.position.copy(V(base.o).addScaledVector(V(base.u), cx).addScaledVector(V(base.v), cy).addScaledVector(V(base.n), base.d).addScaledVector(V(ax), off + 24 * r));
+      const m = new THREE.Mesh(new THREE.ConeGeometry(6 * r, 16 * r, 16), new THREE.MeshBasicMaterial({ color: 0xff9a3c, depthTest: false }));
+      m.position.copy(V(base.o).addScaledVector(V(base.u), cx).addScaledVector(V(base.v), cy).addScaledVector(V(base.n), base.d).addScaledVector(V(ax), off + 18 * r));
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), V(ax));
       m.applyMatrix4(M); m.renderOrder = 1; m.userData.pnew = ax;
+      m.userData.a = V(base.o).addScaledVector(V(base.u), cx).addScaledVector(V(base.v), cy).addScaledVector(V(base.n), base.d).addScaledVector(V(ax), off).applyMatrix4(M);
       handles.add(m);
     }
   }
   // ⇔-Pfeil an der markierten Kante bzw. Rundung/Fase: wegziehen = runden, hineinschieben = fasen (E1)
   const ea = edgeArrowAt();
   if (ea) for (const k of [1, -1]) {
-    const r = pxSize(), m = new THREE.Mesh(new THREE.ConeGeometry(8 * r, 14 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
-    m.position.copy(ea.P).addScaledVector(ea.out, k * 9 * r);
+    const r = pxSize(), m = new THREE.Mesh(new THREE.ConeGeometry(6 * r, 11 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
+    m.position.copy(ea.P).addScaledVector(ea.out, k * 7 * r);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ea.out.clone().multiplyScalar(k));
-    m.renderOrder = 1; m.userData.edgeArrow = true;
+    m.renderOrder = 1; m.userData.edgeArrow = true; m.userData.a = ea.P.clone();
     handles.add(m);
   }
+  const px = pxSize();
+  for (const m of handles.children) Object.assign(m.userData, { px0: px, p0: m.position.clone(), a: m.userData.a ?? m.position.clone(), k: 1 });
   handles.updateMatrixWorld(true);
   buildDims();
+}
+// Griffe behalten beim Zoomen ihre Größe auf dem Bildschirm (sonst riesig nach dem Hineinzoomen): um ihren Ankerpunkt skalieren
+function scaleHandles() {
+  const px = pxSize();
+  for (const m of handles.children) {
+    const u = m.userData, k = px / u.px0;
+    if (!u.p0 || Math.abs(k - u.k) < 1e-3) continue;
+    u.k = k; m.scale.setScalar(k); m.position.copy(u.a).addScaledVector(u.p0.clone().sub(u.a), k); m.updateMatrixWorld(true);
+  }
 }
 // Trimmen (Klick) bzw. Verlängern (Shift+Klick) der offenen Hilfslinie unter der Maus; Schnitte mit allen Linien der Ebene
 function trimAt(e: PointerEvent) {
@@ -3004,6 +3018,7 @@ renderer.setAnimationLoop(now => {
   controls.update();
   if (!fly && !wheel.left && now > awake && now - lastDraw < 1000) return;
   lastDraw = now;
+  scaleHandles();
   renderer.render(scene, camera);
   renderCube();
   updateScale();
