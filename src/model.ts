@@ -99,7 +99,7 @@ export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } //
 // Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
 export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean; skip?: string[] } // skip: weggelassene Exemplare (Schlüssel wie in patternCopies, I4)
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string; ex?: Bound }; // name = eigener Name im Baum, ex = an Parameter gebundene Maße (F7)
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
 // Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
 export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`);
@@ -844,10 +844,61 @@ export function coplanarBounds(pos: ArrayLike<number>, idx: ArrayLike<number>, n
   return out;
 }
 
+// ---------- Benannte Maße (F7) ----------
+// Parameter: Name → Wert in mm. Ein Maßfeld darf einen Ausdruck enthalten (Zahlen, Namen, + − × ÷, Klammern, Komma als Dezimalzeichen).
+// Enthält er einen Namen, merkt sich der Schritt ihn unter ex[Pfad] samt Einheit beim Eintippen (u = mm je Eingabe-Einheit);
+// ändert sich ein Parameter, rechnet applyParams alle gebundenen Maße neu. Gerechnet wird in der Einheit beim Eintippen.
+export type Bound = Record<string, { e: string; u: number }>;
+export const PARAM_NAME = /^[A-Za-z_ÄÖÜäöüß][A-Za-z0-9_ÄÖÜäöüß]*$/;
+export function evalExpr(text: string, vars: Record<string, number>): number {
+  const toks = text.replace(/(\d),(\d)/g, '$1.$2').match(/\d+\.?\d*(?:e[+-]?\d+)?|\.\d+|[A-Za-z_ÄÖÜäöüß][A-Za-z0-9_ÄÖÜäöüß]*|[-+*/()×÷]|\S/g) ?? [];
+  let i = 0;
+  const peek = () => toks[i], next = () => toks[i++];
+  const atom = (): number => {
+    const t = next();
+    if (t === undefined) throw new Error('Ausdruck unvollständig');
+    if (t === '-') return -atom();
+    if (t === '+') return atom();
+    if (t === '(') { const v = sum(); if (next() !== ')') throw new Error('Klammer fehlt'); return v; }
+    if (/^[\d.]/.test(t)) return parseFloat(t);
+    if (PARAM_NAME.test(t)) { if (!Object.hasOwn(vars, t)) throw new Error(`Unbekannter Name „${t}“`); return vars[t]; }
+    throw new Error(`Zeichen „${t}“ nicht erlaubt`);
+  };
+  const prod = (): number => { let v = atom(); while (peek() && '*/×÷'.includes(peek()!)) { const o = next(), w = atom(); v = o === '*' || o === '×' ? v * w : v / w; } return v; };
+  const sum = (): number => { let v = prod(); while (peek() === '+' || peek() === '-') { const o = next(), w = prod(); v = o === '+' ? v + w : v - w; } return v; };
+  const v = sum();
+  if (i < toks.length) throw new Error(`Zeichen „${toks[i]}“ nicht erwartet`);
+  if (!isFinite(v)) throw new Error('Ergebnis ist keine Zahl');
+  return v;
+}
+export const usesNames = (text: string) => /[A-Za-z_ÄÖÜäöüß]/.test(text.replace(/\d+\.?\d*e[+-]?\d+/gi, ''));
+// Werte der Parameter in einer Eingabe-Einheit (u mm je Einheit)
+export const varsIn = (params: Record<string, number>, u: number) => Object.fromEntries(Object.entries(params).map(([k, v]) => [k, v / u]));
+// Pfade der Zahlen, die sich zwischen zwei Ständen eines Schritts geändert haben ("p.w", "d", "lip.h" …)
+export function changedNumbers(a: unknown, b: unknown, at = ''): string[] {
+  if (typeof a === 'number' || typeof b === 'number') return a !== b && typeof b === 'number' ? [at] : [];
+  if (!b || typeof b !== 'object') return [];
+  const A: any = a && typeof a === 'object' ? a : {}; // fehlt vorher ganz: alle Zahlen darunter zählen als geändert
+  return Object.keys(b).filter(k => k !== 'ex').flatMap(k => changedNumbers(A[k], (b as any)[k], at ? `${at}.${k}` : k));
+}
+// Alle gebundenen Maße neu rechnen; Fehler (unbekannter Name nach Löschen/Umbenennen) als Liste „#id: Grund“, das Maß bleibt dann stehen
+export function applyParams(features: Feature[], params: Record<string, number>): string[] {
+  const errs: string[] = [];
+  for (const f of features) for (const [path, b] of Object.entries(f.ex ?? {})) {
+    let v: number;
+    try { v = evalExpr(b.e, varsIn(params, b.u)) * b.u; } catch (e) { errs.push(`#${f.id}: ${e instanceof Error ? e.message : e}`); continue; }
+    const ks = path.split('.'), key = ks.pop()!, obj = ks.reduce<any>((o, k) => o?.[k], f);
+    if (!obj || typeof obj[key] !== 'number') continue;
+    if (isExtrude(f) && f.type === 'rect' && path.match(/^p\.[wh]$/)) rectSize(f, key as 'w' | 'h', Math.max(0.5, v)); // Mitte bleibt bei „aus der Mitte“
+    else obj[key] = v;
+  }
+  return errs;
+}
+
 // Modell aus .ofc/.json/Autosave prüfen, bevor etwas übernommen wird (A5): fremde oder kaputte Dateien werfen einen
 // verständlichen Fehler statt das Modell zu leeren. Bezüge auf andere Schritte müssen Zahlen sein, sie landen in der
 // Oberfläche (A1). Fehlende Nebenangaben alter Dateien (meta, roll, dims, nextId) werden ergänzt
-export function parseModel(text: string): { features: Feature[]; nextId: number; meta: Record<number, BodyMeta>; roll: number | null; dims: Dim[] } {
+export function parseModel(text: string): { features: Feature[]; nextId: number; meta: Record<number, BodyMeta>; roll: number | null; dims: Dim[]; params: Record<string, number> } {
   let d: any;
   try { d = JSON.parse(text); } catch { throw new Error('Keine gültige Modelldatei (kein JSON)'); }
   if (!d || typeof d !== 'object' || !Array.isArray(d.features)) throw new Error('Keine OpenForm-Datei (Schrittliste fehlt)');
@@ -863,12 +914,15 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');
     if (f.name !== undefined && typeof f.name !== 'string') bad('Name ist kein Text');
     if (f.skip !== undefined && !(Array.isArray(f.skip) && f.skip.every((k: unknown) => typeof k === 'string'))) bad('Weggelassene Exemplare sind keine Liste');
+    if (f.ex !== undefined && !(f.ex && typeof f.ex === 'object' && Object.values(f.ex).every((b: any) => b && typeof b.e === 'string' && b.u > 0))) bad('Gebundene Maße unvollständig');
   });
+  const params = d.params && typeof d.params === 'object' && !Array.isArray(d.params) ? d.params : {};
+  if (!Object.entries(params).every(([k, v]) => PARAM_NAME.test(k) && typeof v === 'number' && isFinite(v))) throw new Error('Parameter: Name oder Wert ungültig');
   const max = Math.max(0, ...d.features.map((f: Feature) => f.id));
   return {
     features: d.features, nextId: int(d.nextId) && d.nextId > max ? d.nextId : max + 1,
     meta: d.meta && typeof d.meta === 'object' ? d.meta : {},
     roll: int(d.roll) && d.roll >= 0 && d.roll <= d.features.length ? d.roll : null,
-    dims: Array.isArray(d.dims) ? d.dims : [],
+    dims: Array.isArray(d.dims) ? d.dims : [], params,
   };
 }

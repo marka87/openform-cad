@@ -684,3 +684,37 @@ test('Lippe und Falz (F6): Ring an der Öffnung einer Schale, nach oben bzw. mit
   const zuBreit = buildBody([kiste, { ...hohl, lip: { kind: 'groove', w: 5, h: 2, c: 0.2 } }]);
   expect(measureVolume(zuBreit.body!)).toBeLessThan(ohne);
 });
+
+test('Benannte Maße (F7): Ausdrücke, Bindung, Neurechnen nach Parameteränderung, Datei', async () => {
+  const { evalExpr, applyParams, changedNumbers, usesNames } = await import('./model');
+  expect(evalExpr('2 + 3 × 4', {})).toBe(14);
+  expect(evalExpr('(breite - 2*wand) / 2', { breite: 40, wand: 2 })).toBe(18);
+  expect(evalExpr('-a + 1,5', { a: 1 })).toBe(0.5);
+  expect(() => evalExpr('hoehe + 1', {})).toThrow('Unbekannter Name „hoehe“');
+  expect(() => evalExpr('constructor', {})).toThrow('Unbekannter Name');
+  expect(() => evalExpr('alert(1)', { alert: 1 })).toThrow();
+  expect(() => evalExpr('2 +', {})).toThrow();
+  expect(usesNames('12,5')).toBe(false);
+  expect(usesNames('b/2')).toBe(true);
+  // Kasten: Breite an Parameter gebunden, aus der Mitte gezeichnet → Mitte bleibt
+  const kasten = { ...rect(GROUND, [0, 0], [40, 20], 1, 10, false), mid: true } as Extrude & { ex?: Record<string, { e: string; u: number }> };
+  const vorher = structuredClone(kasten);
+  kasten.p.x -= 5; kasten.p.w = 50; // so ändert das Seitenfeld w bei „aus der Mitte“
+  expect(changedNumbers(vorher, kasten).sort()).toEqual(['p.w', 'p.x']);
+  kasten.ex = { 'p.w': { e: 'breite', u: 1 }, d: { e: 'breite / 5', u: 25.4 } }; // d in Zoll eingetippt
+  const fehler = applyParams([kasten], { breite: 60 });
+  expect(fehler).toEqual([]);
+  expect([kasten.p.x, kasten.p.w]).toEqual([-10, 60]); // Mitte bei 20
+  expect(kasten.d).toBeCloseTo(60 / 25.4 / 5 * 25.4, 9);
+  expect(measureVolume(buildBody([kasten]).body!)).toBeCloseTo(60 * 20 * 12, 3);
+  // Parameter gelöscht: Maß bleibt stehen, Meldung
+  expect(applyParams([kasten], {})).toEqual(['#1: Unbekannter Name „breite“', '#1: Unbekannter Name „breite“']);
+  expect(kasten.p.w).toBe(60);
+  // Datei: Parameter und Bindungen kommen mit, Unsinn wird abgelehnt
+  const datei = parseModel(JSON.stringify({ features: [kasten], nextId: 2, params: { breite: 60 } }));
+  expect(datei.params).toEqual({ breite: 60 });
+  expect(datei.features[0].ex?.['p.w'].e).toBe('breite');
+  expect(parseModel(JSON.stringify({ features: [] })).params).toEqual({});
+  expect(() => parseModel(JSON.stringify({ features: [], params: { '<img>': 1 } }))).toThrow('Parameter');
+  expect(() => parseModel(JSON.stringify({ features: [{ ...kasten, ex: { 'p.w': { e: 1 } } }] }))).toThrow('Gebundene');
+});

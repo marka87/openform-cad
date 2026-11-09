@@ -136,7 +136,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F4 (0.19.0) Echtes Gewinde M3–M20 und 1/4"-20 (ISO-Profil 60°): Auswahl „Gewinde“ im Seitenfeld eines extrudierten Kreises; Bolzen = Außen-, Bohrung = Innengewinde.
 - [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
 - [x] DONE F6 (0.19.0) Lippe/Falz: Seitenfeld der Schale „Rand“ = Lippe (Kiste) oder Falz (Deckel), Breite/Höhe/Spiel (Vorgabe halbe Wand, 2 mm, 0,2 mm).
-- [ ] TODO F7 Benannte Maße (Parameter): Name = Wert, in Maßfeldern statt Zahl verwendbar.
+- [x] DONE F7 (0.19.0) Benannte Maße: Liste „Parameter“ unter den Schritten (Name = Wert); jedes Maßfeld im Seitenfeld nimmt Namen und Rechnungen (breite/2 + 3), gebundene Maße rechnen bei Änderung neu.
 - [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht.
 - [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen.
 
@@ -235,7 +235,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.19.0** Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
+- **0.19.0** Benannte Maße/Parameter (F7); Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
@@ -280,6 +280,16 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 F7 Benannte Maße (0.19.0, noch kein Installer). Entscheidung Datei: `params` {Name: mm} im Modell (nur wenn vorhanden), je Schritt
+  `ex` {Pfad: {e: Ausdruck, u: mm je Eingabe-Einheit}}; ältere Versionen ignorieren beides und behalten die Zahlen. Rechner `evalExpr` ohne eval
+  (CSP): Zahlen (Komma geht), Namen, + − × ÷, Klammern. Bindung ohne Umbau der ~25 Feld-Handler: Seitenfeld merkt vor dem Handler den Schritt,
+  danach wird die geänderte Zahl gesucht, die dem Ausdruck entspricht (`changedNumbers`), genau eine → gebunden; Zahl ohne Namen eingetippt → Bindung
+  weg. Maßfelder dafür Text statt Zahl (Pfeil hoch/runter zählt weiter), gebundene Maße stehen unten im Seitenfeld („Breite = breite + 1“).
+  Ausdruck rechnet immer in der Einheit, in der er getippt wurde. Kern-Test: Rechner, Fehler, Rechteck aus der Mitte, Zoll-Bindung, gelöschter
+  Parameter (Maß bleibt, Meldung), Datei. Browser mm: 8 → 16 (Breite = breite 80) → 32 (Höhe = breite/4) → 12,5 (breite 50) → Zahl 30 löst die
+  Breite → 6 (breite 40), Strg+Z zurück. Browser Zoll: dicke·2 = 2 in = 50,8 mm, breite+1 = 3 in = 76,2 mm, in mm breite 76,2 → Breite 101,6 mm;
+  dabei gefunden und behoben: Parameter-Liste zeigte nach Umschalten der Einheit alte Werte. Nicht: Maße beim Zeichnen (HUD) und Ziehen kennen
+  keine Namen, Winkel nicht bindbar, Parameter aus Parametern.
 - 2026-11-09 F6 Lippe/Falz (0.19.0, gleiche Nummer, noch kein Installer): Merkmal `lip` {kind, w, h, c} an der Schale, kein neuer Schritt.
   Kern (`lipOn`): Randfläche = ebene Fläche in der Ebene der geöffneten Fläche (Normale vor dem Aushöhlen gemerkt), deren Loch = Öffnung;
   Ring = Öffnung um W nach außen versetzt (`offset2D`, runde Ecken) minus Öffnung. Lippe: W = w, h nach oben angesetzt. Falz: W = w + c,

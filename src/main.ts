@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { evalExpr, varsIn, applyParams, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
@@ -195,9 +195,9 @@ let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werde
 const live = () => roll === null ? features : features.slice(0, roll);
 function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else { features.splice(roll, 0, ...fs); roll += fs.length; } }
 let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
-const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims });
+const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims, ...Object.keys(params).length && { params } });
 function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); redoStack.length = 0; }
-function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; }
+function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; params = d.params; renderParams(); }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push({ s: snapshot(), path: filePath }); step(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push({ s: snapshot(), path: filePath }); step(redoStack.pop()!); } }
@@ -698,6 +698,7 @@ function renderTree() {
     (problems.get(f.id)?.bad && aiOn ? '<button data-a="why" title="KI erklärt, warum der Schritt scheitert">?</button>' : '') +
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
+  tree.append(paramsEl);
   tree.querySelector<HTMLButtonElement>('.rollEnd')?.addEventListener('click', () => { pushHistory(); roll = null; refresh(); });
   tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => {
     const b = +row.dataset.b!;
@@ -825,7 +826,11 @@ const U = () => display.unit === 'in' ? 25.4 : 1;
 const fmt = (mm: number, d = 1) => (mm / U()).toFixed(U() > 1 ? d + 2 : d);      // Zahl in der Anzeigeeinheit
 const len = (mm: number, d = 1) => `${fmt(mm, d)} ${display.unit}`;              // mit Einheit
 const uval = (mm: number) => +(mm / U()).toFixed(U() > 1 ? 4 : 2);               // Wert für Eingabefelder
-const mmOf = (inp: HTMLInputElement) => parseFloat(inp.value) * U();             // Eingabe → mm
+// Eingabe → mm; Zahl oder Ausdruck mit Parametern (F7), Fehler als Hinweis
+const mmOf = (inp: HTMLInputElement) => {
+  if (!inp.value.trim()) return NaN;
+  try { return evalExpr(inp.value, varsIn(params, U())) * U(); } catch (e) { showNotice(e instanceof Error ? e.message : String(e)); return NaN; }
+};
 const snap = (x: number, e: PointerEvent, s = gridStep()) => e.shiftKey || !display.snap.grid ? x : Math.round(x / s) * s;
 // Parameter s auf der Geraden P0 + s*D, der dem Mausstrahl am nächsten liegt
 function lineParam(P0: THREE.Vector3, D: THREE.Vector3) {
@@ -1804,6 +1809,70 @@ function xfClick(h: Hit | null, edge: EdgeHit | null) {
 }
 
 const panel = $('panel');
+// ---------- Benannte Maße (F7): Parameter-Liste unter den Schritten, Namen in jedem Maßfeld des Seitenfelds ----------
+let params: Record<string, number> = {};
+const paramsEl = document.createElement('div');
+const BOUND_LABEL: Record<string, string> = { 'p.w': 'Breite', 'p.h': 'Höhe', 'p.r': 'Radius', 'p.ry': 'Radius 2', d: 'Höhe/Tiefe', t: 'Wandstärke', r: 'Maß', rib: 'Rippe', 'lip.w': 'Lippe Breite', 'lip.h': 'Lippe Höhe', 'lip.c': 'Spiel', off: 'Abstand' };
+function setParams() {
+  const errs = applyParams(features, params);
+  refresh(); renderParams();
+  if (errs.length) showNotice(`Parameter: ${errs.join(' · ')}`);
+}
+function renderParams() {
+  paramsEl.innerHTML = `<h3 style="margin-top:8px">Parameter</h3>` + Object.entries(params).map(([k, v]) =>
+    `<div class="row"><span>${esc(k)}</span><input class="pv" data-k="${esc(k)}" value="${uval(v)}" inputmode="decimal" style="width:64px"><button data-del="${esc(k)}" title="Parameter löschen">✕</button></div>`).join('')
+    + `<div class="row" title="Name = Wert; der Name geht dann in jedem Maßfeld, auch in Rechnungen wie breite/2 + 3"><input class="pn" placeholder="Name" style="width:70px">=<input class="pnv" placeholder="Wert" inputmode="decimal" style="width:52px"></div>`;
+  const val = (x: HTMLInputElement) => { try { return evalExpr(x.value, varsIn(params, U())) * U(); } catch (e) { showNotice(e instanceof Error ? e.message : String(e)); return NaN; } };
+  paramsEl.querySelectorAll<HTMLInputElement>('.pv').forEach(x => x.onchange = () => { const v = val(x); if (!isFinite(v)) return renderParams(); pushHistory(); params[x.dataset.k!] = v; setParams(); });
+  paramsEl.querySelectorAll<HTMLButtonElement>('[data-del]').forEach(b => b.onclick = () => { pushHistory(); delete params[b.dataset.del!]; setParams(); });
+  const pn = paramsEl.querySelector<HTMLInputElement>('.pn')!, pnv = paramsEl.querySelector<HTMLInputElement>('.pnv')!;
+  pn.onchange = pnv.onchange = () => {
+    const name = pn.value.trim();
+    if (!name || !pnv.value.trim()) return;
+    if (!PARAM_NAME.test(name)) return showNotice('Name: Buchstaben, Ziffern und _ , mit einem Buchstaben vorn');
+    if (Object.hasOwn(params, name)) return showNotice(`„${name}“ gibt es schon`);
+    const v = val(pnv);
+    if (!isFinite(v)) return;
+    pushHistory(); params[name] = v; setParams();
+  };
+}
+renderParams();
+// Maßfelder als Textfelder (Zahl oder Ausdruck); Pfeil hoch/runter zählt bei reinen Zahlen weiter wie vorher
+const numberLike = (x: EventTarget | null): x is HTMLInputElement => x instanceof HTMLInputElement && !!x.dataset.num;
+new MutationObserver(() => {
+  panel.querySelectorAll<HTMLInputElement>('input[type=number]').forEach(x => { x.dataset.num = x.step || '1'; x.type = 'text'; x.inputMode = 'decimal'; });
+  const f = selId !== null ? getById(selId) : undefined;
+  if (f?.ex && !panel.querySelector('.bound') && panel.style.display !== 'none') panel.insertAdjacentHTML('beforeend', `<p class="bound" style="color:var(--accent);margin:6px 0 0">`
+    + Object.entries(f.ex).map(([p, b]) => `${esc(BOUND_LABEL[p] ?? p)} = ${esc(b.e)}`).join('<br>') + '</p>');
+}).observe(panel, { childList: true });
+panel.addEventListener('keydown', e => {
+  const x = e.target;
+  if (!numberLike(x) || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !/^\s*-?\d*[.,]?\d+\s*$/.test(x.value)) return;
+  e.preventDefault();
+  x.value = String(+(parseFloat(x.value.replace(',', '.')) + (e.key === 'ArrowUp' ? 1 : -1) * +x.dataset.num!).toFixed(4));
+  x.dispatchEvent(new Event('change', { bubbles: true })); // wie eine Eingabe: alte Bindung fällt weg
+});
+// Bindung merken: vor dem Feld-Handler den Schritt festhalten, danach das geänderte Maß suchen, das dem Ausdruck entspricht
+let bindFrom: { id: number; before: unknown; text: string; u: number } | null = null;
+panel.addEventListener('change', e => {
+  const f = selId !== null ? getById(selId) : undefined;
+  bindFrom = numberLike(e.target) && f ? { id: f.id, before: JSON.parse(JSON.stringify(f)), text: e.target.value.trim(), u: U() } : null;
+}, true);
+panel.addEventListener('change', () => {
+  const b = bindFrom, f = b && getById(b.id);
+  bindFrom = null;
+  if (!b || !f) return;
+  let v: number;
+  try { v = evalExpr(b.text, varsIn(params, b.u)) * b.u; } catch { return; }
+  const at = (p: string) => p.split('.').reduce<any>((o, k) => o?.[k], f), same = (p: string) => Math.abs(at(p) - v) < 1e-6;
+  const changed = changedNumbers(b.before, f);
+  let hit = changed.filter(same);
+  if (!changed.length) hit = changedNumbers({}, f).filter(same); // gleicher Wert wie vorher: das Maß mit diesem Wert, wenn eindeutig
+  for (const p of changed) delete f.ex?.[p]; // überschrieben: alte Bindung weg
+  if (usesNames(b.text) && hit.length === 1) (f.ex ??= {})[hit[0]] = { e: b.text, u: b.u };
+  if (f.ex && !Object.keys(f.ex).length) delete f.ex;
+  save(); renderPanel();
+});
 function renderPanel() {
   renderFeaturePanel();
   const f = getSel(), c = f && !edgeSel.length && confirms.get(f.id);
@@ -3200,7 +3269,7 @@ function applyDisplay() {
   $<HTMLSelectElement>('unit').value = display.unit;
 }
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
-$<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); renderTree(); buildDims(); };
+$<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); renderTree(); renderParams(); buildDims(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };
 // Einrasten-Menü: Schalter je Fangart, Anzeige, Rastergröße (alles lokal gemerkt wie die übrige Darstellung)
 const snapMenu = $('snapMenu');
