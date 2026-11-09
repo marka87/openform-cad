@@ -12,8 +12,8 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
-import { fromBase64, isMeshFile, meshPositions, toBase64 } from './refmesh';
+import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -73,7 +73,34 @@ let workView: { c: THREE.Vector3; r: number } | null = null, lookBack: { p: THRE
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
 const refGroup = new THREE.Group(); scene.add(refGroup); // Referenz-Netze (F2): halbdurchsichtig, nur Treffer für Messen und Skizzieren
 const refCache = new Map<number, { data: string; obj: THREE.Group }>(); // je Schritt einmal dekodieren, nicht bei jedem Ziehen
+const imgCache = new Map<number, { data: string; m: THREE.Mesh; aspect: number }>(); // Referenzbilder (F3)
+function syncImages() {
+  const want = live().filter((f): f is RefImage => f.type === 'image' && !f.hidden);
+  for (const [id, c] of imgCache) if (!want.some(f => f.id === id && f.data === c.data)) { refGroup.remove(c.m); c.m.geometry.dispose(); (c.m.material as THREE.MeshBasicMaterial).map?.dispose(); imgCache.delete(id); }
+  for (const f of want) {
+    let c = imgCache.get(f.id);
+    if (!c) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
+      const cc = c = { data: f.data, m, aspect: 1 };
+      const tex = new THREE.TextureLoader().load(f.data, t => { cc.aspect = t.image.height / t.image.width; syncImages(); });
+      tex.colorSpace = THREE.SRGBColorSpace;
+      (m.material as THREE.MeshBasicMaterial).map = tex;
+      m.matrixAutoUpdate = false; m.renderOrder = -1;
+      refGroup.add(m); imgCache.set(f.id, c);
+    }
+    const P = ORIGIN[f.pl], n = V(P.n), ctr = V(P.u).multiplyScalar(f.x).addScaledVector(V(P.v), f.y).addScaledVector(n, -0.02); // knapp hinter der Ebene: Skizzen darauf bleiben sichtbar
+    c.m.matrix.makeBasis(V(P.u).multiplyScalar(f.w), V(P.v).multiplyScalar(f.w * c.aspect), n).setPosition(ctr);
+    c.m.matrixWorldNeedsUpdate = true;
+  }
+}
+// Punkt auf der Ebene eines Referenzbilds unter der Maus (Maßstab setzen)
+function imagePoint(f: RefImage) {
+  const P = ORIGIN[f.pl], q = ray.ray.intersectPlane(new THREE.Plane(V(P.n), 0), new THREE.Vector3());
+  return q && [q.dot(V(P.u)), q.dot(V(P.v))];
+}
+let calib: { id: number; pts: number[][] } | null = null; // Maßstab: zwei Klicks auf bekannte Punkte im Bild
 function syncRefs() {
+  syncImages();
   const want = new Set(live().filter(f => f.type === 'mesh' && !f.hidden).map(f => f.id));
   for (const [id, r] of refCache) if (!want.has(id) || (getById(id) as RefMesh).data !== r.data) { refGroup.remove(r.obj); r.obj.traverse(o => (o as THREE.Mesh).geometry?.dispose()); refCache.delete(id); }
   for (const id of want) {
@@ -641,6 +668,7 @@ function nameOf(f: Feature) {
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'drop') return `${bodyName(f.body)} löschen`;
   if (f.type === 'mesh') return `Referenz ${f.name}`;
+  if (f.type === 'image') return `Bild ${f.name}`;
   if (f.type === 'loft') return 'Übergang';
   if (f.type === 'pattern') return f.mir ? 'Spiegeln' : f.rot ? `Kreis-Muster ${f.a.n}` : `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
@@ -1295,6 +1323,8 @@ function cancelPoly() { poly = null; disposeGroup(preview); hud.style.display = 
 function onDown(e: PointerEvent) {
   if (e.button !== 0 || !ready) return;
   setRay(e);
+  const ci = calib && getById(calib.id);
+  if (calib && ci?.type === 'image' && calib.pts.length < 2) { const q = imagePoint(ci); if (q) { calib.pts.push(q); selId = ci.id; renderPanel(); } return; } // Maßstab setzen (F3)
   if (gizmo.object) (gizmo as any).pointerHover({ x: ndc.x, y: ndc.y, button: 0 }); // Treffer auch ohne vorherige Mausbewegung
   if (gizmo.axis) return; // Griffe zum Verschieben/Drehen bedienen sich selbst
   if (drag?.kind === 'sketch' && drag.armed) { // Form per Klick-Klick: zweiter Klick setzt den Endpunkt
@@ -1808,6 +1838,28 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'pattern') return renderPatternPanel(f);
+  if (f.type === 'image') {
+    const c = calib?.id === f.id ? calib : null, d = c?.pts.length === 2 ? Math.hypot(c.pts[0][0] - c.pts[1][0], c.pts[0][1] - c.pts[1][1]) : 0;
+    panel.innerHTML = `<h3>${esc(nameOf(f))}</h3><p style="color:var(--muted);margin:4px 0">Zum Nachzeichnen, nicht im Export. Auf der Ebene skizzieren (Quadrat am Ursprung anklicken).</p>
+      <label>Ebene <select class="ipl">${(['xy', 'xz', 'yz'] as const).map(k => `<option value="${k}"${f.pl === k ? ' selected' : ''}>${k.toUpperCase()}-Ebene</option>`).join('')}</select></label>
+      <label>Breite <input type="number" step="1" class="iw" value="${uval(f.w)}"></label><label>Mitte X <input type="number" step="1" class="ix" value="${uval(f.x)}"></label><label>Mitte Y <input type="number" step="1" class="iy" value="${uval(f.y)}"></label>
+      ${d ? `<label>Gemessen ${len(d)} · echte Länge <input type="number" step="0.5" class="ical"></label>` : `<button class="act cal">${c ? `Punkt ${c.pts.length + 1} im Bild anklicken …` : 'Maßstab: 2 Punkte anklicken'}</button>`}
+      <button class="del">Löschen</button>`;
+    const set = (k: 'w' | 'x' | 'y', v: number) => { if (!isFinite(v) || (k === 'w' && v <= 0)) return; pushHistory(); f[k] = v; refresh(); };
+    panel.querySelector<HTMLInputElement>('.iw')!.onchange = e => set('w', mmOf(e.target as HTMLInputElement));
+    panel.querySelector<HTMLInputElement>('.ix')!.onchange = e => set('x', mmOf(e.target as HTMLInputElement));
+    panel.querySelector<HTMLInputElement>('.iy')!.onchange = e => set('y', mmOf(e.target as HTMLInputElement));
+    panel.querySelector<HTMLSelectElement>('.ipl')!.onchange = e => { pushHistory(); f.pl = (e.target as HTMLSelectElement).value as RefImage['pl']; refresh(); };
+    const cal = panel.querySelector<HTMLButtonElement>('.cal');
+    if (cal) cal.onclick = () => { calib = { id: f.id, pts: [] }; renderPanel(); showHint('Zwei Punkte im Bild anklicken, deren Abstand du kennst'); };
+    const ical = panel.querySelector<HTMLInputElement>('.ical');
+    if (ical) { ical.focus(); ical.onchange = () => { // um den Ursprung der Ebene skalieren: Mitte wandert mit, das Bild bleibt deckungsgleich
+      const k = mmOf(ical) / d;
+      if (!(k > 0) || !isFinite(k)) return;
+      pushHistory(); f.w *= k; f.x *= k; f.y *= k; calib = null; refresh();
+    }; }
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'drop' || f.type === 'loft' || f.type === 'mesh') {
     panel.innerHTML = `<h3>${esc(nameOf(f))}</h3>${f.type === 'mesh' ? `<p style="color:var(--muted);margin:4px 0">Netz zum Messen und Nachzeichnen (auf eine Fläche skizzieren). Kein Körper, nicht im Export.</p>` : ''}<button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -2456,7 +2508,7 @@ const fileIn = $<HTMLInputElement>('fileIn');
 const recent = (): string[] => { try { const r = JSON.parse(localStorage.getItem('openform-recent') ?? '[]'); return Array.isArray(r) ? r.filter(p => typeof p === 'string') : []; } catch { return []; } };
 const setRecent = (r: string[]) => { try { localStorage.setItem('openform-recent', JSON.stringify(r.slice(0, 8))); } catch {} };
 async function pickFile() {
-  try { const f = await openFile(); if (f?.bytes) openMesh(f.path, f.bytes); else if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
+  try { const f = await openFile(); if (f?.bytes && isImageFile(f.path)) openImage(f.path, new Blob([f.bytes], { type: `image/${f.path.split('.').pop()!.toLowerCase().replace('jpg', 'jpeg')}` })); else if (f?.bytes) openMesh(f.path, f.bytes); else if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
 }
 async function openRecent(p: string) {
   let text: string;
@@ -2478,6 +2530,17 @@ async function openMesh(name: string, buf: ArrayBuffer) {
   const f: RefMesh = { id: nextId++, type: 'mesh', name: baseName(name), data };
   add(f); selId = f.id; refresh();
 }
+// Bild: als Referenz auf die XY-Ebene (Boden), 100 mm breit; Maßstab danach mit 2 Punkten (F3)
+function openImage(name: string, blob: Blob) {
+  const r = new FileReader();
+  r.onload = () => {
+    pushHistory();
+    const f: RefImage = { id: nextId++, type: 'image', name: baseName(name), data: r.result as string, pl: 'xy', x: 0, y: 0, w: 100 };
+    add(f); selId = f.id; refresh();
+  };
+  r.onerror = () => alert(`${baseName(name)} lässt sich nicht lesen`);
+  r.readAsDataURL(blob);
+}
 // .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
 function opened(name: string, text: string, path: string | null = null) {
   const isStep = /\.(step|stp)$/i.test(name);
@@ -2492,6 +2555,7 @@ fileIn.onchange = async () => {
   const file = fileIn.files?.[0];
   fileIn.value = '';
   if (file && isMeshFile(file.name)) return openMesh(file.name, await file.arrayBuffer());
+  if (file && isImageFile(file.name)) return openImage(file.name, file);
   if (file) opened(file.name, await file.text());
 };
 $('bStl').onclick = () => sendExport({ type: 'export', format: 'stl' });

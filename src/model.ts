@@ -46,6 +46,8 @@ export interface Split { id: number; type: 'split'; body: number; plane: number;
 // Körper löschen: als Schritt, damit auch eine Hälfte aus „Teilen“ wegfallen kann und Zurückspulen ihn wiederbringt
 // Referenz-Netz (F2): Dreiecke (Base64 von Float32 x,y,z) aus STL/OBJ/3MF, nur Anzeige/Messen/Skizzieren, kein Körper
 export interface RefMesh { id: number; type: 'mesh'; name: string; data: string; hidden?: boolean; body?: number } // body: ungenutzt, nur damit bodyOf passt
+// Referenzbild (F3): Foto/Scan als Data-URL auf einer Ursprungsebene, Mitte x/y in der Ebene, Breite w in mm (Höhe aus dem Seitenverhältnis)
+export interface RefImage { id: number; type: 'image'; name: string; data: string; pl: 'xy' | 'xz' | 'yz'; x: number; y: number; w: number; hidden?: boolean; body?: number }
 export interface DropBody { id: number; type: 'drop'; body: number; hidden?: boolean }
 // Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
 export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: number; hidden?: boolean }
@@ -94,8 +96,8 @@ export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } //
 // Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
 export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean; skip?: string[] } // skip: weggelassene Exemplare (Schlüssel wie in patternCopies, I4)
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | RefMesh | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
 // Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
 export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`);
 // Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
@@ -180,6 +182,8 @@ export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | '
 export type Grip = { f: Extrude; part: Part; k: number; i?: number } | { f: EdgeOp; part: 'edge'; k: 0 } | { f: Import; part: 'import'; k: 0 } | { f: RefPlane; part: 'plane'; k: 0 };
 
 export const GROUND: Frame = { o: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
+// Ursprungsebenen wie die Quadrate am Ursprung (main.ts), für Referenzbilder
+export const ORIGIN: Record<'xy' | 'xz' | 'yz', Frame> = { xy: GROUND, xz: { o: [0, 0, 0], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] }, yz: { o: [0, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] } };
 
 const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -850,6 +854,7 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     if ((f.type === 'loft' || f.type === 'combine') && !(int(f.a) && int(f.b))) bad('Bezug a/b ist keine Zahl');
     if (f.type === 'drop' && !int(f.body)) bad('Körper fehlt');
     if (f.type === 'mesh' && typeof f.data !== 'string') bad('Netz fehlt');
+    if (f.type === 'image' && !(typeof f.data === 'string' && f.data.startsWith('data:image/') && f.w > 0 && ['xy', 'xz', 'yz'].includes(f.pl))) bad('Bild unvollständig');
     if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');
     if (f.name !== undefined && typeof f.name !== 'string') bad('Name ist kein Text');
     if (f.skip !== undefined && !(Array.isArray(f.skip) && f.skip.every((k: unknown) => typeof k === 'string'))) bad('Weggelassene Exemplare sind keine Liste');

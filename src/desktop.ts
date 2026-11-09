@@ -30,9 +30,9 @@ export async function readFile(path: string): Promise<string> {
 // „Öffnen“: Modell (.ofc, älter .json) oder STEP wählen und lesen; null = abgebrochen
 // Netz (STL/OBJ/3MF) als Bytes statt Text (F2)
 export async function openFile(): Promise<{ path: string; text: string; bytes?: ArrayBuffer } | null> {
-  const path = await (await dialog()).open({ multiple: false, filters: [{ name: 'OpenForm-Modell, STEP oder Netz', extensions: ['ofc', 'json', 'step', 'stp', 'stl', 'obj', '3mf'] }] });
+  const path = await (await dialog()).open({ multiple: false, filters: [{ name: 'OpenForm-Modell, STEP, Netz oder Bild', extensions: ['ofc', 'json', 'step', 'stp', 'stl', 'obj', '3mf', 'png', 'jpg', 'jpeg', 'webp'] }] });
   if (typeof path !== 'string') return null;
-  return /\.(stl|obj|3mf)$/i.test(path) ? { path, text: '', bytes: await (await core()).invoke<ArrayBuffer>('read_bytes', { path }) } : { path, text: await readFile(path) };
+  return /\.(stl|obj|3mf|png|jpe?g|webp)$/i.test(path) ? { path, text: '', bytes: await (await core()).invoke<ArrayBuffer>('read_bytes', { path }) } : { path, text: await readFile(path) };
 }
 
 // Datei, mit der die App gestartet wurde (Doppelklick auf eine .ofc-Datei)

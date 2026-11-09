@@ -5,6 +5,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 export const isMeshFile = (name: string) => /\.(stl|obj|3mf)$/i.test(name);
+export const isImageFile = (name: string) => /\.(png|jpe?g|webp)$/i.test(name); // Referenzbild (F3)
 
 // Alle Dreiecke als x,y,z je Ecke in Szenen-Lage (Datei Z oben → Szene Y oben, wie beim Export umgekehrt); Einheit mm angenommen
 export async function meshPositions(name: string, buf: ArrayBuffer): Promise<Float32Array> {

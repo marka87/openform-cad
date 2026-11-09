@@ -19,4 +19,8 @@ test('Referenz-Netz: STL und OBJ lesen, Z oben → Y oben, Base64 hin und zurüc
   expect([isMeshFile('x.3mf'), isMeshFile('x.step')]).toEqual([true, false]);
   await expect(meshPositions('leer.obj', new ArrayBuffer(0))).rejects.toThrow('keine Dreiecke');
   expect(() => parseModel(JSON.stringify({ features: [{ id: 1, type: 'mesh', name: 'x' }] }))).toThrow('Netz fehlt');
+  // Referenzbild (F3): nur Bild-Daten, Breite > 0 und eine der drei Ursprungsebenen
+  const img = { id: 2, type: 'image', name: 'f.png', data: 'data:image/png;base64,AA', pl: 'xz', x: 0, y: 0, w: 50 };
+  expect(parseModel(JSON.stringify({ features: [img] })).features).toHaveLength(1);
+  for (const bad of [{ data: 'javascript:1' }, { w: 0 }, { pl: 'ab' }]) expect(() => parseModel(JSON.stringify({ features: [{ ...img, ...bad }] }))).toThrow('Bild unvollständig');
 });
