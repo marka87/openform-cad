@@ -245,6 +245,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.23.0** Rippe als Knotenblech: Linie auf einer Fläche (Boden oder Wand), die an einer Wand beginnt, gibt ein Dreieck zwischen Fläche und Wand
 - **0.22.2** Linke Leiste aufgeräumt: ▾ verdeckt die Taste nicht mehr, Ansichten als Raster mit zwei Spalten, Einheit und Skin je eine Zeile
 - **0.22.1** Rippe: keine Riesenplatte mehr bei einer Linie auf der Wandfläche, Meldung mit Anleitung; auf einer Körperfläche gezeichnet geht die Wand bündig nach innen (R1)
 - **0.22.0** Feste Leisten links und rechts mit Splittern, 3D-Ansicht nimmt den Rest, bei Platzmangel links nur Symbole; Mindestgröße 1024×576 (L2)
@@ -296,6 +297,13 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Knotenblech (0.23.0, MINOR): Feldnotiz Nutzer (Exe 0.22.0): „als Mensch mit Maus kann ich dort keine Linie ziehen, nur auf die flache
+  Fläche“ – eine Ebene quer durch das Teil ist mit der Maus kaum zu treffen. Darum: scheitert die bisherige Rippe und liegt die Linie auf einer
+  Körperfläche, sucht `gusset` das Linienende an einer Wand (kleiner Würfel knapp hinter dem Ende, 1 mm über der Fläche, schneidet Material;
+  Punktabstand taugt nicht, beim Verbund misst er zur Hülle) und baut dort ein Dreieck senkrecht zur Fläche, rechter Winkel an der Wand, 45°,
+  oben auf die Hüllbox gekappt. Damit wird auch der erste Fall des Nutzers (Linie an der Wand entlang) zum Knotenblech statt Fehler.
+  Kern-Test: Boden-Linie beide Richtungen = Dreieck 25 × 25 × 3, zu lang = gekappt, ohne Wand = Meldung. Browser: 7,50 → 8,44 cm³, Bild geschickt.
+  Nicht: Exe, Linie schräg zur Wand (Dreieck steht dann schräg zur Wand), Höhe/Winkel einstellbar.
 - 2026-11-09 Linke Leiste (0.22.2, PATCH, Nutzer-Screenshot Exe 0.22.0): In der festen Leiste lagen ▾ und Tastenkürzel beide float:right,
   das ▾ (margin −6 px) verdeckte die Taste (R, N, M, L). Jetzt Knopf als Flex-Zeile, ▾ und Taste in fester Spalte rechts. Ansichten-Bereich als
   Raster 2 Spalten, Überschriften/Schieber/Einheit/Skin/„Leisten aus“ über die ganze Breite, Auswahlfeld rechts. Browser 1920×990 und 1100×990 (Hell):

@@ -1,5 +1,5 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, basicFaceExtrusion, makeFace, measureArea, Vector, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { assembleWire, makeBox, basicFaceExtrusion, makeFace, measureArea, Vector, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Shell, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
@@ -117,6 +117,35 @@ const dot3 = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] 
 // shortcut: Richtung quer zur Sehne vom ersten zum letzten Punkt; bei stark gebogenen Linienzügen ungenau → Richtung je Abschnitt
 const RIB_HOW = 'Linie auf eine Ebene quer durch das Teil legen (z. B. Stirnfläche) und schräg von Wand zu Boden zeichnen';
 function ribSolid(g: Extrude, body: Shape3D): Shape3D {
+  try { return ribRegion(g, body); } catch (e) {
+    const k = g.onFace ? gusset(g, body) : null; // auf einer Fläche gezeichnet und an einer Wand: Knotenblech
+    if (k) return k;
+    throw e;
+  }
+}
+// Knotenblech: Linie auf einer Fläche (z. B. Boden eines Winkels), ein Ende an einer aufragenden Wand. Dreieck senkrecht auf der Fläche durch
+// die Linie, rechter Winkel an der Wand, Höhe = Linienlänge (45°), oben auf die Hüllbox des Körpers gekappt. null = keine Wand an einem Ende
+function gusset(g: Extrude, body: Shape3D): Shape3D | null {
+  const t = g.rib!, pts = g.pts!, ends = [pts[0], pts[pts.length - 1]];
+  const W = (q: number[], z = 0) => g.o.map((o, i) => o + q[0] * g.u[i] + q[1] * g.v[i] + z * g.n[i]);
+  const A = W(ends[0]), B = W(ends[1]), L = Math.hypot(...A.map((x, i) => B[i] - x));
+  if (L < 1e-6) return null;
+  for (const [E, F] of [[A, B], [B, A]]) {
+    const s = E.map((x, i) => (F[i] - x) / L), up = g.n;
+    // liegt knapp hinter dem Ende, 1 mm über der Fläche, Material? (Abstand zum Punkt taugt nicht: beim Verbund misst er zur Hülle)
+    const c = E.map((x, i) => x - 0.3 * s[i] + 1 * up[i]), cube = makeBox(c.map(x => x - 0.1) as Vec, c.map(x => x + 0.1) as Vec), hit = cube.intersect(body) as Shape3D;
+    const inWall = measureVolume(hit) > 0.004; // halber Würfel (0,2³ = 0,008)
+    cube.delete(); hit.delete();
+    if (!inWall) continue;
+    const n = [s[1] * up[2] - s[2] * up[1], s[2] * up[0] - s[0] * up[2], s[0] * up[1] - s[1] * up[0]] as Vec;
+    const tri = solidOf({ id: g.id, type: 'poly', p: {}, pts: [[0, 0], [L, 0], [0, L]], d: t, o: E.map((x, i) => x - t / 2 * n[i]) as Vec, u: s as Vec, v: up, n } as Extrude);
+    const [lo, hi] = body.boundingBox.bounds, box = makeBox(lo as Vec, hi as Vec), out = tri.intersect(box) as Shape3D; // nicht über den Körper hinaus
+    tri.delete(); box.delete();
+    return out;
+  }
+  return null;
+}
+function ribRegion(g: Extrude, body: Shape3D): Shape3D {
   const t = g.rib!, pts = g.pts!, a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (L < 1e-6 || t <= 0) throw new Error('Linie zu kurz für eine Rippe');
   const m = [(a[1] - b[1]) / L, (b[0] - a[0]) / L], [lo, hi] = body.boundingBox.bounds, D = 2 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) + 10;

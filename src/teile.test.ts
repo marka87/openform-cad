@@ -725,12 +725,33 @@ test('Rippe (R1): Linie auf der Wandfläche gibt keine Riesenplatte, Skizze auf 
   // Fall des Nutzers: senkrechte Linie auf der Innenseite der Wand (Ebene x = 5), von der Grundplatte bis oben
   const wandFlaeche: Frame = { o: [5, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] };
   const monster = buildBody([boden, wand, { ...wandFlaeche, id: 3, type: 'line', p: {}, pts: [[0, 5], [0, 40]], d: 0, open: true, onFace: true, rib: 5 } as Extrude]);
-  expect(monster.errors.get(3)).toMatch(/quer durch das Teil/);
-  expect(measureVolume(monster.body!)).toBeCloseTo(ohne, 3); // nichts angebaut
+  // keine Riesenplatte mehr, sondern Knotenblech: Linie an der Wand entlang, Dreieck in den Boden hinein (35 × 35, 5 dick)
+  expect([...monster.errors]).toEqual([]);
+  expect(measureVolume(monster.body!)).toBeCloseTo(ohne + 0.5 * 35 * 35 * 5, 1);
   // richtig: schräge Linie auf der Stirnfläche (z = 10), Wand geht von dort nach innen und schließt bündig ab
   const stirn: Frame = { o: [0, 0, 10], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
   const gut = buildBody([boden, wand, { ...stirn, id: 3, type: 'line', p: {}, pts: [[5, 30], [35, 5]], d: 0, open: true, onFace: true, rib: 3 } as Extrude]);
   expect([...gut.errors]).toEqual([]);
   expect(measureVolume(gut.body!)).toBeCloseTo(ohne + 0.5 * 30 * 25 * 3, 1);
   expect(gut.body!.boundingBox.bounds[1][2]).toBeCloseTo(10, 3); // nicht aus dem Teil heraus
+});
+
+test('Rippe als Knotenblech: Linie auf dem Boden von der Wand weg gibt ein Dreieck zwischen Boden und Wand', () => {
+  const boden = rect(GROUND, [0, -10], [40, 10], 1, 5, false), wand = rect(GROUND, [0, -10], [5, 10], 2, 40, false);
+  const ohne = measureVolume(buildBody([boden, wand]).body!);
+  // Fall aus dem Bild: auf der Oberseite des Bodens (y = 5) von der Wand (x = 5) 25 mm weg, mittig
+  const oben: Frame = { o: [0, 5, 0], n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] };
+  const linie = (pts: number[][]) => ({ ...oben, id: 3, type: 'line', p: {}, pts, d: 0, open: true, onFace: true, rib: 3 }) as Extrude;
+  for (const pts of [[[5, 0], [30, 0]], [[30, 0], [5, 0]]]) { // beide Zeichenrichtungen
+    const r = buildBody([boden, wand, linie(pts)]);
+    expect([...r.errors].map(e => e[1]).join()).toBe('');
+    expect(valid(r.body!)).toBe(true);
+    expect(measureVolume(r.body!)).toBeCloseTo(ohne + 0.5 * 25 * 25 * 3, 1);
+  }
+  // länger als die Wand hoch ist: oben gekappt, nicht über den Körper hinaus
+  const lang = buildBody([boden, wand, linie([[5, 0], [40, 0]])]);
+  expect(lang.body!.boundingBox.bounds[1][1]).toBeCloseTo(40, 3);
+  // ohne Wand am Ende: weiter Fehler mit Anleitung
+  const frei = buildBody([boden, wand, linie([[15, 0], [30, 0]])]);
+  expect(frei.errors.get(3)).toMatch(/quer durch das Teil/);
 });
