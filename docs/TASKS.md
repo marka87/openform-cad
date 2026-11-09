@@ -297,6 +297,12 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 KI Google (nur Doku, Heimrechner, curl): Nutzer hatte 403 in der App, weil die Adresse generativelanguage.googleapis.com
+  eingetragen war; sein `AQ.`-Schlüssel ist dort gesperrt (API_KEY_SERVICE_BLOCKED). Richtig: Basis-URL
+  `https://aiplatform.googleapis.com/v1/projects/507261852277/locations/global/endpoints/openapi` (Projektnummer statt ID genügt).
+  Antworten und rufen Werkzeuge richtig auf (Quader 40 × 20 × 10): google/gemini-3.8-flash (Empfehlung), -3.5-flash, -3.5-flash-lite,
+  -3.1-flash-lite, -3.1-pro-preview, -3-flash-preview. 404: 3.8/3.5/3-pro, 3-pro-preview, 3.8-flash-lite, 2.5-*, 2.0-flash.
+  Schlüsseldatei geminikey_dontcommitpush.txt lokal über .git/info/exclude ausgeschlossen. Nicht in der App geprüft.
 - 2026-11-09 Installer 0.23.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Knotenblech (0.23.0, MINOR): Feldnotiz Nutzer (Exe 0.22.0): „als Mensch mit Maus kann ich dort keine Linie ziehen, nur auf die flache
   Fläche“ – eine Ebene quer durch das Teil ist mit der Maus kaum zu treffen. Darum: scheitert die bisherige Rippe und liegt die Linie auf einer
