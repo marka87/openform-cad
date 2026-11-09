@@ -236,6 +236,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.20.0** Leisten mit Tab (oder Knopf „Leisten aus“) ausblenden, Baum einklappbar und auf hohen Bildschirmen höher, Parameter-Zeile passt in den Baum
 - **0.19.0** Benannte Maße/Parameter (F7); Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
@@ -281,6 +282,11 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Bedienung 1080p (0.20.0, MINOR wegen neuer Funktion Ausblenden). Nutzer-Screenshot 1920×1080: Parameter-Zeile lief aus dem Baum
+  (Querbalken). Jetzt Zeile als Flex mit festen Wertfeldern, Baum ohne Querscrollen, ab 900 px Höhe 45 % statt 35 % hoch, ▾ klappt ihn auf die
+  Kopfzeile ein. Tab blendet Werkzeuge, Ansichten und Baum aus (wie in Bildbearbeitungen; Tab beim Maßtippen bleibt Maß-Trenner), oben, Seitenfeld
+  und Würfel bleiben; ☰ unten links bringt sie zurück. Beides merkt sich der Rechner (localStorage, nicht im Modell). Browser 1920×1000:
+  Baum 220×226, keine Überbreite; Ausblenden per Knopf und Tab, Einklappen 226 → 36 px. Nicht: Exe, kleinere Fenster neu angeordnet.
 - 2026-11-09 Installer 0.19.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 F7 Benannte Maße (0.19.0, noch kein Installer). Entscheidung Datei: `params` {Name: mm} im Modell (nur wenn vorhanden), je Schritt
   `ex` {Pfad: {e: Ausdruck, u: mm je Eingabe-Einheit}}; ältere Versionen ignorieren beides und behalten die Zahlen. Rechner `evalExpr` ohne eval

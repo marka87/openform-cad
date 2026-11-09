@@ -74,6 +74,22 @@
   #tree .row span[contenteditable=true] { background:#1e2126; border-radius:4px; padding:0 3px; }
   #tree .rollEnd { display:block; width:100%; margin:0 0 6px; background:#4a3a20; color:var(--accent); border-radius:6px; padding:4px; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
+  #tree { overflow-x:hidden; }
+  #tree .ph { margin-top:8px; }
+  #tree .prow { display:flex; align-items:center; gap:4px; padding:2px 6px; }
+  #tree .prow span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  #tree input { min-width:0; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:2px 5px; font:inherit; }
+  #tree .pv, #tree .pnv { flex:none; width:64px; }
+  #tree .pn { flex:1; }
+  /* Baum einklappbar: nur die Kopfzeile bleibt */
+  #treeTgl { position:sticky; top:0; float:right; margin:-2px -2px 0 0; z-index:1; }
+  #tree.mini { max-height:36px; overflow:hidden; }
+  #tree.mini #treeTgl { transform:rotate(180deg); }
+  /* Tab: Leisten ausblenden (Werkzeuge, Ansichten, Baum); oben, Seitenfeld und Würfel bleiben */
+  body.bare #toolbar, body.bare #views, body.bare #tree { display:none; }
+  #bareBtn { position:fixed; left:12px; bottom:14px; display:none; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:5px 10px; cursor:pointer; font:inherit; }
+  body.bare #bareBtn { display:block; }
+  @media (min-height:900px) { #tree { max-height:45vh; } }
   #palette { position:fixed; top:70px; left:50%; transform:translateX(-50%); width:340px; background:var(--panel);
     border:1px solid var(--accent); border-radius:12px; padding:8px; display:none; z-index:10; }
   #palette input { width:100%; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
@@ -255,7 +271,9 @@
   <div class="vg">Systemeinstellungen</div>
   <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
   <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
+  <button id="bBare" title="Werkzeuge, Ansichten und Baum ausblenden (Tab)">Leisten aus</button>
 </div>
+<button id="bareBtn" title="Leisten wieder zeigen (Tab)">☰ Leisten</button>
 <div id="palette"><input placeholder="Werkzeug oder Befehl suchen …"><div></div></div>
 <div id="scale"><div></div><span></span></div>
 <div id="hint">CAD-Kern wird geladen (großer Download, nur beim ersten Mal langsam) …</div>

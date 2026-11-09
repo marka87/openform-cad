@@ -690,7 +690,7 @@ function nameOf(f: Feature) {
 }
 function renderTree() {
   const aiOn = loadSettings().on;
-  tree.innerHTML = (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
+  tree.innerHTML = '<button id="treeTgl" title="Baum ein-/ausklappen">▾</button>' + (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
     `<h3>Schritte${bodyTotal ? ` · ${volText(bodyTotal.v)} · ${display.unit === 'in' ? areaText(bodyTotal.a) : `${(bodyTotal.a / 100).toFixed(1)} cm²`}` : ''}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
@@ -699,6 +699,7 @@ function renderTree() {
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
   tree.append(paramsEl);
+  $('treeTgl').onclick = () => { const on = tree.classList.toggle('mini'); try { localStorage.setItem('openform-treeMini', on ? '1' : ''); } catch {} };
   tree.querySelector<HTMLButtonElement>('.rollEnd')?.addEventListener('click', () => { pushHistory(); roll = null; refresh(); });
   tree.querySelectorAll<HTMLElement>('.row[data-b]').forEach(row => {
     const b = +row.dataset.b!;
@@ -1819,9 +1820,9 @@ function setParams() {
   if (errs.length) showNotice(`Parameter: ${errs.join(' · ')}`);
 }
 function renderParams() {
-  paramsEl.innerHTML = `<h3 style="margin-top:8px">Parameter</h3>` + Object.entries(params).map(([k, v]) =>
-    `<div class="row"><span>${esc(k)}</span><input class="pv" data-k="${esc(k)}" value="${uval(v)}" inputmode="decimal" style="width:64px"><button data-del="${esc(k)}" title="Parameter löschen">✕</button></div>`).join('')
-    + `<div class="row" title="Name = Wert; der Name geht dann in jedem Maßfeld, auch in Rechnungen wie breite/2 + 3"><input class="pn" placeholder="Name" style="width:70px">=<input class="pnv" placeholder="Wert" inputmode="decimal" style="width:52px"></div>`;
+  paramsEl.innerHTML = `<h3 class="ph">Parameter</h3>` + Object.entries(params).map(([k, v]) =>
+    `<div class="prow"><span>${esc(k)}</span><input class="pv" data-k="${esc(k)}" value="${uval(v)}" inputmode="decimal"><button data-del="${esc(k)}" title="Parameter löschen">✕</button></div>`).join('')
+    + `<div class="prow" title="Name = Wert; der Name geht dann in jedem Maßfeld, auch in Rechnungen wie breite/2 + 3"><input class="pn" placeholder="Name">=<input class="pnv" placeholder="Wert" inputmode="decimal"></div>`;
   const val = (x: HTMLInputElement) => { try { return evalExpr(x.value, varsIn(params, U())) * U(); } catch (e) { showNotice(e instanceof Error ? e.message : String(e)); return NaN; } };
   paramsEl.querySelectorAll<HTMLInputElement>('.pv').forEach(x => x.onchange = () => { const v = val(x); if (!isFinite(v)) return renderParams(); pushHistory(); params[x.dataset.k!] = v; setParams(); });
   paramsEl.querySelectorAll<HTMLButtonElement>('[data-del]').forEach(b => b.onclick = () => { pushHistory(); delete params[b.dataset.del!]; setParams(); });
@@ -2744,6 +2745,14 @@ function exportOBJ() {
   download('modell.obj', new Blob([new OBJExporter().parse(g)], { type: 'text/plain' }));
 }
 
+// Leisten ausblenden (Tab, wie in Bildbearbeitungen) und Baum einklappen; beides merkt sich der Rechner
+function toggleBare() {
+  const on = document.body.classList.toggle('bare');
+  try { localStorage.setItem('openform-bare', on ? '1' : ''); } catch {}
+  showNotice(on ? 'Leisten ausgeblendet · Tab oder ☰ unten links zeigt sie wieder' : HINTS[tool]);
+}
+$('bBare').onclick = $('bareBtn').onclick = () => toggleBare();
+try { if (localStorage.getItem('openform-bare')) document.body.classList.add('bare'); if (localStorage.getItem('openform-treeMini')) tree.classList.add('mini'); } catch {}
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
@@ -2756,6 +2765,7 @@ addEventListener('keydown', e => {
     if (drag?.kind === 'sketch' && tool === 'ngon' && (k === '+' || k === '-')) { sides = Math.max(3, Math.min(24, sides + (k === '+' ? 1 : -1))); modeLabels(); return showHint(`${sides} Ecken`); }
   }
   if (e.ctrlKey && k === 'k') { e.preventDefault(); return openPalette(); }
+  if (k === 'tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); return toggleBare(); }
   if (e.ctrlKey && k === 's') { e.preventDefault(); return void saveModel(e.shiftKey); } // Strg+Umschalt+S = speichern unter
   if (e.ctrlKey && k === 'o') { e.preventDefault(); return $('bOpen').click(); }
   if (e.ctrlKey && k === 'c') return copySel();
