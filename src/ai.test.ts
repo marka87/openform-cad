@@ -29,6 +29,9 @@ test('KI-Adapter: verständliche Fehler, kein Senden wenn aus (T8.2)', async () 
   await expect(chat(S, [], [], hang, 20)).rejects.toThrow('Keine Antwort nach 0 s');
   const noKey = await chat({ ...S, key: '' }, [], [], async (_u, i) => { expect((i.headers as Record<string, string>).Authorization).toBeUndefined(); return reply(200, { choices: [{ message: { content: 'OK' } }] })(); });
   expect(noKey.content).toBe('OK');                                             // Ollama: ohne Schlüssel kein Authorization-Kopf
+  const vx = await chat({ ...S, base: 'https://aiplatform.googleapis.com/v1/projects/1/locations/global/endpoints/openapi' }, [], [], async (_u, i) => {
+    const h = i.headers as Record<string, string>; expect([h['x-goog-api-key'], h.Authorization]).toEqual(['k', undefined]); return reply(200, { choices: [{ message: { content: 'OK' } }] })(); });
+  expect(vx.content).toBe('OK');                                                // Google Agent Platform: Schlüssel im eigenen Kopf, nicht als Bearer
 });
 
 test('KI-Adapter: 429 einmal nach retry-after wiederholt, Abbruch mitten im Auftrag behält Angelegtes (T8.9)', async () => {

@@ -24,6 +24,8 @@ export function saveSettings(s: AiSettings) { try { localStorage.setItem(KEY, JS
 
 // Desktop: über tauri-plugin-http (keine CORS-Sperren des WebViews), Browser: normales fetch.
 // Ollama lehnt die Herkunft der Desktop-App (http://tauri.localhost) mit 403 ab, erlaubt aber http://localhost → für lokale Adressen setzen
+// Google Agent Platform (Vertex): API-Schlüssel nur im Kopf x-goog-api-key, Bearer erwartet dort ein OAuth-Token (401)
+const vertex = (url: string) => /^https:\/\/([a-z0-9-]+-)?aiplatform\.googleapis\.com\//.test(url);
 const local = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url);
 const defaultFetch: Fetch = async (url, init) => '__TAURI_INTERNALS__' in globalThis
   ? (await import('@tauri-apps/plugin-http')).fetch(url, local(url) ? { ...init, headers: { ...init.headers as Record<string, string>, Origin: 'http://localhost' } } : init)
@@ -39,7 +41,7 @@ export async function chat(s: AiSettings, messages: Msg[], tools: Tool[] = [], d
     try {
       return await doFetch(s.base.replace(/\/+$/, '') + '/chat/completions', {
         method: 'POST', signal: ctl.signal,
-        headers: { 'Content-Type': 'application/json', ...s.key && { Authorization: `Bearer ${s.key}` } },
+        headers: { 'Content-Type': 'application/json', ...s.key && (vertex(s.base) ? { 'x-goog-api-key': s.key } : { Authorization: `Bearer ${s.key}` }) },
         body: JSON.stringify({ model: s.model, messages, ...tools.length && { tools, tool_choice: 'auto' }, temperature: 0, max_tokens: 3000 }), // Obergrenze: kleine Modelle schreiben sonst endlos weiter (Denkmodelle wie gpt-oss zählen ihr Denken mit)
       });
     } catch (e) {

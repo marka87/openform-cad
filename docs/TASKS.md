@@ -222,6 +222,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
@@ -265,6 +266,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 KI mit Google Agent Platform (0.18.2, PATCH): Schlüssel des Nutzers (beginnt mit `AQ.`) ist ein Agent-Platform-Schlüssel, bei generativelanguage.googleapis.com gesperrt (403 API_KEY_SERVICE_BLOCKED). Die OpenAI-kompatible Adresse `https://aiplatform.googleapis.com/v1/projects/<Projekt>/locations/global/endpoints/openapi` mit Modell `google/gemini-3.8-flash` antwortet mit curl, aber nur mit dem Kopf `x-goog-api-key`; `Authorization: Bearer` wird dort als OAuth-Token gelesen (401). `chat` schickt den Schlüssel bei *aiplatform.googleapis.com jetzt so, Test in ai.test.ts. Nicht in der App selbst geprüft (Schlüssel tippt der Nutzer ein). Der Nutzer hatte geminikey.txt im Repo-Ordner: lokal über .git/info/exclude ausgeschlossen, nicht über .gitignore.
 - 2026-11-09 Installer 0.18.1 gebaut (9,9 MB), noch nicht installiert.
 - 2026-11-09 K1 Kugel abziehen (0.18.1, Fehlerbehebung = PATCH, da 0.18.0 schon gebaut): Nutzer wollte eine Halbkugel-Mulde, das Häkchen „Abziehen“ war bei der Kugel ausgeblendet (`f.rev && !f.ball`), der Kern konnte es schon (`isCut` = `rev ? sub`). Häkchen jetzt bei jedem Drehkörper, bei der Kugel „(Loch)“. Kern-Test: Würfel 20×20×10 minus Kugel r5 mit Mitte auf der Fläche = 4000 − ½·Kugel. Gelernt: im Test muss die Kugel im selben Körper liegen (kein `body`), sonst bleibt sie ein eigener Körper und es wird nichts abgezogen. Im Browser: 30×30×20 minus Kugel r8 = 16,93 cm³, Mulde sichtbar. Offen: eine neue Kugel ist zunächst immer aufgesetzt, Abziehen erst danach per Häkchen.
 - 2026-11-09 Installer 0.18.0 gebaut (9,9 MB), noch nicht installiert; I8 und Alt+Ziehen erst darin prüfbar.
