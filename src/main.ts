@@ -2364,9 +2364,17 @@ function renderPatternPanel(f: Pattern) {
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 function renderShellPanel(f: Shell) {
-  panel.innerHTML = `<h3>Schale #${f.id}</h3><p style="color:var(--muted);margin:0 0 6px">${1 + (f.more?.length ?? 0)} offene Fläche(n) · weitere: H, dann Shift+Klick</p><label>Wandstärke <input type="number" step="0.5" value="${uval(f.t)}"></label><button class="del">Löschen</button>`;
+  panel.innerHTML = `<h3>Schale #${f.id}</h3><p style="color:var(--muted);margin:0 0 6px">${1 + (f.more?.length ?? 0)} offene Fläche(n) · weitere: H, dann Shift+Klick</p><label>Wandstärke <input type="number" step="0.5" value="${uval(f.t)}"></label>`
+    + `<label title="Lippe an der Kiste, Falz am Deckel: der Falz greift mit Spiel über die Lippe">Rand <select class="lipk"><option value="">–</option><option value="lip"${f.lip?.kind === 'lip' ? ' selected' : ''}>Lippe (Kiste)</option><option value="groove"${f.lip?.kind === 'groove' ? ' selected' : ''}>Falz (Deckel)</option></select></label>`
+    + (f.lip ? ([['w', 'Breite'], ['h', 'Höhe'], ['c', 'Spiel']] as const).map(([k, t]) => `<label>${t} <input type="number" step="0.1" min="0" class="lip" data-k="${k}" value="${uval(f.lip![k])}"></label>`).join('') : '')
+    + `<button class="del">Löschen</button>`;
   const inp = panel.querySelector('input')!;
   inp.onchange = () => { const v = mmOf(inp); if (isFinite(v) && v > 0) { pushHistory(); f.t = v; refresh(); } };
+  panel.querySelector<HTMLSelectElement>('.lipk')!.onchange = e => { // Breite = halbe Wand, Spiel 0,2 mm (3D-Druck)
+    const k = (e.target as HTMLSelectElement).value as 'lip' | 'groove' | '';
+    pushHistory(); if (k) f.lip = { w: Math.abs(f.t) / 2, h: 2, c: 0.2, ...f.lip, kind: k }; else delete f.lip; refresh();
+  };
+  panel.querySelectorAll<HTMLInputElement>('input.lip').forEach(x => x.onchange = () => { const v = mmOf(x), k = x.dataset.k as 'w' | 'h' | 'c'; if (isFinite(v) && v >= (k === 'c' ? 0 : 0.1)) { pushHistory(); f.lip![k] = v; } refresh(); });
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 // Mehrere Kanten auf einmal runden oder fasen (Shift+Klick auf Kanten)

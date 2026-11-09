@@ -1,6 +1,6 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
-import { assembleWire, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
-import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
+import { assembleWire, basicFaceExtrusion, makeFace, measureArea, Vector, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
+import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Shell, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
 import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
@@ -83,6 +83,30 @@ export function solidOf(f: Extrude): Shape3D {
   }
   return s;
 }
+
+// Lippe/Falz (F6) am offenen Rand einer Schale: Randfläche = ebene Fläche in der Ebene der geöffneten Fläche, mit Loch (Öffnung).
+// Ring an der Öffnung, Breite W von ihrer Kante nach außen. Lippe: Ring um h nach oben angesetzt. Falz (Gegenstück am Deckel):
+// Ring mit Spiel c breiter, h + c tief abgezogen; dort bleibt der äußere Teil der Wand stehen und greift über die Lippe.
+function lipOn(f: Shell, A: Shape3D, nA: Named, N: Vec): [Shape3D, Named] {
+  const { kind, w, h, c } = f.lip!, groove = kind === 'groove', W = groove ? w + c : w, d = groove ? -(h + c) : h, lvl = dot3(f.at, N);
+  const holes = A.faces.filter(x => x.geomType === 'PLANE' && dot3(x.normalAt().toTuple(), N) > 0.999 && Math.abs(dot3(x.center.toTuple(), N) - lvl) < 1e-4)
+    .flatMap(x => x.innerWires()); // innerWires gibt die Fläche frei: zuletzt
+  if (!holes.length) throw new Error('Rand der Schale nicht gefunden – Lippe nur an einer ebenen Öffnung');
+  let out: [Shape3D, Named] = [A.clone() as Shape3D, nA];
+  for (const hole of holes) {
+    const inner = makeFace(hole.clone()), grow = [W, -W].map(o => makeFace(hole.clone().offset2D(o))) // makeFace/offset2D verbrauchen den Draht.sort((x, y) => measureArea(y) - measureArea(x)); // größere = nach außen
+    grow[1].delete();
+    const vec = () => new Vector(N.map(x => x * d) as Vec), ring = basicFaceExtrusion(grow[0], vec()) as unknown as Shape3D, cavity = basicFaceExtrusion(inner, vec()) as unknown as Shape3D;
+    const tool = groove ? ring : ring.cut(cavity) as Shape3D; // Falz: die Öffnung ist ohnehin leer
+    const nT: Named = tool.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'shell', i: 100 + i } }));
+    const next = boolean(groove ? 'cut' : 'fuse', out[0], out[1], tool, nT);
+    out[0].delete(); out = next;
+    if (tool !== ring) tool.delete();
+    ring.delete(); cavity.delete(); inner.delete(); grow[0].delete();
+  }
+  return out;
+}
+const dot3 = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // Rippe (F5): offene Linie als Wand der Dicke rib, mittig auf der Skizzenebene. Die Wand reicht quer zur Linie (in der Ebene) bis an
 // den Körper: Streifen von der Linie weg, Körper abziehen, das Stück an der Linie bleibt. Seite = die, auf der der Körper den Streifen
@@ -317,7 +341,12 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       if (f.type === 'shell') {
         if (!body) continue;
         const nm = names.get(k) ?? [];
-        done(...shell(f.id, body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces, f.t)); // positive Dicke = Wand nach innen
+        const open = anchor(f.id, anchorFaces(f, body, nm)).faces;
+        const N = f.lip && open[0] ? open[0].normalAt(f.at).normalized().toTuple() as Vec : null; // vor dem Aushöhlen: danach ist die Fläche weg
+        const [hollow, nH] = shell(f.id, body, nm, open, f.t); // positive Dicke = Wand nach innen
+        if (!N) { done(hollow, nH); continue; }
+        try { done(...lipOn(f, hollow, nH, N)); hollow.delete(); }
+        catch (e) { done(hollow, nH); errors.set(f.id, `Lippe: ${e instanceof Error ? e.message : e}`); } // Schale bleibt, nur die Lippe fehlt
         continue;
       }
       if (f.type === 'remove') {

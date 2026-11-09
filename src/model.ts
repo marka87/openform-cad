@@ -42,7 +42,8 @@ export interface EdgeOp { id: number; type: 'fillet' | 'chamfer'; at: Vec; dir: 
 // shortcut: STEP-Text liegt im Modell und in jedem Rückgängig-Schritt, bei großen Dateien speicherhungrig → eigene Ablage (M5, .ofc)
 export interface Import { id: number; type: 'import'; name: string; step: string; hidden?: boolean; body?: number }
 // Schale: Körper aushöhlen (Wandstärke t), die Flächen durch at und more werden geöffnet
-export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; faces?: FaceRef[]; hidden?: boolean; body?: number } // faces: Bezüge zu at, more
+// lip (F6): am offenen Rand (Fläche at) Lippe (Ring Breite w, Höhe h nach oben) bzw. Falz für den Deckel (Ring w + c breit, h + c tief abgezogen)
+export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; faces?: FaceRef[]; hidden?: boolean; body?: number; lip?: { kind: 'lip' | 'groove'; w: number; h: number; c: number } } // faces: Bezüge zu at, more
 // Körper an der Hilfsebene plane teilen: der Teil auf der Seite der Normalen wird ein neuer Körper (Nummer = id)
 export interface Split { id: number; type: 'split'; body: number; plane: number; hidden?: boolean }
 // Körper löschen: als Schritt, damit auch eine Hälfte aus „Teilen“ wegfallen kann und Zurückspulen ihn wiederbringt

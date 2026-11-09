@@ -135,7 +135,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F3 (0.19.0) Referenzbild über „Öffnen“ (PNG/JPG/WebP): auf XY/XZ/YZ-Ebene, Breite und Mitte im Seitenfeld, Maßstab mit 2 Punkten + echter Länge.
 - [x] DONE F4 (0.19.0) Echtes Gewinde M3–M20 und 1/4"-20 (ISO-Profil 60°): Auswahl „Gewinde“ im Seitenfeld eines extrudierten Kreises; Bolzen = Außen-, Bohrung = Innengewinde.
 - [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
-- [ ] TODO F6 Lippe/Falz für Deckel: umlaufende Stufe an einer Kante einer Schale, mit Spiel.
+- [x] DONE F6 (0.19.0) Lippe/Falz: Seitenfeld der Schale „Rand“ = Lippe (Kiste) oder Falz (Deckel), Breite/Höhe/Spiel (Vorgabe halbe Wand, 2 mm, 0,2 mm).
 - [ ] TODO F7 Benannte Maße (Parameter): Name = Wert, in Maßfeldern statt Zahl verwendbar.
 - [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht.
 - [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen.
@@ -235,7 +235,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.19.0** Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
+- **0.19.0** Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
@@ -280,6 +280,13 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 F6 Lippe/Falz (0.19.0, gleiche Nummer, noch kein Installer): Merkmal `lip` {kind, w, h, c} an der Schale, kein neuer Schritt.
+  Kern (`lipOn`): Randfläche = ebene Fläche in der Ebene der geöffneten Fläche (Normale vor dem Aushöhlen gemerkt), deren Loch = Öffnung;
+  Ring = Öffnung um W nach außen versetzt (`offset2D`, runde Ecken) minus Öffnung. Lippe: W = w, h nach oben angesetzt. Falz: W = w + c,
+  h + c tief abgezogen. Scheitert der Rand, bleibt die Schale und der Schritt meldet „Lippe: …“. Gelernt (replicad): `innerWires()` gibt die
+  Fläche frei, `makeFace`/`offset2D` verbrauchen den Draht, `basicFaceExtrusion` den Vektor → je Aufruf eigene Kopie. Kern-Test: Kiste
+  40×30×20, Wand 2: Lippe = Ring(1) × 2, Höhe 22; Falz = Ring(1,2) × 2,2; zu breiter Falz frisst in die Wand. Browser: 7,15 → 7,41 cm³ (Lippe)
+  → 6,81 cm³ (Falz), Felder mit Vorgaben. Nicht: Ziehen am Ring (nur Tippen), Deckel und Kiste zusammen gedruckt, Zoll, Exe.
 - 2026-11-09 F5 Rippe (0.19.0, gleiche Nummer, noch kein Installer): Merkmal `rib` (Dicke) an einer offenen Linie, kein neuer Schritt-Typ.
   Kern (`ribSolid`): Streifen von der Linie quer zur Sehne weg, mittig auf der Skizzenebene, Körper abziehen; von den Stücken bleibt das an der
   Linie (Abstand zu einem Punkt knapp neben der ersten Seite). Seite automatisch: die, auf der der Körper den Streifen begrenzt; läuft er auf

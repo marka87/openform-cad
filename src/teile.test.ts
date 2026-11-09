@@ -665,3 +665,22 @@ test('Rippe (F5): Linie im Winkel wird Wand bis an den Körper, Seite automatisc
   const weg = buildBody([boden, wand, { ...linie([[100, 100], [120, 100]]), o: [0, 0, 50] }]);
   expect(weg.errors.get(3)).toMatch(/trifft den Körper nicht/);
 });
+
+test('Lippe und Falz (F6): Ring an der Öffnung einer Schale, nach oben bzw. mit Spiel abgezogen', () => {
+  const kiste = rect(GROUND, [0, 0], [40, 30], 1, 20, false), hohl: Shell = { id: 2, type: 'shell', at: [20, 20, -15], t: 2 };
+  const ring = (W: number) => (36 + 2 * W) * (26 + 2 * W) - (4 - Math.PI) * W * W - 36 * 26; // Öffnung 36×26, nach außen versetzt mit runden Ecken
+  const ohne = measureVolume(buildBody([kiste, hohl]).body!);
+  expect(ohne).toBeCloseTo(24000 - 36 * 26 * 18, 1);
+  const lippe = buildBody([kiste, { ...hohl, lip: { kind: 'lip', w: 1, h: 2, c: 0.2 } }]);
+  expect([...lippe.errors]).toEqual([]);
+  expect(valid(lippe.body!)).toBe(true);
+  expect(measureVolume(lippe.body!)).toBeCloseTo(ohne + ring(1) * 2, 1);
+  expect(lippe.body!.boundingBox.bounds[1][1]).toBeCloseTo(22, 3);
+  const falz = buildBody([kiste, { ...hohl, lip: { kind: 'groove', w: 1, h: 2, c: 0.2 } }]);
+  expect([...falz.errors]).toEqual([]);
+  expect(valid(falz.body!)).toBe(true);
+  expect(measureVolume(falz.body!)).toBeCloseTo(ohne - ring(1.2) * 2.2, 1);
+  // breiter als die Wand: Schale bleibt, Meldung am Schritt
+  const zuBreit = buildBody([kiste, { ...hohl, lip: { kind: 'groove', w: 5, h: 2, c: 0.2 } }]);
+  expect(measureVolume(zuBreit.body!)).toBeLessThan(ohne);
+});
