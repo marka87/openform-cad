@@ -28,9 +28,11 @@ export async function readFile(path: string): Promise<string> {
 }
 
 // „Öffnen“: Modell (.ofc, älter .json) oder STEP wählen und lesen; null = abgebrochen
-export async function openFile(): Promise<{ path: string; text: string } | null> {
-  const path = await (await dialog()).open({ multiple: false, filters: [{ name: 'OpenForm-Modell oder STEP', extensions: ['ofc', 'json', 'step', 'stp'] }] });
-  return typeof path === 'string' ? { path, text: await readFile(path) } : null;
+// Netz (STL/OBJ/3MF) als Bytes statt Text (F2)
+export async function openFile(): Promise<{ path: string; text: string; bytes?: ArrayBuffer } | null> {
+  const path = await (await dialog()).open({ multiple: false, filters: [{ name: 'OpenForm-Modell, STEP oder Netz', extensions: ['ofc', 'json', 'step', 'stp', 'stl', 'obj', '3mf'] }] });
+  if (typeof path !== 'string') return null;
+  return /\.(stl|obj|3mf)$/i.test(path) ? { path, text: '', bytes: await (await core()).invoke<ArrayBuffer>('read_bytes', { path }) } : { path, text: await readFile(path) };
 }
 
 // Datei, mit der die App gestartet wurde (Doppelklick auf eine .ofc-Datei)

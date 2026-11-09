@@ -216,7 +216,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       cache.at = changed;
     }
     const f = features[fi];
-    if (f.hidden || f.type === 'plane') continue;
+    if (f.hidden || f.type === 'plane' || f.type === 'mesh') continue; // Referenz-Netz: nur Anzeige (F2)
     try {
       if (f.type === 'combine') {
         const a = key(f.a), b = key(f.b), A = bodies.get(a), B = bodies.get(b);

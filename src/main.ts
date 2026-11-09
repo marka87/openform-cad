@@ -12,7 +12,8 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { fromBase64, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -70,6 +71,21 @@ let workHit: Hit | null = null; // Fläche, auf der das Raster liegt; neue Skizz
 let workPts: { p: Vec; mid: boolean }[] = []; // shortcut: beim Anlegen des Rasters berechnet, nach einem Umbau des Körpers erst mit neuem Raster aktuell // Rastpunkte der Fläche unter dem Raster (Mitte, Ecken, Kantenmitten, Kreismitten)
 let workView: { c: THREE.Vector3; r: number } | null = null, lookBack: { p: THREE.Vector3; t: THREE.Vector3 } | null = null; // Raster-Mitte/-Größe; Ansicht vor „auf die Fläche schauen“
 const bodyGroup = new THREE.Group(); scene.add(bodyGroup); // Körper aus dem Kern
+const refGroup = new THREE.Group(); scene.add(refGroup); // Referenz-Netze (F2): halbdurchsichtig, nur Treffer für Messen und Skizzieren
+const refCache = new Map<number, { data: string; obj: THREE.Group }>(); // je Schritt einmal dekodieren, nicht bei jedem Ziehen
+function syncRefs() {
+  const want = new Set(live().filter(f => f.type === 'mesh' && !f.hidden).map(f => f.id));
+  for (const [id, r] of refCache) if (!want.has(id) || (getById(id) as RefMesh).data !== r.data) { refGroup.remove(r.obj); r.obj.traverse(o => (o as THREE.Mesh).geometry?.dispose()); refCache.delete(id); }
+  for (const id of want) {
+    if (refCache.has(id)) continue;
+    const f = getById(id) as RefMesh, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(fromBase64(f.data), 3)); g.computeVertexNormals();
+    const obj = new THREE.Group(), m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8fc7a8, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+    m.userData.ref = id;
+    obj.add(m, new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ color: 0x4f8f6c })));
+    refGroup.add(obj); refCache.set(id, { data: f.data, obj });
+  }
+}
 const group = new THREE.Group(); scene.add(group);         // Skizzen und Auswahlrahmen
 const preview = new THREE.Group(); scene.add(preview);
 const handles = new THREE.Group(); scene.add(handles);     // Punkte der ausgewählten Skizze zum Ziehen
@@ -364,6 +380,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
 
 function rebuild() {
   requestBuild();
+  syncRefs();
   disposeGroup(group);
   const L = live();
   L.forEach((f, i) => {
@@ -623,6 +640,7 @@ function nameOf(f: Feature) {
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
   if (f.type === 'drop') return `${bodyName(f.body)} löschen`;
+  if (f.type === 'mesh') return `Referenz ${f.name}`;
   if (f.type === 'loft') return 'Übergang';
   if (f.type === 'pattern') return f.mir ? 'Spiegeln' : f.rot ? `Kreis-Muster ${f.a.n}` : `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
@@ -729,7 +747,7 @@ let patPickFor: number | null = null, patRef: { ax: Vec; c: Vec; label: string }
 function pick(): { face: Hit | null; edge: EdgeHit | null } {
   const px = pxSize();
   ray.params.Line.threshold = 6 * px;
-  const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children], true); // Raycaster prüft Sichtbarkeit nicht
+  const hs = ray.intersectObjects([...bodyGroup.children.filter(m => m.visible), ...group.children, ...[...refCache.values()].map(r => r.obj.children[0])], true); // Raycaster prüft Sichtbarkeit nicht
   auxPick = hs.find(h => h.object.userData.aux)?.object.userData.aux ?? null; // Hilfslinie unter der Maus (keine Körperkante)
   const faces = hs.filter(h => h.face);
   const areaOf = (h: THREE.Intersection) => { const g = getById(h.object.userData.id ?? h.object.userData.src); return g && isExtrude(g) ? sketchArea(g) : Infinity; };
@@ -743,7 +761,7 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
     patHit = null;
-    const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray(), 0.15, fh.object.userData.body) ?? patternGrip(fh.point.toArray(), n.toArray());
+    const grip: Grip | null = fh.object.userData.ref ? null : f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray(), 0.15, fh.object.userData.body) ?? patternGrip(fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
     face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat, patSrc: fh.object.userData.src, skipAt: fh.object.userData.key ? { pat: fh.object.userData.pat, key: fh.object.userData.key } : patHit };
   }
@@ -1790,8 +1808,8 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'pattern') return renderPatternPanel(f);
-  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'drop' || f.type === 'loft') {
-    panel.innerHTML = `<h3>${esc(nameOf(f))}</h3><button class="del">Löschen</button>`;
+  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'drop' || f.type === 'loft' || f.type === 'mesh') {
+    panel.innerHTML = `<h3>${esc(nameOf(f))}</h3>${f.type === 'mesh' ? `<p style="color:var(--muted);margin:4px 0">Netz zum Messen und Nachzeichnen (auf eine Fläche skizzieren). Kein Körper, nicht im Export.</p>` : ''}<button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'import') return renderImportPanel(f);
@@ -2438,7 +2456,7 @@ const fileIn = $<HTMLInputElement>('fileIn');
 const recent = (): string[] => { try { const r = JSON.parse(localStorage.getItem('openform-recent') ?? '[]'); return Array.isArray(r) ? r.filter(p => typeof p === 'string') : []; } catch { return []; } };
 const setRecent = (r: string[]) => { try { localStorage.setItem('openform-recent', JSON.stringify(r.slice(0, 8))); } catch {} };
 async function pickFile() {
-  try { const f = await openFile(); if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
+  try { const f = await openFile(); if (f?.bytes) openMesh(f.path, f.bytes); else if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
 }
 async function openRecent(p: string) {
   let text: string;
@@ -2452,6 +2470,14 @@ $('bOpen').onclick = e => {
   const dir = (p: string) => { const d = p.slice(0, -baseName(p).length - 1); return d.length > 40 ? '…' + d.slice(-40) : d; };
   showMenu(b.left, b.bottom + 4, [['Datei wählen …', pickFile], null, ...r.map(p => [`${baseName(p)}  ·  ${dir(p)}`, () => void openRecent(p)] as [string, () => void])]);
 };
+// STL/OBJ/3MF: als Referenz-Netz dazulegen (F2), das Modell bleibt
+async function openMesh(name: string, buf: ArrayBuffer) {
+  let data: string;
+  try { data = toBase64(await meshPositions(name, buf)); } catch (e) { return alert(`${baseName(name)} lässt sich nicht lesen: ${e instanceof Error ? e.message : e}`); }
+  pushHistory();
+  const f: RefMesh = { id: nextId++, type: 'mesh', name: baseName(name), data };
+  add(f); selId = f.id; refresh();
+}
 // .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
 function opened(name: string, text: string, path: string | null = null) {
   const isStep = /\.(step|stp)$/i.test(name);
@@ -2465,6 +2491,7 @@ function opened(name: string, text: string, path: string | null = null) {
 fileIn.onchange = async () => {
   const file = fileIn.files?.[0];
   fileIn.value = '';
+  if (file && isMeshFile(file.name)) return openMesh(file.name, await file.arrayBuffer());
   if (file) opened(file.name, await file.text());
 };
 $('bStl').onclick = () => sendExport({ type: 'export', format: 'stl' });

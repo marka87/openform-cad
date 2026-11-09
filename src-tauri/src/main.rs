@@ -8,6 +8,12 @@ fn read_text(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
 }
 
+// Binärdatei (STL/3MF als Referenz-Netz, F2) als Rohdaten: kommt im WebView als ArrayBuffer an
+#[tauri::command]
+fn read_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    std::fs::read(&path).map(tauri::ipc::Response::new).map_err(|e| format!("{path}: {e}"))
+}
+
 // Erst daneben schreiben, dann umbenennen (ersetzt unter Windows die alte Datei): ein Absturz mitten im
 // Schreiben lässt die alte Datei heil (A20)
 #[tauri::command]
@@ -36,7 +42,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init()) // KI-Anfragen ohne CORS-Sperren des WebViews (ADR 0002)
-        .invoke_handler(tauri::generate_handler![read_text, write_bytes, initial_file])
+        .invoke_handler(tauri::generate_handler![read_text, read_bytes, write_bytes, initial_file])
         .run(tauri::generate_context!())
         .expect("OpenForm CAD konnte nicht starten");
 }
