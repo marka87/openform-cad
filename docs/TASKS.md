@@ -123,7 +123,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE I5 (0.18.0) Durch alles beim Ziehen: Bohrung über den Boden hinaus gezogen rastet auf „durch alles“ ein.
 - [x] DONE I6 (0.18.0) Bis zur Fläche ziehen: Höhe rastet beim Ziehen an anderen ebenen Flächen ein.
 - [x] DONE I7 (0.18.0) Bohrungsvorlagen für den 3D-Druck: Gewindeeinsatz M3/M4, Mutternfalle, selbstschneidend.
-- [ ] TODO I8 Zuletzt geöffnete Dateien unter „Öffnen“ (Desktop).
+- [x] DONE I8 (0.18.0) Zuletzt geöffnete Dateien unter „Öffnen“ (Desktop).
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
@@ -220,7 +220,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7)
+- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
 - **0.17.1** Pfeile kleiner und behalten beim Zoomen ihre Bildschirmgröße (vorher riesig nach dem Hineinzoomen)
 - **0.17.0** Muster und Ziehen wie Shapr3D: Klick auf ein Exemplar markiert das ganze Muster samt Quelle (M1); ⇕-Pfeil an ausgewählter Skizze bzw. Fläche, bei einem Muster an der Quelle (M2); Muster direkt am Modell: 4 Pfeile aus der Skizzenmitte, Ziehen legt es an, danach 2 Pfeile quer für das Raster (M3); Felder „Abstand ▾ / Gesamt“ und Anzahl am Pfeil (M4); Kante: ⇔-Pfeil und Feld „Rundung ▾ / Fase“ mit Maß (E1)
@@ -262,6 +262,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 I8 Zuletzt geöffnet (0.18.0): jede Datei, die geöffnet oder gespeichert wird (`setFile`), kommt nach vorn in `openform-recent` (höchstens 8). „Öffnen“ zeigt in der Desktop-App ein Menü: „Datei wählen …“ und die Liste (Name · Ordner); nicht mehr vorhandene Dateien fliegen beim Anklicken mit Meldung heraus. Ohne Liste geht der Dialog wie bisher direkt auf. Nur in der Exe prüfbar, nicht im Browser; nicht von Hand geprüft. Damit sind I1–I8 erledigt.
 - 2026-11-09 I7 3D-Druck-Vorlagen (0.18.0): Auswahl „Vorlage“ an Bohrungen jetzt mit Gruppe „3D-Druck“ (`PRINT_HOLES`: Einschmelzmutter M2–M5 mit Ø und Tiefe, M3/M4 direkt in Kunststoff, Durchgang M3–M5 nach ISO 273 mittel), dazu „Mutternfalle M3/M4/M5“ (`nutTrap`: Sechskant-Tasche ISO 4032 + 0,3 mm Luft, Mutter + 0,2 mm tief, eigene Skizze an derselben Stelle). Werte sind übliche Herstellerangaben, Drucker streuen: bei Bedarf im Feld ändern. Kern-Test für die Mutternfalle. Im Browser: Durchgang M3 gewählt, Mutternfalle M3 angelegt (6 × 3,35 mm, 2,6 tief).
 - 2026-11-09 I6 Bis zur Fläche (0.18.0): `faceLevels` sammelt einmal je Ziehen die Höhen aller ebenen Flächen parallel zur Skizze (Anzeigenetz, auf 0,001 mm gerundet); näher als 8 Pixel = einrasten, HUD „bis Fläche“, Shift = frei. Nur das Maß wird übernommen, es wandert nicht mit, wenn die andere Fläche sich später ändert (echte Bindung wäre ein neuer Bezug im Modell, erst wenn ein Teil das braucht). Im Browser: Block auf 20,37 mm gezogen = Höhe des Nachbarn (krumme Zahl, also nicht das Raster).
 - 2026-11-09 I5 Durch alles beim Ziehen (0.18.0): beim ersten Hineinziehen einer Skizze auf einer Körperfläche misst `bodyDepth` einmal die Tiefe des Körpers unter ihrer Mitte (fernster Treffer im Anzeigenetz entlang −n); wer weiter zieht, bekommt „durch alles“ (thru, Tiefe = Körper), mitgezogene Bohrungen ebenso; zurückziehen hebt es wieder auf (applyPush). Erster Versuch stürzte ab: Tiefe wurde an der Kopie f0 gesucht, die nicht in der Schrittliste steht → nach Nummer suchen. Kein Kern-Test (reine Bedienung, der Kern rechnet thru wie bisher). Im Browser: Bohrung 4 mm in 10-mm-Platte weit gezogen → −10, Haken gesetzt.

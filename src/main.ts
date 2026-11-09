@@ -2355,7 +2355,7 @@ $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 // Modell als .ofc (dasselbe JSON wie im Autosave). Desktop: Speichern schreibt in die geöffnete Datei, sonst Dialog
 let filePath: string | null = null;
-function setFile(path: string | null) { filePath = path; void setTitle(path ? `${baseName(path)} – OpenForm CAD` : 'OpenForm CAD'); }
+function setFile(path: string | null) { filePath = path; if (path && isDesktop) setRecent([path, ...recent().filter(q => q !== path)]); void setTitle(path ? `${baseName(path)} – OpenForm CAD` : 'OpenForm CAD'); }
 // Ungespeicherte Änderungen (A22): Prüfsumme des zuletzt gespeicherten oder geöffneten Stands, dauerhaft, damit auch ein
 // Start per Doppelklick weiß, ob der Zwischenspeicher noch Arbeit enthält, die in keiner Datei steht
 const sum = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return String(h >>> 0); };
@@ -2380,9 +2380,23 @@ void onCloseRequested(async () => {
   return a === 'discard' || (a === 'save' && await saveModel());
 });
 const fileIn = $<HTMLInputElement>('fileIn');
-$('bOpen').onclick = async () => {
-  if (!isDesktop) return fileIn.click();
+// Zuletzt geöffnete oder gespeicherte Modelle (I8, Desktop): neueste zuerst, höchstens 8; „Öffnen“ zeigt sie als Menü
+const recent = (): string[] => { try { const r = JSON.parse(localStorage.getItem('openform-recent') ?? '[]'); return Array.isArray(r) ? r.filter(p => typeof p === 'string') : []; } catch { return []; } };
+const setRecent = (r: string[]) => { try { localStorage.setItem('openform-recent', JSON.stringify(r.slice(0, 8))); } catch {} };
+async function pickFile() {
   try { const f = await openFile(); if (f) opened(f.path, f.text, f.path); } catch (e) { alert('Öffnen fehlgeschlagen: ' + e); }
+}
+async function openRecent(p: string) {
+  let text: string;
+  try { text = await readFile(p); } catch { setRecent(recent().filter(q => q !== p)); return alert(`${baseName(p)} lässt sich nicht mehr öffnen (verschoben oder gelöscht?) und wurde aus der Liste genommen`); }
+  opened(p, text, p);
+}
+$('bOpen').onclick = e => {
+  if (!isDesktop) return fileIn.click();
+  const r = recent(), b = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  if (!r.length) return void pickFile();
+  const dir = (p: string) => { const d = p.slice(0, -baseName(p).length - 1); return d.length > 40 ? '…' + d.slice(-40) : d; };
+  showMenu(b.left, b.bottom + 4, [['Datei wählen …', pickFile], null, ...r.map(p => [`${baseName(p)}  ·  ${dir(p)}`, () => void openRecent(p)] as [string, () => void])]);
 };
 // .ofc/.json = eigenes Modell öffnen, .step/.stp = Körper ins Modell importieren; path = Desktop-Pfad zum späteren Speichern
 function opened(name: string, text: string, path: string | null = null) {
