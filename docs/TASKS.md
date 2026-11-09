@@ -124,6 +124,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE I6 (0.18.0) Bis zur Fläche ziehen: Höhe rastet beim Ziehen an anderen ebenen Flächen ein.
 - [x] DONE I7 (0.18.0) Bohrungsvorlagen für den 3D-Druck: Gewindeeinsatz M3/M4, Mutternfalle, selbstschneidend.
 - [x] DONE I8 (0.18.0) Zuletzt geöffnete Dateien unter „Öffnen“ (Desktop).
+- [x] DONE K2 (0.19.0) Halbkugel: Häkchen „Halbkugel“ bei der Kugel; flache Seite auf der Skizzenebene, Kuppel nach außen. Ersetzt das umständliche Teilen an einer Ebene.
 - [x] DONE K1 (0.18.1) Kugel abziehen: Häkchen „Abziehen (Loch)“ im Seitenfeld der Kugel; Mitte auf der Fläche = Halbkugel-Mulde.
 - [x] DONE E2 (0.18.0) Kante mit Vorzeichen (Wunsch des Nutzers): 0 = scharf, in den Körper = Rundung, raus = Fase; durch 0 wechselt die Art im selben Zug, bei 0 loslassen entfernt den Eintrag; Maßfeld: negativ = Fase, 0 = scharf.
 
@@ -222,6 +223,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.19.0** Halbkugel per Häkchen (K2)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
@@ -266,6 +268,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 K2 Halbkugel (0.19.0, neue Funktion = MINOR): Nutzer kam mit Teilen an einer Ebene nicht zurecht (Ebene nicht mittig setzbar; Körper statt Schritt auswählen nicht zu finden). Kern hatte es schon: Kugel = Halbkreis um die Achse u gedreht, 180° statt 360° gibt genau die Hälfte auf der +n-Seite. Häkchen setzt `rev` 180/360; bei „Abziehen“ ausgeblendet und `rev` zurück auf 360 (die halbe Kuppel läge außerhalb, die ganze Kugel gibt die Mulde). Kern-Test: Volumen ½ Kugel, y-Bereich [0, r]. Browser: Platte 80×80×10 + Halbkugel r30 = 120,55 cm³. Gefunden, offen: ausgeblendete Körper gehen wohl trotzdem in den Export, einzelnen Körper löschen gibt es nicht.
 - 2026-11-09 Installer 0.18.2 gebaut (9,9 MB), noch nicht installiert.
 - 2026-11-09 KI mit Google Agent Platform (0.18.2, PATCH): Schlüssel des Nutzers (beginnt mit `AQ.`) ist ein Agent-Platform-Schlüssel, bei generativelanguage.googleapis.com gesperrt (403 API_KEY_SERVICE_BLOCKED). Die OpenAI-kompatible Adresse `https://aiplatform.googleapis.com/v1/projects/<Projekt>/locations/global/endpoints/openapi` mit Modell `google/gemini-3.8-flash` antwortet mit curl, aber nur mit dem Kopf `x-goog-api-key`; `Authorization: Bearer` wird dort als OAuth-Token gelesen (401). `chat` schickt den Schlüssel bei *aiplatform.googleapis.com jetzt so, Test in ai.test.ts. Nicht in der App selbst geprüft (Schlüssel tippt der Nutzer ein). Der Nutzer hatte geminikey.txt im Repo-Ordner: lokal über .git/info/exclude ausgeschlossen, nicht über .gitignore.
 - 2026-11-09 Installer 0.18.1 gebaut (9,9 MB), noch nicht installiert.

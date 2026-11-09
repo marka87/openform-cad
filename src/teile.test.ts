@@ -518,6 +518,12 @@ test('Kugel: Werkzeug, Vollkreis als Drehkörper, Skizze quer über die Achse', 
   expect([...mulde.errors]).toEqual([]);
   expect(valid(mulde.body!)).toBe(true);
   expect(measureVolume(mulde.body!)).toBeCloseTo(4000 - soll(5) / 2, 2);
+  // Halbkugel: halber Drehwinkel, flache Seite auf der Skizzenebene, Kuppel in Richtung n (hier +y)
+  const halb = buildBody([{ ...k, rev: 180, p: { cx: 0, cy: 0, r: 30 } }]);
+  expect(valid(halb.body!)).toBe(true);
+  expect(measureVolume(halb.body!)).toBeCloseTo(soll(30) / 2, 1);
+  const hb = halb.body!.boundingBox.bounds;
+  expect([hb[0][1], hb[1][1]].map(x => Math.round(x * 1e3) / 1e3)).toEqual([0, 30]);
   // Vollkreis mit Achse durch die Mitte ist auch ohne Werkzeug eine Kugel
   const voll: Extrude = { ...circle(GROUND, [0, 0], 10, 1, 0, false), rev: 360 };
   expect(measureVolume(buildBody([voll]).body!)).toBeCloseTo(soll(10), 3);

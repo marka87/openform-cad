@@ -1842,7 +1842,8 @@ function renderFeaturePanel() {
       : f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Vorlage <select class="thr"><option value="">–</option><optgroup label="Gewinde (Kernloch)">${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</optgroup><optgroup label="3D-Druck">${Object.keys(PRINT_HOLES).map(m => `<option>${m}</option>`).join('')}</optgroup></select></label><label>Mutternfalle <select class="nut"><option value="">–</option>${Object.keys(NUTS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
-    (f.rev && !f.ball ? revHtml : '') + (f.rev ? `<label>Abziehen (${f.ball ? 'Loch' : 'Nut'}) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') + // Kugel abziehen = Halbkugel-Mulde
+    (f.rev && !f.ball ? revHtml : '') + (f.ball && !f.sub ? `<label>Halbkugel <input type="checkbox" class="half"${f.rev === 180 ? ' checked' : ''} style="width:auto"></label>` : '') + // flache Seite auf der Skizzenebene, Kuppel nach außen
+    (f.rev ? `<label>Abziehen (${f.ball ? 'Loch' : 'Nut'}) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') + // Kugel abziehen = Halbkugel-Mulde
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${esc(nameOf(loftTo))} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${esc(nameOf(g))} #${g.id} – bearbeiten</button>`).join('') +
     `<button class="del">Löschen</button>` +
@@ -1890,7 +1891,9 @@ function renderFeaturePanel() {
   const thru = panel.querySelector<HTMLInputElement>('.thru');
   if (thru) thru.onchange = () => { pushHistory(); if (thru.checked) f.thru = true; else delete f.thru; refresh(); };
   const sub = panel.querySelector<HTMLInputElement>('.sub');
-  if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; refresh(); };
+  if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; if (f.ball && f.sub) f.rev = 360; refresh(); }; // halbe Kuppel läge außerhalb: ganze Kugel gibt die Mulde
+  const half = panel.querySelector<HTMLInputElement>('.half');
+  if (half) half.onchange = () => { pushHistory(); f.rev = half.checked ? 180 : 360; refresh(); };
   const addOff = panel.querySelector<HTMLButtonElement>('.addOff');
   if (addOff) addOff.onclick = () => { // neue Skizze außen (> 0) bzw. innen (< 0) um die ausgewählte
     const g = offsetFeature(f, mmOf(panel.querySelector<HTMLInputElement>('.off')!) || 0, nextId);
