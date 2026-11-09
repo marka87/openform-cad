@@ -96,7 +96,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.0 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8 und Kante mit Vorzeichen (E2), liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
+      STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.1 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8, Kante mit Vorzeichen (E2), Kugel abziehen (K1), liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
@@ -265,6 +265,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.18.1 gebaut (9,9 MB), noch nicht installiert.
 - 2026-11-09 K1 Kugel abziehen (0.18.1, Fehlerbehebung = PATCH, da 0.18.0 schon gebaut): Nutzer wollte eine Halbkugel-Mulde, das Häkchen „Abziehen“ war bei der Kugel ausgeblendet (`f.rev && !f.ball`), der Kern konnte es schon (`isCut` = `rev ? sub`). Häkchen jetzt bei jedem Drehkörper, bei der Kugel „(Loch)“. Kern-Test: Würfel 20×20×10 minus Kugel r5 mit Mitte auf der Fläche = 4000 − ½·Kugel. Gelernt: im Test muss die Kugel im selben Körper liegen (kein `body`), sonst bleibt sie ein eigener Körper und es wird nichts abgezogen. Im Browser: 30×30×20 minus Kugel r8 = 16,93 cm³, Mulde sichtbar. Offen: eine neue Kugel ist zunächst immer aufgesetzt, Abziehen erst danach per Häkchen.
 - 2026-11-09 Installer 0.18.0 gebaut (9,9 MB), noch nicht installiert; I8 und Alt+Ziehen erst darin prüfbar.
 - 2026-11-09 E2 Kante mit Vorzeichen (0.18.0, gleiche Nummer, noch kein Installer): Nutzer wollte einen Wert durch 0 statt „erste Bewegung legt die Art fest“, Richtung festgelegt: in den Körper = Rundung (umgekehrt zu E1). `edgeStart` legt beim Drücken eine Achse in der Bildebene fest (Außenrichtung: an scharfer Kante `edgeOutward`, an fertiger Rundung/Fase neu `nearestNormal` = Normale der nächsten Fläche, auch für den Pfeil) und den Startwert ±r; Wert = Start − Weg entlang der Achse, also relativ, damit Greifen auf der Fasenfläche nicht sofort umschlägt. Zone um 0 ist 8 px breit (bei 0,5-mm-Raster nur ~1 px, nicht zu treffen); dort wird der Eintrag `hidden`, beim Loslassen entfernt (`dropEdgeOps`, Kanten bleiben markiert). Maßfeld: `editDim` gibt jetzt auch ≤ 0 an `apply` weiter (einziger Nutzer). Im Browser: rein 6,5 Rundung, raus durch 0 auf Fase 6, Fase 5→2→scharf→Radius 1,5→7,5, bei scharf losgelassen = weg, Strg+Z zurück, getippt 3/0/−2. Kein Kern-Test: nur Bedienung in main.ts, Kern unverändert. Nicht geprüft: Zoll, Innenkanten (konkav), Mehrfachauswahl.
