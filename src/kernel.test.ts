@@ -1067,6 +1067,8 @@ test('Muster als Schritt: Raster 3 × 2 Bohrungen, Kopien folgen der Quelle, fla
   expect(measureVolume(left.body!)).toBeCloseTo(measureVolume(r.body!), 3);
   const both = buildBody([box(), h, { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 2, d: 4, both: true } }]); // beidseitig (I3): Quelle in der Mitte, je eine Kopie links und rechts
   expect(measureVolume(both.body!)).toBeCloseTo(2000 - 3 * Math.PI * 4, 0);
+  const skip = buildBody([box(), h, { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 4 }, skip: ['1:0'] }]); // mittleres Exemplar weggelassen (I4)
+  expect(measureVolume(skip.body!)).toBeCloseTo(2000 - 2 * Math.PI * 4, 0);
   r = buildBody([box(), { ...h, d: -6 }, p]);
   expect(measureVolume(r.body!)).toBeCloseTo(2000 - 6 * Math.PI * 6, 0);  // tiefer gebohrt: alle Kopien mit
   r = buildBody([box(), { ...h, d: 0 }, p]);

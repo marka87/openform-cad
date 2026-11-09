@@ -375,7 +375,7 @@ function rebuild() {
         if (!src || !isExtrude(src) || src.hidden || noFace(src) || !isFlat(src) && !on) continue;
         for (const P of patternCopies(f)) {
           const o = buildMesh(P.copy(src, f.id), isFlat(src) ? 'sketch' : 'outline');
-          delete o.userData.id; o.userData.pat = f.id; o.userData.src = src.id;
+          delete o.userData.id; o.userData.pat = f.id; o.userData.src = src.id; o.userData.key = P.key;
           o.matrix.premultiply(M); // buildMesh setzt die Lage schon in die Matrix
           group.add(o);
         }
@@ -697,7 +697,7 @@ function setRay(e: PointerEvent) {
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
-type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; free?: boolean; body?: number; tri?: number[]; pat?: number; patSrc?: number }; // pat = Kopie aus diesem Muster, patSrc = ihre Quellskizze // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
+type Hit = { point: THREE.Vector3; n: THREE.Vector3; grip: Grip | null; free?: boolean; body?: number; tri?: number[]; pat?: number; patSrc?: number; skipAt?: { pat: number; key: string } | null }; // skipAt = getroffenes Muster-Exemplar (I4) // pat = Kopie aus diesem Muster, patSrc = ihre Quellskizze // tri = Dreiecke der B-Rep-Fläche [Anfang, Anzahl] im Index
 type EdgeHit = { at: Vec; dir: Vec; body?: number };
 let lastPick: { fh?: THREE.Intersection; eh?: THREE.Intersection } = {};
 // Getroffene Fläche bzw. Kante orange hervorheben (ganze B-Rep-Fläche/Kante), Skizzen etwas kräftiger
@@ -739,9 +739,10 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   if (fh) {
     const n = fh.face!.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
     const id = fh.object.userData.id, f = features.find(f => f.id === id);
+    patHit = null;
     const grip: Grip | null = f && isExtrude(f) ? { f, part: 'end', k: 1 } : f?.type === 'plane' ? { f, part: 'plane', k: 0 } : ownerOf(live(), fh.point.toArray(), n.toArray(), 0.15, fh.object.userData.body) ?? patternGrip(fh.point.toArray(), n.toArray());
     const sk = f && isExtrude(f) ? f : null; // flache Skizze: deren Körper
-    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat, patSrc: fh.object.userData.src };
+    face = { point: fh.point.clone(), n, grip, body: sk ? sk.body : fh.object.userData.body, tri: fh.object.userData.faces && range(fh.object.userData.faces, fh.faceIndex! * 3), pat: fh.object.userData.pat, patSrc: fh.object.userData.src, skipAt: fh.object.userData.key ? { pat: fh.object.userData.pat, key: fh.object.userData.key } : patHit };
   }
   if (eh && (!fh || eh.distance < fh.distance + 12 * px)) {
     const pos = (eh.object as THREE.LineSegments).geometry.attributes.position as THREE.BufferAttribute;
@@ -752,12 +753,14 @@ function pick(): { face: Hit | null; edge: EdgeHit | null } {
   return { face, edge };
 }
 // Fläche einer Muster-Kopie im Körper: zurück auf die Quelle schieben und dort suchen, damit Ziehen die Quelle (und alle Kopien) ändert
+let patHit: { pat: number; key: string } | null = null; // Exemplar, das patternGrip zuletzt getroffen hat (für Alt+Klick = weglassen)
 function patternGrip(P: number[], n: number[]): Grip | null {
   const L = live();
+  patHit = null;
   for (const p of L) if (p.type === 'pattern' && !p.hidden)
     for (const C of patternCopies(p)) {
       const g = ownerOf(L.filter(f => p.src.includes(f.id)), C.back(P as Vec), C.backDir(n as Vec));
-      if (g) return g;
+      if (g) { patHit = { pat: p.id, key: C.key }; return g; }
     }
   return null;
 }
@@ -1277,6 +1280,12 @@ function onDown(e: PointerEvent) {
   if (tool === 'select' && auxPick !== null && !hp) { // Hilfslinie auswählen, mit Strg/Shift zur Auswahl dazu
     if (e.ctrlKey || e.shiftKey) toggleSel(auxPick); else { clearSel(); selId = auxPick; }
     detachGizmo(); return refresh();
+  }
+  if (tool === 'select' && e.altKey && h?.skipAt && !hp) { // Alt+Klick auf ein Exemplar: weglassen (I4), zurückholen im Seitenfeld
+    const p = getById(h.skipAt.pat);
+    if (p?.type !== 'pattern') return;
+    pushHistory(); (p.skip ??= []).push(h.skipAt.key); clearSel(); selId = p.id; refresh();
+    return showNotice('Exemplar weggelassen · im Seitenfeld zurückholen');
   }
   if (tool === 'select' && h?.pat !== undefined && !hp) { // Kopie eines Musters: wählt das Muster; ziehen drückt die Quelle hinein, alle Kopien folgen
     if (e.ctrlKey || e.shiftKey) { toggleSel(h.pat); return refresh(); }
@@ -2168,8 +2177,9 @@ function renderPatternPanel(f: Pattern) {
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
       <label>${patTotal ? 'Gesamt' : 'Abstand'} <input class="d${k}" type="number" step="0.5" value="${uval(patTotal && d.n > 1 ? d.d * spanOf(d as PatternDir) : d.d)}"></label><label class="row"><input type="checkbox" class="w${k}"${(d as PatternDir).both ? ' checked' : ''}> beidseitig</label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
   panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
-    + row('a', 'Richtung 1') + row('b', 'quer dazu') + (f.src.length === 1 ? fillHtml() : '') + `<button class="del">Löschen</button>`;
+    + row('a', 'Richtung 1') + row('b', 'quer dazu') + (f.skip?.length ? `<p style="color:var(--muted);margin:4px 0">${f.skip.length} weggelassen <button class="unskip">alle zurückholen</button></p>` : `<p style="color:var(--muted);margin:4px 0">Alt+Klick auf ein Exemplar = weglassen</p>`) + (f.src.length === 1 ? fillHtml() : '') + `<button class="del">Löschen</button>`;
   wireFill(() => { const s = getById(f.src[0]); return s && isExtrude(s) ? s : null; }, () => [f.a.d, f.b && f.b.n > 1 ? f.b.d : f.a.d], f);
+  panel.querySelector<HTMLButtonElement>('.unskip')?.addEventListener('click', () => { pushHistory(); delete f.skip; refresh(); });
   for (const k of ['a', 'b'] as const) {
     const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
     const set = (fn: (d: PatternDir) => void) => { pushHistory(); fn(dir()); refresh(); };

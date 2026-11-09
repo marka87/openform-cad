@@ -89,7 +89,7 @@ export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v
 export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } // both: n Exemplare je Seite, Quelle in der Mitte (I3)
 // Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
 export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
-export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean }
+export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean; skip?: string[] } // skip: weggelassene Exemplare (Schlüssel wie in patternCopies, I4)
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
 // Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
@@ -107,7 +107,8 @@ export function fillGrid(box: number[], h: number[], m: number, s: number[]) {
     return { n, start: (lo + hi - (n - 1) * s[k]) / 2 };
   });
 }
-export function patternCopies(p: Pattern): PatternCopy[] {
+export const patternCopies = (p: Pattern) => allCopies(p).filter(c => !p.skip?.includes(c.key));
+function allCopies(p: Pattern): PatternCopy[] {
   const O: Vec = [0, 0, 0], same = (d: Vec) => d;
   if (p.mir) {
     const { ax, c } = p.mir, pt = (q: Vec) => mirrorPt(q, ax, c), dir = (d: Vec) => mirrorDir(d, ax);
@@ -789,6 +790,7 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     if ((f.type === 'loft' || f.type === 'combine') && !(int(f.a) && int(f.b))) bad('Bezug a/b ist keine Zahl');
     if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');
     if (f.name !== undefined && typeof f.name !== 'string') bad('Name ist kein Text');
+    if (f.skip !== undefined && !(Array.isArray(f.skip) && f.skip.every((k: unknown) => typeof k === 'string'))) bad('Weggelassene Exemplare sind keine Liste');
   });
   const max = Math.max(0, ...d.features.map((f: Feature) => f.id));
   return {

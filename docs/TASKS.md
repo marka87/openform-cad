@@ -119,7 +119,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
       gerechnet, Raster sitzt mittig. Ergebnis ist ein normales Muster (bleibt bearbeitbar).
 - [x] DONE I2 (0.18.0) Größtmögliche Rundung/Fase: schlägt sie fehl, das größte noch machbare Maß suchen und anbieten.
 - [x] DONE I3 (0.18.0) Muster von der Mitte aus: Taste beim Ziehen = beidseitig gleich weit.
-- [ ] TODO I4 Einzelne Exemplare weglassen: Shift+Klick auf eine Kopie nimmt sie heraus (und wieder hinein).
+- [x] DONE I4 (0.18.0) Einzelne Exemplare weglassen: Alt+Klick (Shift+Klick ist schon Mehrfachauswahl) auf eine Kopie nimmt sie heraus (und wieder hinein).
 - [ ] TODO I5 Durch alles beim Ziehen: Bohrung über den Boden hinaus gezogen rastet auf „durch alles“ ein.
 - [ ] TODO I6 Bis zur Fläche ziehen: Höhe rastet beim Ziehen an anderen ebenen Flächen ein.
 - [ ] TODO I7 Bohrungsvorlagen für den 3D-Druck: Gewindeeinsatz M3/M4, Mutternfalle, selbstschneidend.
@@ -220,7 +220,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3)
+- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
 - **0.17.1** Pfeile kleiner und behalten beim Zoomen ihre Bildschirmgröße (vorher riesig nach dem Hineinzoomen)
 - **0.17.0** Muster und Ziehen wie Shapr3D: Klick auf ein Exemplar markiert das ganze Muster samt Quelle (M1); ⇕-Pfeil an ausgewählter Skizze bzw. Fläche, bei einem Muster an der Quelle (M2); Muster direkt am Modell: 4 Pfeile aus der Skizzenmitte, Ziehen legt es an, danach 2 Pfeile quer für das Raster (M3); Felder „Abstand ▾ / Gesamt“ und Anzahl am Pfeil (M4); Kante: ⇔-Pfeil und Feld „Rundung ▾ / Fase“ mit Maß (E1)
@@ -262,6 +262,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 I4 Exemplare weglassen (0.18.0): `skip` am Muster (Schlüssel der Exemplare, in parseModel geprüft), `patternCopies` filtert sie, Kern und Anzeige folgen. Alt+Klick statt Shift+Klick, weil Shift schon Mehrfachauswahl ist; trifft flache Kopien und Körper-Kopien (über `patternGrip`). Zurückholen: „alle zurückholen“ im Seitenfeld, einzeln nur mit Strg+Z. Kern-Test; im Browser ein Loch aus 5 per Alt+Klick entfernt.
 - 2026-11-09 I3 Muster beidseitig (0.18.0): neue Eigenschaft `both` je Richtung (n Exemplare je Seite, Quelle in der Mitte, Schlüssel der bestehenden Kopien bleiben gleich), `spanOf` für die Gesamtlänge. Alt beim Ziehen eines Muster-Pfeils schaltet ein, das Häkchen „beidseitig“ im Seitenfeld ein und aus; Feld am Pfeil zeigt „3× ⇆“. Kern-Test. Im Browser über das Häkchen geprüft (3 → 5 Löcher, Quelle mittig); Alt+Ziehen nicht von Hand geprüft (Werkzeug kann beim Ziehen keine Taste halten).
 - 2026-11-09 I2 Größtmögliches Maß (0.18.0): Knopf im Feld einer roten Rundung/Fase. `maxEdgeSize` (kernel.ts, Kern-Test): Halbierungssuche 0,05 mm bis gescheitertes Maß, nur Schritte bis zur Rundung, eigener Zwischenspeicher (jeder Versuch rechnet nur den einen Schritt), abgerundet auf 0,1 mm; Worker-Auftrag `maxEdge`. Ergebnis wird übernommen (Strg+Z = zurück). Im Browser: Quader 20 × 10 × 10, Rundung 12 → 9,9. Das Seitenfeld zeigt den Knopf bis zum nächsten Neuzeichnen weiter.
 - 2026-11-09 I1 Fläche füllen (0.18.0): Knopf im Muster-Feld (neue Reihe und bestehendes Muster mit einer Quelle), Rand eintippen. `fillGrid` (model.ts, Kern-Test) rechnet Anzahl und Startmitte je Richtung; die Fläche kommt als Kasten aus dem Anzeigenetz des Körpers (Punkte in der Skizzenebene mit gleicher Normale), Quelle wird auf die erste Stelle verschoben, Achsen = X/Y der Skizze. shortcut: Kasten statt echtem Umriss, bei runden oder L-Flächen fallen Ecklöcher heraus. Im Browser: Platte 60 × 30, Loch R3, Rand 3, Abstand 10 → 5 × 2, Mitten 10–50 / 10–20 (mittig).
