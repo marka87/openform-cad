@@ -173,7 +173,7 @@ function hoverHint(h: { face: Hit | null; edge: EdgeHit | null }) {
   if (!hintAuto || drag) return;
   const g = h.face?.grip, f = g && g.f;
   const hh = ray.intersectObjects(handles.children)[0]?.object.userData;
-  const text = hh?.edgeArrow ? 'wegziehen = runden · hineinschieben = fasen' : hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung · mit Alt = nach beiden Seiten' : hh?.pk ? 'ziehen = Abstand des Musters ändern · mit Alt = nach beiden Seiten' : hh ? 'ziehen = Punkt verschieben'
+  const text = hh?.edgeArrow ? 'in den Körper = runden · raus = fasen · zurück auf 0 = scharf' : hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung · mit Alt = nach beiden Seiten' : hh?.pk ? 'ziehen = Abstand des Musters ändern · mit Alt = nach beiden Seiten' : hh ? 'ziehen = Punkt verschieben'
     : h.edge ? 'ziehen = runden · hinein = fasen'
     : !h.face ? 'ziehen = Rahmen auswählen · rechts ziehen = drehen'
     : !g || g.part === 'import' ? 'ziehen = Fläche versetzen'
@@ -454,7 +454,7 @@ function rebuild() {
       handles.add(m);
     }
   }
-  // ⇔-Pfeil an der markierten Kante bzw. Rundung/Fase: wegziehen = runden, hineinschieben = fasen (E1)
+  // ⇔-Pfeil an der markierten Kante bzw. Rundung/Fase: in den Körper = runden, raus = fasen, durch 0 = Art wechselt
   const ea = edgeArrowAt();
   if (ea) for (const k of [1, -1]) {
     const r = pxSize(), m = new THREE.Mesh(new THREE.ConeGeometry(6 * r, 11 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
@@ -794,7 +794,8 @@ function edgeArrowAt() {
   const s = getSel(), a = s && isEdgeOp(s) ? s : edgeSel[0];
   if (!a) return null;
   const P = V(a.at), view = camera.position.clone().sub(P).normalize();
-  return { a, op: s && isEdgeOp(s) ? s : null, P, out: (!(s && isEdgeOp(s)) && edgeOutward(P)) || V(a.dir).cross(view).cross(V(a.dir)).normalize() };
+  const op = s && isEdgeOp(s) ? s : null;
+  return { a, op, P, out: (op ? nearestNormal(P, op.body) : edgeOutward(P)) || V(a.dir).cross(view).cross(V(a.dir)).normalize() };
 }
 function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
   const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3(), normals: THREE.Vector3[] = [];
@@ -809,6 +810,30 @@ function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
   }
   return normals.length === 2 ? normals[0].add(normals[1]).normalize() : null;
 }
+// Nach dem Runden/Fasen gibt es die Kante nicht mehr: Normale der nächsten Fläche zeigt ebenso ins Freie (konvex wie konkav)
+function nearestNormal(at: THREE.Vector3, body?: number): THREE.Vector3 | null {
+  const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3();
+  let best = Infinity;
+  for (const mesh of bodyGroup.children as THREE.Mesh[]) {
+    if (body !== undefined && mesh.userData.body !== body) continue;
+    const pos = mesh.geometry.attributes.position as THREE.BufferAttribute, idx = mesh.geometry.index!;
+    for (let i = 0; i < idx.count; i += 3) {
+      tri.setFromAttributeAndIndices(pos, idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+      const d = tri.closestPointToPoint(at, q).distanceTo(at);
+      if (d < best) { best = d; tri.getNormal(n); }
+    }
+  }
+  return best < Infinity ? n : null;
+}
+// Kantenzug mit Vorzeichen: Achse in der Bildebene, die ins Freie zeigt; Wert = v0 − Weg entlang der Achse (in den Körper = +)
+function edgeStart(d: any) {
+  const view = camera.position.clone().sub(d.P0).normalize(), dir = V(d.f ? d.f.dir : d.edge.dir);
+  const out = (d.f ? nearestNormal(d.P0, d.f.body) : edgeOutward(d.P0)) ?? dir.clone().cross(view).cross(dir);
+  let ax = out.clone().addScaledVector(view, -out.dot(view));
+  if (ax.length() < 0.2 * out.length()) ax = dir.clone().cross(view).cross(dir); // Achse zeigt zum Betrachter: quer zur Kante nehmen
+  d.ax = ax.normalize(); d.s0 = edgeS(d); d.v0 = d.f ? (d.f.type === 'fillet' ? d.f.r : -d.f.r) : 0;
+}
+const edgeS = (d: any) => ray.ray.closestPointToPoint(d.P0, new THREE.Vector3()).sub(d.P0).dot(d.ax);
 
 // Wie tief der Körper unter der Mitte einer Skizze reicht (entlang −n): fernster Treffer im Anzeigenetz, null = nichts darunter (I5)
 const depthRay = new THREE.Raycaster();
@@ -1422,6 +1447,7 @@ function onDown(e: PointerEvent) {
       ? { kind: 'edge', f: g.f, P0: V(g.f.at), sx: e.clientX, sy: e.clientY, started: false }
       : { kind: 'push', f: g.f, f0: structuredClone(g.f), part: g.part, k: g.k, i: g.i, P0: h.point, D: h.n, sx: e.clientX, sy: e.clientY, started: false };
   }
+  if (drag?.kind === 'edge') edgeStart(drag);
   controls.enabled = false;
   el.setPointerCapture(e.pointerId);
 }
@@ -1520,12 +1546,10 @@ function onMove(e: PointerEvent) {
       rebuild();
       return showHud(e, `Versatz: ${len(drag.f.d)}`);
     }
-    if (drag.kind === 'edge') { // Radius = Abstand des Mauszeigers von der Kante
+    if (drag.kind === 'edge') { // Wert mit Vorzeichen: in den Körper = Rundung, ins Freie = Fase, durch 0 = Art wechselt, bei 0 scharf
+      const v = drag.v0 - (edgeS(drag) - drag.s0), a = snap(Math.abs(v), e, pullStep()), type: EdgeOp['type'] = v > 0 ? 'fillet' : 'chamfer';
       if (!drag.f) {
-        // Erste Bewegung entscheidet: vom Körper weg = Rundung, in den Körper hinein = Fase
-        const out = edgeOutward(drag.P0), a = drag.P0.clone().project(camera), b = out && drag.P0.clone().add(out).project(camera);
-        const inward = b && (b.x - a.x) * (e.clientX - drag.sx) - (b.y - a.y) * (e.clientY - drag.sy) < 0;
-        drag.f = { id: nextId++, type: inward ? 'chamfer' : 'fillet', at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
+        drag.f = { id: nextId++, type, at: drag.edge.at, dir: drag.edge.dir, r: 1, body: drag.edge.body } satisfies EdgeOp;
         add(drag.f); selId = drag.f.id;
         // Gezogene Kante gehört zur Markierung: alle markierten Kanten gleich mitrunden
         const others = edgeSel.some(a => sameEdge(a, drag.edge, 4 * pxSize())) ? edgeSel.filter(a => !sameEdge(a, drag.edge, 4 * pxSize())) : [];
@@ -1533,10 +1557,10 @@ function onMove(e: PointerEvent) {
         drag.more = others.map(a => { const g: EdgeOp = { id: nextId++, type: drag.f.type, at: a.at, dir: a.dir, r: 1, body: a.body }; add(g); multi.add(g.id); return g; });
       }
       drag.more ??= [...multi].map(getById).filter(isEdgeOp);
-      drag.f.r = Math.max(0.5, snap(ray.ray.distanceToPoint(drag.P0), e, pullStep()));
-      for (const o of drag.more) o.r = drag.f.r;
+      drag.sharp = a < 0.5 || Math.abs(v) < 8 * pxSize(); // Zone um 0 (8 px, sonst kaum zu treffen): Kante bleibt scharf, beim Loslassen fällt der Eintrag weg
+      for (const o of [drag.f, ...drag.more]) { o.hidden = drag.sharp || undefined; if (!drag.sharp) { o.r = a; o.type = type; } }
       rebuild();
-      return showHud(e, `${drag.f.type === 'fillet' ? 'Radius' : 'Fase'}: ${len(drag.f.r)}`);
+      return showHud(e, drag.sharp ? 'scharf · in den Körper = Rundung, raus = Fase' : `${type === 'fillet' ? 'Radius' : 'Fase'}: ${len(a)}`);
     }
     if (drag.kind === 'plane') { // Ebene entlang ihrer Normalen verschieben
       const s = lineParam(drag.P0, drag.D);
@@ -1622,6 +1646,7 @@ el.addEventListener('pointerup', e => {
   hideSnap();
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push') for (const o of [drag, ...drag.more ?? []]) if (o.f.and && Math.abs(o.f.d) < 1e-6) { features = features.filter(f => f !== o.f); multi.delete(o.f.id); } // flacher Bereich bringt nichts
+  if (drag.kind === 'edge' && drag.sharp) dropEdgeOps([drag.f, ...drag.more]); // bis auf 0 zurückgezogen
   if (drag.kind === 'offset' && drag.f && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f);  // Versatz 0 bringt nichts
   if (drag.kind === 'patd' && drag.made && !drag.f[drag.k].d) { if (drag.k === 'b') delete drag.f.b; else { features = features.filter(f => f !== drag.f); selId = null; } } // hin und zurück gezogen: Abstand 0 bringt nichts
   drag = null;
@@ -2055,12 +2080,19 @@ function edgeDims() {
   if (!ea) return;
   const kind = ea.op?.type ?? edgeKind, el = document.createElement('span'), r = pxSize();
   el.innerHTML = `<i>${kind === 'fillet' ? 'Rundung' : 'Fase'} ▾</i> <b data-t=".r">${ea.op ? fmt(ea.op.r) : '0'}</b>`;
-  el.title = 'Rundung/Fase anklicken = umschalten · Zahl anklicken = tippen';
+  el.title = 'Rundung/Fase anklicken = umschalten · Zahl anklicken = tippen (negativ = Fase, 0 = scharf)';
   el.onmousedown = e => e.preventDefault();
   el.onclick = e => {
     e.stopPropagation();
     const t = (e.target as HTMLElement).dataset.t;
-    if (t) return editDim(el, t, ea.op ? undefined : v => addEdgeOps(edgeKind, v));
+    // getippt: negativ = Fase, 0 = Kante wieder scharf
+    if (t) return editDim(el, t, v => {
+      if (!ea.op) return void (v && addEdgeOps(v < 0 ? 'chamfer' : edgeKind, Math.abs(v)));
+      pushHistory();
+      const ops = [ea.op, ...[...multi].map(getById).filter(isEdgeOp)];
+      if (!v) dropEdgeOps(ops); else for (const g of ops) { g.r = Math.max(0.5, Math.abs(v)); if (v < 0) g.type = 'chamfer'; }
+      refresh();
+    });
     if (!ea.op) { edgeKind = edgeKind === 'fillet' ? 'chamfer' : 'fillet'; return buildDims(); }
     pushHistory(); for (const g of [ea.op, ...[...multi].map(getById).filter(isEdgeOp)]) g.type = g.type === 'fillet' ? 'chamfer' : 'fillet'; refresh();
   };
@@ -2081,7 +2113,7 @@ function editDim(span: HTMLSpanElement, target: string, apply?: (v: number) => v
   dimEditing = true;
   const finish = (ok: boolean) => {
     if (done) return; done = true; dimEditing = false;
-    if (ok && apply) { const v = parseFloat(inp.value) * U(); if (v > 0) apply(v); }
+    if (ok && apply) { const v = parseFloat(inp.value) * U(); if (!isNaN(v)) apply(v); }
     else if (ok && field && inp.value !== field.value) { field.value = inp.value; field.dispatchEvent(new Event('change')); }
     inp.remove(); buildDims();
   };
@@ -2251,6 +2283,13 @@ function addEdgeOps(type: EdgeOp['type'], r: number) {
   pushHistory();
   for (const a of edgeSel) add({ id: nextId++, type, at: a.at, dir: a.dir, r: Math.max(0.5, r), body: a.body });
   selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
+}
+// Rundungen/Fasen entfernen, ihre Kanten bleiben markiert (Kante wieder scharf)
+function dropEdgeOps(ops: EdgeOp[]) {
+  const gone = new Set<Feature>(ops);
+  if (roll !== null) roll -= features.slice(0, roll).filter(f => gone.has(f)).length;
+  features = features.filter(f => !gone.has(f));
+  edgeSel = ops.map(o => ({ at: o.at, dir: o.dir, body: o.body })); selId = null; multi.clear();
 }
 function deleteSel() {
   const ids = new Set([selId, ...multi]);
