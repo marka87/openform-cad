@@ -124,6 +124,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE I6 (0.18.0) Bis zur Fläche ziehen: Höhe rastet beim Ziehen an anderen ebenen Flächen ein.
 - [x] DONE I7 (0.18.0) Bohrungsvorlagen für den 3D-Druck: Gewindeeinsatz M3/M4, Mutternfalle, selbstschneidend.
 - [x] DONE I8 (0.18.0) Zuletzt geöffnete Dateien unter „Öffnen“ (Desktop).
+- [x] DONE K1 (0.18.1) Kugel abziehen: Häkchen „Abziehen (Loch)“ im Seitenfeld der Kugel; Mitte auf der Fläche = Halbkugel-Mulde.
 - [x] DONE E2 (0.18.0) Kante mit Vorzeichen (Wunsch des Nutzers): 0 = scharf, in den Körper = Rundung, raus = Fase; durch 0 wechselt die Art im selben Zug, bei 0 loslassen entfernt den Eintrag; Maßfeld: negativ = Fase, 0 = scharf.
 
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
@@ -221,6 +222,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
+- **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
 - **0.17.1** Pfeile kleiner und behalten beim Zoomen ihre Bildschirmgröße (vorher riesig nach dem Hineinzoomen)
@@ -263,6 +265,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 K1 Kugel abziehen (0.18.1, Fehlerbehebung = PATCH, da 0.18.0 schon gebaut): Nutzer wollte eine Halbkugel-Mulde, das Häkchen „Abziehen“ war bei der Kugel ausgeblendet (`f.rev && !f.ball`), der Kern konnte es schon (`isCut` = `rev ? sub`). Häkchen jetzt bei jedem Drehkörper, bei der Kugel „(Loch)“. Kern-Test: Würfel 20×20×10 minus Kugel r5 mit Mitte auf der Fläche = 4000 − ½·Kugel. Gelernt: im Test muss die Kugel im selben Körper liegen (kein `body`), sonst bleibt sie ein eigener Körper und es wird nichts abgezogen. Im Browser: 30×30×20 minus Kugel r8 = 16,93 cm³, Mulde sichtbar. Offen: eine neue Kugel ist zunächst immer aufgesetzt, Abziehen erst danach per Häkchen.
 - 2026-11-09 Installer 0.18.0 gebaut (9,9 MB), noch nicht installiert; I8 und Alt+Ziehen erst darin prüfbar.
 - 2026-11-09 E2 Kante mit Vorzeichen (0.18.0, gleiche Nummer, noch kein Installer): Nutzer wollte einen Wert durch 0 statt „erste Bewegung legt die Art fest“, Richtung festgelegt: in den Körper = Rundung (umgekehrt zu E1). `edgeStart` legt beim Drücken eine Achse in der Bildebene fest (Außenrichtung: an scharfer Kante `edgeOutward`, an fertiger Rundung/Fase neu `nearestNormal` = Normale der nächsten Fläche, auch für den Pfeil) und den Startwert ±r; Wert = Start − Weg entlang der Achse, also relativ, damit Greifen auf der Fasenfläche nicht sofort umschlägt. Zone um 0 ist 8 px breit (bei 0,5-mm-Raster nur ~1 px, nicht zu treffen); dort wird der Eintrag `hidden`, beim Loslassen entfernt (`dropEdgeOps`, Kanten bleiben markiert). Maßfeld: `editDim` gibt jetzt auch ≤ 0 an `apply` weiter (einziger Nutzer). Im Browser: rein 6,5 Rundung, raus durch 0 auf Fase 6, Fase 5→2→scharf→Radius 1,5→7,5, bei scharf losgelassen = weg, Strg+Z zurück, getippt 3/0/−2. Kein Kern-Test: nur Bedienung in main.ts, Kern unverändert. Nicht geprüft: Zoll, Innenkanten (konkav), Mehrfachauswahl.
 - 2026-11-09 I8 Zuletzt geöffnet (0.18.0): jede Datei, die geöffnet oder gespeichert wird (`setFile`), kommt nach vorn in `openform-recent` (höchstens 8). „Öffnen“ zeigt in der Desktop-App ein Menü: „Datei wählen …“ und die Liste (Name · Ordner); nicht mehr vorhandene Dateien fliegen beim Anklicken mit Meldung heraus. Ohne Liste geht der Dialog wie bisher direkt auf. Nur in der Exe prüfbar, nicht im Browser; nicht von Hand geprüft. Damit sind I1–I8 erledigt.

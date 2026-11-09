@@ -513,6 +513,11 @@ test('Kugel: Werkzeug, Vollkreis als Drehkörper, Skizze quer über die Achse', 
   expect(valid(mit.body!)).toBe(true);
   expect(measureVolume(mit.body!)).toBeGreaterThan(1000);
   expect(measureVolume(buildBody([quader]).body!)).toBeCloseTo(1000, 3);
+  // Abziehen: Mitte auf der Fläche = Halbkugel-Mulde
+  const wuerfel = rect(GROUND, [0, 0], [20, 20], 4, 10, false), mulde = buildBody([wuerfel, { ...k, id: 5, sub: true, p: { cx: 10, cy: 10, r: 5 } }]);
+  expect([...mulde.errors]).toEqual([]);
+  expect(valid(mulde.body!)).toBe(true);
+  expect(measureVolume(mulde.body!)).toBeCloseTo(4000 - soll(5) / 2, 2);
   // Vollkreis mit Achse durch die Mitte ist auch ohne Werkzeug eine Kugel
   const voll: Extrude = { ...circle(GROUND, [0, 0], 10, 1, 0, false), rev: 360 };
   expect(measureVolume(buildBody([voll]).body!)).toBeCloseTo(soll(10), 3);

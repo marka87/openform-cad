@@ -1842,7 +1842,7 @@ function renderFeaturePanel() {
       : f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
     (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Vorlage <select class="thr"><option value="">–</option><optgroup label="Gewinde (Kernloch)">${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</optgroup><optgroup label="3D-Druck">${Object.keys(PRINT_HOLES).map(m => `<option>${m}</option>`).join('')}</optgroup></select></label><label>Mutternfalle <select class="nut"><option value="">–</option>${Object.keys(NUTS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
-    (f.rev && !f.ball ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
+    (f.rev && !f.ball ? revHtml : '') + (f.rev ? `<label>Abziehen (${f.ball ? 'Loch' : 'Nut'}) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') + // Kugel abziehen = Halbkugel-Mulde
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${esc(nameOf(loftTo))} #${loftTo.id}</button>` : '') +
     features.filter((g): g is Pattern => g.type === 'pattern' && g.src.includes(f.id)).map(g => `<button class="act toPat" data-id="${g.id}">Im ${esc(nameOf(g))} #${g.id} – bearbeiten</button>`).join('') +
     `<button class="del">Löschen</button>` +
