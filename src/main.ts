@@ -786,7 +786,7 @@ function edgeArrowAt() {
   const s = getSel(), a = s && isEdgeOp(s) ? s : edgeSel[0];
   if (!a) return null;
   const P = V(a.at), view = camera.position.clone().sub(P).normalize();
-  return { a, op: s && isEdgeOp(s) ? s : null, P, out: edgeOutward(P) ?? V(a.dir).cross(view).cross(V(a.dir)).normalize() };
+  return { a, op: s && isEdgeOp(s) ? s : null, P, out: (!(s && isEdgeOp(s)) && edgeOutward(P)) || V(a.dir).cross(view).cross(V(a.dir)).normalize() };
 }
 function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
   const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3(), normals: THREE.Vector3[] = [];
@@ -1356,8 +1356,8 @@ function onDown(e: PointerEvent) {
     drag = { kind: 'push', f, f0: structuredClone(f), part: 'end', k: 1, whole: true, P0: hp.object.position.clone(), D: V(f.n).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(f)))), sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp?.object.userData.edgeArrow) { // Kanten-Pfeil: wie die Kante selbst ziehen
     const ea = edgeArrowAt()!;
-    drag = ea.op ? { kind: 'edge', f: ea.op, P0: V(ea.op.at), sx: e.clientX, sy: e.clientY, started: false }
-      : { kind: 'edge', f: null, edge: edgeSel[0], P0: V(edgeSel[0].at), sx: e.clientX, sy: e.clientY, started: false };
+    drag = ea.op ? { kind: 'edge', f: ea.op, P0: V(ea.op.at), arrow: true, sx: e.clientX, sy: e.clientY, started: false }
+      : { kind: 'edge', f: null, edge: edgeSel[0], P0: V(edgeSel[0].at), arrow: true, sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp?.object.userData.pnew) { // Pfeil einer neuen Muster-Richtung: Muster bzw. Richtung 2 entsteht beim ersten Ziehen (M3)
     const s = getSel()!, ax: Vec = hp.object.userData.pnew;
     drag = { kind: 'patd', f: s.type === 'pattern' ? s : null, src: s, ax, k: s.type === 'pattern' ? 'b' : 'a', d0: 0, P0: hp.object.position.clone(), D: V(ax).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(s)))), sx: e.clientX, sy: e.clientY, started: false };
@@ -1515,6 +1515,7 @@ function onMove(e: PointerEvent) {
     if (drag.kind === 'patd') { // letztes Exemplar folgt der Maus, Abstand = Weg / (Anzahl − 1)
       if (!drag.f || (drag.f[drag.k]?.n ?? 0) < 2) { // neue Richtung (M3)
         const d: PatternDir = { ax: drag.ax, n: Math.max(3, drag.k === 'a' ? patVals.cnt : patVals.cnt2), d: 0 };
+        drag.made = true;
         if (drag.f) drag.f.b = d;
         else { drag.f = { id: nextId++, type: 'pattern', src: patTargets(drag.src).map(g => g.id), a: d, body: bodyOf(drag.src) } satisfies Pattern; add(drag.f); patView = null; clearSel(); selId = drag.f.id; }
       }
@@ -1562,7 +1563,7 @@ el.addEventListener('pointerup', e => {
   }
   if (drag.kind === 'sketch' && !finishSketch()) { drag.armed = true; controls.enabled = true; return showHud(e, TOO_THIN); }
   if (drag.kind === 'box') boxSelect(drag);
-  if (drag.kind === 'edge' && !drag.started && !drag.f) {
+  if (drag.kind === 'edge' && !drag.started && !drag.f && !drag.arrow) { // nur Klick auf den Pfeil: Auswahl bleibt
     const near = (a: { at: Vec; dir: Vec }) => sameEdge(a, drag.edge, 4 * pxSize());
     edgeSel = e.shiftKey || e.ctrlKey ? (edgeSel.some(near) ? edgeSel.filter(a => !near(a)) : [...edgeSel, drag.edge]) : [drag.edge];
     selId = selBody = null; multi.clear();
@@ -1578,6 +1579,7 @@ el.addEventListener('pointerup', e => {
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push') for (const o of [drag, ...drag.more ?? []]) if (o.f.and && Math.abs(o.f.d) < 1e-6) { features = features.filter(f => f !== o.f); multi.delete(o.f.id); } // flacher Bereich bringt nichts
   if (drag.kind === 'offset' && drag.f && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f);  // Versatz 0 bringt nichts
+  if (drag.kind === 'patd' && drag.made && !drag.f[drag.k].d) { if (drag.k === 'b') delete drag.f.b; else { features = features.filter(f => f !== drag.f); selId = null; } } // hin und zurück gezogen: Abstand 0 bringt nichts
   drag = null;
   controls.enabled = true;
   if (!wasLine) refresh();
