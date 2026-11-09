@@ -810,6 +810,15 @@ function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
   return normals.length === 2 ? normals[0].add(normals[1]).normalize() : null;
 }
 
+// Wie tief der Körper unter der Mitte einer Skizze reicht (entlang −n): fernster Treffer im Anzeigenetz, null = nichts darunter (I5)
+const depthRay = new THREE.Raycaster();
+function bodyDepth(f: Extrude) {
+  const M = moveMatrix(movesAfter(live(), live().findIndex(g => g.id === f.id))), [cx, cy] = sketchMid(f), n = V(f.n).transformDirection(M);
+  const P = V(f.o).addScaledVector(V(f.u), cx).addScaledVector(V(f.v), cy).applyMatrix4(M).addScaledVector(n, 0.01);
+  depthRay.set(P, n.clone().negate());
+  const hs = depthRay.intersectObjects(bodyGroup.children.filter(m => m.userData.body === bodyOf(f)), false);
+  return hs.length ? Math.max(...hs.map(h => h.distance)) - 0.01 : null;
+}
 // Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
 const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
 // Ziel einer neuen Skizze: angeklickte Fläche, sonst das Flächenraster, sonst der Boden
@@ -1558,8 +1567,13 @@ function onMove(e: PointerEvent) {
     }
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
-    const [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, pullStep()), drag.i);
+    let [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, pullStep()), drag.i);
+    if (drag.part === 'end' && drag.f.onFace && !drag.f.rev && drag.f.d < 0) { // über den Boden hinaus = durch alles (I5); Tiefe des Körpers einmal je Ziehen messen
+      drag.T ??= bodyDepth(drag.f0);
+      if (drag.T && -drag.f.d >= drag.T) { drag.f.d = -drag.T; drag.f.thru = true; label = 'durch alles'; val = drag.T; }
+    }
     for (const o of drag.more ?? []) applyPush(o.f, o.f0, 'end', drag.k, snap(s, e, pullStep()));
+    if (drag.f.thru) for (const o of drag.more ?? []) if (o.f.onFace) { o.f.d = drag.f.d; o.f.thru = true; } // mitgezogene Bohrungen ebenso
     if (drag.part === 'seg' || drag.part === 'arc') { // verschobene Seite bleibt, Abhängigkeiten ziehen den Rest nach
       if (constrain(drag.f, [drag.i, (drag.i + 1) % drag.f.pts.length])) drag.last = drag.f.pts; else drag.f.pts = drag.last ?? drag.f0.pts;
     }
