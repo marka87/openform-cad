@@ -86,7 +86,9 @@ export interface RefPlane { id: number; type: 'plane'; c: Vec; n: Vec; u: Vec; v
 // mit b zusätzlich quer dazu (n × b.n Exemplare). Der Kern rechnet die Kopien bei jedem Lauf aus der aktuellen Lage der Quelle neu
 // Rundungen/Fasen an der Quelle gehen mit (T6.8). rot: Kreis-Muster um die Achse ax durch c, a.n Exemplare auf 360° (a.ax/a.d unbenutzt);
 // mir: Spiegelbild an der Ebene durch c mit Normale ax (ein Exemplar, a unbenutzt)
-export interface PatternDir { ax: Vec; n: number; d: number }
+export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } // both: n Exemplare je Seite, Quelle in der Mitte (I3)
+// Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
+export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean }
 export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
 export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
@@ -121,7 +123,8 @@ export function patternCopies(p: Pattern): PatternCopy[] {
     });
   }
   const out: PatternCopy[] = [], nb = p.b ? Math.max(1, Math.round(p.b.n)) : 1;
-  for (let j = 0; j < nb; j++) for (let i = 0; i < n; i++) {
+  const idx = (d: PatternDir, m: number) => Array.from({ length: d.both ? 2 * m - 1 : m }, (_, k) => d.both ? k - m + 1 : k); // beidseitig: −(m−1) … m−1
+  for (const j of p.b ? idx(p.b, nb) : [0]) for (const i of idx(p.a, n)) {
     if (!i && !j) continue;
     const t = [0, 1, 2].map(k => p.a.ax[k] * p.a.d * i + (p.b ? p.b.ax[k] * p.b.d * j : 0)) as Vec;
     out.push({ key: `${i}:${j}`, copy: (f, id) => movedCopy(f, id, t), pt: q => q.map((x, k) => x + t[k]) as Vec, dir: same, back: q => q.map((x, k) => x - t[k]) as Vec, backDir: same });

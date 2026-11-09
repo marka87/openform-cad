@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -173,7 +173,7 @@ function hoverHint(h: { face: Hit | null; edge: EdgeHit | null }) {
   if (!hintAuto || drag) return;
   const g = h.face?.grip, f = g && g.f;
   const hh = ray.intersectObjects(handles.children)[0]?.object.userData;
-  const text = hh?.edgeArrow ? 'wegziehen = runden · hineinschieben = fasen' : hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung' : hh?.pk ? 'ziehen = Abstand des Musters ändern' : hh ? 'ziehen = Punkt verschieben'
+  const text = hh?.edgeArrow ? 'wegziehen = runden · hineinschieben = fasen' : hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung · mit Alt = nach beiden Seiten' : hh?.pk ? 'ziehen = Abstand des Musters ändern · mit Alt = nach beiden Seiten' : hh ? 'ziehen = Punkt verschieben'
     : h.edge ? 'ziehen = runden · hinein = fasen'
     : !h.face ? 'ziehen = Rahmen auswählen · rechts ziehen = drehen'
     : !g || g.part === 'import' ? 'ziehen = Fläche versetzen'
@@ -1526,6 +1526,7 @@ function onMove(e: PointerEvent) {
       }
       const s = lineParam(drag.P0, drag.D), dir = drag.f[drag.k];
       if (s === null) return;
+      if (e.altKey) dir.both = true; // Alt beim Ziehen: nach beiden Seiten (I3), zurück über das Häkchen im Seitenfeld
       dir.d = snap(drag.d0 + s / (dir.n - 1), e, pullStep()) || drag.d0;
       rebuild();
       return showHud(e, `Abstand: ${len(dir.d)} · ${dir.n} Stück`);
@@ -1987,7 +1988,7 @@ function patDims(f: Pattern) {
     const d = f[k];
     if (!d || d.n < 2) continue;
     const dir = V(d.ax).multiplyScalar(Math.sign(d.d) || 1), el = document.createElement('span');
-    el.innerHTML = `<i>${patTotal ? 'Gesamt' : 'Abstand'} ▾</i> <b data-t=".d${k}">${fmt(Math.abs(patTotal ? d.d * (d.n - 1) : d.d))}</b> · <b data-t=".n${k}">${d.n}×</b>`;
+    el.innerHTML = `<i>${patTotal ? 'Gesamt' : 'Abstand'} ▾</i> <b data-t=".d${k}">${fmt(Math.abs(patTotal ? d.d * spanOf(d) : d.d))}</b> · <b data-t=".n${k}">${d.n}×${d.both ? ' ⇆' : ''}</b>`;
     el.title = 'Abstand/Gesamt anklicken = umschalten · Zahl anklicken = tippen';
     el.onmousedown = e => e.preventDefault();
     el.onclick = e => { e.stopPropagation(); const t = (e.target as HTMLElement).dataset.t; if (t) editDim(el, t); else { patTotal = !patTotal; renderPanel(); buildDims(); } };
@@ -2165,7 +2166,7 @@ function renderPatternPanel(f: Pattern) {
   }
   const row = (k: 'a' | 'b', label: string) => { const d = f[k] ?? { n: 1, d: 20 };
     return `<label>${label}: Anzahl <input class="n${k}" type="number" min="1" value="${d.n}"></label>
-      <label>${patTotal ? 'Gesamt' : 'Abstand'} <input class="d${k}" type="number" step="0.5" value="${uval(patTotal ? d.d * Math.max(1, d.n - 1) : d.d)}"></label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
+      <label>${patTotal ? 'Gesamt' : 'Abstand'} <input class="d${k}" type="number" step="0.5" value="${uval(patTotal && d.n > 1 ? d.d * spanOf(d as PatternDir) : d.d)}"></label><label class="row"><input type="checkbox" class="w${k}"${(d as PatternDir).both ? ' checked' : ''}> beidseitig</label><button class="f${k}" title="Richtung umkehren">⇄ Richtung</button>`; };
   panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p style="color:var(--muted);margin:4px 0">Quelle: ${f.src.map(id => `#${id}`).join(', ')}</p>`
     + row('a', 'Richtung 1') + row('b', 'quer dazu') + (f.src.length === 1 ? fillHtml() : '') + `<button class="del">Löschen</button>`;
   wireFill(() => { const s = getById(f.src[0]); return s && isExtrude(s) ? s : null; }, () => [f.a.d, f.b && f.b.n > 1 ? f.b.d : f.a.d], f);
@@ -2173,8 +2174,10 @@ function renderPatternPanel(f: Pattern) {
     const dir = () => f[k] ??= { ax: crossDir(f), n: 1, d: 20 };
     const set = (fn: (d: PatternDir) => void) => { pushHistory(); fn(dir()); refresh(); };
     const n = panel.querySelector<HTMLInputElement>(`.n${k}`)!, d = panel.querySelector<HTMLInputElement>(`.d${k}`)!;
-    n.onchange = () => { const v = Math.round(parseFloat(n.value)); if (v >= 1) set(x => { if (patTotal && x.n > 1 && v > 1) x.d = x.d * (x.n - 1) / (v - 1); x.n = v; }); }; // Gesamt bleibt stehen
-    d.onchange = () => { const v = mmOf(d); if (isFinite(v) && v) set(x => x.d = patTotal && x.n > 1 ? v / (x.n - 1) : v); };
+    n.onchange = () => { const v = Math.round(parseFloat(n.value)); if (v >= 1) set(x => { if (patTotal && x.n > 1 && v > 1) x.d = x.d * spanOf(x) / spanOf({ ...x, n: v }); x.n = v; }); }; // Gesamt bleibt stehen
+    d.onchange = () => { const v = mmOf(d); if (isFinite(v) && v) set(x => x.d = patTotal && x.n > 1 ? v / spanOf(x) : v); };
+    const w = panel.querySelector<HTMLInputElement>(`.w${k}`)!;
+    w.onchange = () => set(x => { if (w.checked) x.both = true; else delete x.both; });
     panel.querySelector<HTMLButtonElement>(`.f${k}`)!.onclick = () => set(x => x.d = -x.d);
   }
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
