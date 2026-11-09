@@ -349,6 +349,11 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
+  else if (data.type === 'maxEdge') { // größtes machbares Maß übernehmen (I2), Strg+Z holt das alte zurück
+    const f = getById(data.id);
+    if (data.r && f && isEdgeOp(f)) { pushHistory(); f.r = data.r; refresh(); showNotice(`Geht bis ${len(data.r)} – übernommen (Strg+Z = zurück)`); }
+    else showNotice('Auch mit sehr kleinem Maß nicht machbar – Kante oder Nachbarschritte prüfen');
+  }
   else if (data.invalid?.length) { if (confirm(`Körper ${data.invalid.map(b => `#${b}`).join(', ')} ist ungültig, die Datei kann Löcher haben und sich nicht fertigen lassen. Trotzdem exportieren?`)) sendExport({ type: 'export', format: data.format, force: true }); }
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
@@ -2086,6 +2091,7 @@ function renderEdgePanel(f: EdgeOp) {
   panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}${more.length ? ` + ${more.length} weitere` : ''}</h3>
     <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
     <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input class="r" type="number" step="0.5" value="${uval(f.r)}"></label>
+    ${problems.get(f.id)?.bad ? `<button class="act max">Größtmögliches Maß suchen</button>` : ''}
     <button class="del">Löschen</button>`;
   const sel = panel.querySelector('select')!, inp = panel.querySelector<HTMLInputElement>('.r')!;
   sel.value = f.type;
@@ -2095,6 +2101,8 @@ function renderEdgePanel(f: EdgeOp) {
     if (!isFinite(v)) return;
     pushHistory(); for (const g of [f, ...more]) g.r = Math.max(0.5, v); refresh();
   };
+  const mx = panel.querySelector<HTMLButtonElement>('.max');
+  if (mx) mx.onclick = () => { send({ type: 'maxEdge', features: live(), id: f.id }); showNotice('Suche das größte machbare Maß …'); };
   panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
 }
 // Zweite Richtung eines Musters: in der Ebene der ersten Quellskizze quer zur ersten (n × a; bei a = x der Skizze ist das y)

@@ -153,6 +153,24 @@ function snapshotOf(bodies: Map<number, Shape3D>, names: Map<number, Named>, ali
 }
 const dropCache = (c: BuildCache) => { c.st?.bodies.forEach(s => s.delete()); c.end?.bodies.forEach(s => s.delete()); c.st = c.end = null; };
 export { newCache, dropCache };
+// Größtes Maß, bei dem Rundung/Fase id noch gelingt (I2): Halbierungssuche zwischen 0,05 mm und dem gescheiterten Maß.
+// Nur die Schritte bis zur Rundung; der Stand davor bleibt im eigenen Zwischenspeicher, jeder Versuch rechnet nur den einen Schritt. null = nicht einmal 0,05 mm
+export function maxEdgeSize(features: Feature[], id: number, imports = new Map<number, Shape3D>()): number | null {
+  const i = features.findIndex(f => f.id === id), c = newCache(), fs = features.slice(0, i + 1);
+  const ok = (r: number) => {
+    const res = buildBody(fs.map(f => f.id === id ? { ...f, r } as Feature : f), imports, c), good = !res.errors.has(id) && !res.failed.includes(id);
+    if (res.body && res.bodies.size > 1) res.body.delete();
+    res.bodies.forEach(s => s.delete());
+    return good;
+  };
+  let lo = 0.05, hi = (fs[i] as { r?: number } | undefined)?.r ?? 0;
+  try {
+    if (i < 0 || !ok(lo)) return null;
+    if (ok(hi)) return hi;
+    for (let k = 0; k < 12 && hi - lo > 0.01; k++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; }
+  } finally { dropCache(c); }
+  return lo >= 0.1 ? Math.floor(lo * 10) / 10 : Math.floor(lo * 100) / 100;
+}
 export function buildBody(features: Feature[], imports = new Map<number, Shape3D>(), cache?: BuildCache) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen

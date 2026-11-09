@@ -117,7 +117,7 @@ Video des Nutzers aus Shapr3D (Kante runden/fasen, 18 s): Pfeil an der Kante, Ma
 an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Ziehen selbst entspricht E1.
 - [x] DONE I1 (0.18.0) Fläche füllen (Lochraster): Fläche anklicken, Lochmaß, Abstand, Randabstand → Anzahl je Richtung wird
       gerechnet, Raster sitzt mittig. Ergebnis ist ein normales Muster (bleibt bearbeitbar).
-- [ ] TODO I2 Größtmögliche Rundung/Fase: schlägt sie fehl, das größte noch machbare Maß suchen und anbieten.
+- [x] DONE I2 (0.18.0) Größtmögliche Rundung/Fase: schlägt sie fehl, das größte noch machbare Maß suchen und anbieten.
 - [ ] TODO I3 Muster von der Mitte aus: Taste beim Ziehen = beidseitig gleich weit.
 - [ ] TODO I4 Einzelne Exemplare weglassen: Shift+Klick auf eine Kopie nimmt sie heraus (und wieder hinein).
 - [ ] TODO I5 Durch alles beim Ziehen: Bohrung über den Boden hinaus gezogen rastet auf „durch alles“ ein.
@@ -220,7 +220,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1)
+- **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2)
 - **0.17.2** Audit 2026-11-09: Rundung am Pfeil ziehen ruckelt nicht mehr (A31); kein leeres Muster nach Hin-und-zurück-Ziehen (A32); Klick auf den Kanten-Pfeil behält die markierten Kanten (A33)
 - **0.17.1** Pfeile kleiner und behalten beim Zoomen ihre Bildschirmgröße (vorher riesig nach dem Hineinzoomen)
 - **0.17.0** Muster und Ziehen wie Shapr3D: Klick auf ein Exemplar markiert das ganze Muster samt Quelle (M1); ⇕-Pfeil an ausgewählter Skizze bzw. Fläche, bei einem Muster an der Quelle (M2); Muster direkt am Modell: 4 Pfeile aus der Skizzenmitte, Ziehen legt es an, danach 2 Pfeile quer für das Raster (M3); Felder „Abstand ▾ / Gesamt“ und Anzahl am Pfeil (M4); Kante: ⇔-Pfeil und Feld „Rundung ▾ / Fase“ mit Maß (E1)
@@ -262,6 +262,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 I2 Größtmögliches Maß (0.18.0): Knopf im Feld einer roten Rundung/Fase. `maxEdgeSize` (kernel.ts, Kern-Test): Halbierungssuche 0,05 mm bis gescheitertes Maß, nur Schritte bis zur Rundung, eigener Zwischenspeicher (jeder Versuch rechnet nur den einen Schritt), abgerundet auf 0,1 mm; Worker-Auftrag `maxEdge`. Ergebnis wird übernommen (Strg+Z = zurück). Im Browser: Quader 20 × 10 × 10, Rundung 12 → 9,9. Das Seitenfeld zeigt den Knopf bis zum nächsten Neuzeichnen weiter.
 - 2026-11-09 I1 Fläche füllen (0.18.0): Knopf im Muster-Feld (neue Reihe und bestehendes Muster mit einer Quelle), Rand eintippen. `fillGrid` (model.ts, Kern-Test) rechnet Anzahl und Startmitte je Richtung; die Fläche kommt als Kasten aus dem Anzeigenetz des Körpers (Punkte in der Skizzenebene mit gleicher Normale), Quelle wird auf die erste Stelle verschoben, Achsen = X/Y der Skizze. shortcut: Kasten statt echtem Umriss, bei runden oder L-Flächen fallen Ecklöcher heraus. Im Browser: Platte 60 × 30, Loch R3, Rand 3, Abstand 10 → 5 × 2, Mitten 10–50 / 10–20 (mittig).
 - 2026-11-09 Audit-Fixes (0.17.2): A31 bei bestehender Rundung/Fase keine Suche nach der Außenrichtung (der alte Kantenpunkt liegt nicht mehr am Körper, die Suche lief immer durch alle Dreiecke). A32 `drag.made` merkt ein neu angelegtes Muster bzw. eine neue Richtung, Abstand 0 beim Loslassen = wieder weg. A33 `arrow` am Drag: Klick ohne Ziehen setzt die Kantenauswahl nicht neu. 112 Tests grün, tsc sauber; im Browser nicht durchgeklickt, weil dort das Modell des Nutzers offen ist (eigener Speicher unter 127.0.0.1 war nicht erreichbar).
 - 2026-11-09 Pfeile (0.17.1), Rückmeldung des Nutzers mit Bild: ⇕-Pfeil nach dem Hineinzoomen riesig. Ursache: Griffe wurden beim Neuzeichnen in Pixelgröße angelegt und wuchsen beim Zoomen mit. Jetzt `scaleHandles()` im Bildlauf: jeder Griff merkt sich Ankerpunkt und Pixelgröße und skaliert um den Anker; gilt auch für die alten Muster-Pfeile und Skizzenpunkte. Alle Pfeile etwa ein Drittel kleiner. Geprüft im Browser am Modell des Nutzers (nur ausgewählt und gezoomt, nichts geändert).

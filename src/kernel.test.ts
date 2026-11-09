@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
-import { buildBody, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
+import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
 import { parseModel, fillGrid, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
@@ -1035,6 +1035,17 @@ test('Text aus der mitgelieferten Schrift: erhaben auf dem Boden, graviert in de
   expect(measureVolume(r.body!)).toBeLessThan(2000 - 1);                       // Gravur nimmt Material weg
   expect(measureVolume(r.body!)).toBeGreaterThan(2000 - 6 * 6);
   expect(buildBody([box(), T(3, TOPO, '  ', -1, 1)]).errors.get(3)).toBe('Kein Text eingegeben');
+});
+
+test('Größtmögliche Rundung (I2): zu groß → größtes machbares Maß, unmöglich → null', () => {
+  const f = (r: number): EdgeOp => ({ id: 3, type: 'fillet', at: [20, 10, -5], dir: [0, 0, 1], r }); // Kante oben rechts am Quader 20 × 10 × 10
+  expect(buildBody([box(), f(12)]).errors.has(3)).toBe(true);
+  const r = maxEdgeSize([box(), f(12)], 3)!;
+  expect(r).toBeGreaterThan(8);
+  expect(r).toBeLessThanOrEqual(10);
+  expect(buildBody([box(), f(r)]).errors.has(3)).toBe(false);          // das gefundene Maß gelingt wirklich
+  expect(maxEdgeSize([box(), f(4)], 3)).toBe(4);                        // geht schon: bleibt
+  expect(maxEdgeSize([box(), { ...f(2), at: [50, 50, 50] }], 3)).toBeNull(); // keine Kante dort
 });
 
 test('Fläche füllen (I1): Anzahl je Richtung, Raster mittig, Rand eingehalten, passt nicht = null', () => {
