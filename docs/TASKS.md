@@ -96,7 +96,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
 - [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
-      STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.1 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8, Kante mit Vorzeichen (E2), Kugel abziehen (K1), liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
+      STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.2 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8, Kante mit Vorzeichen (E2), Kugel abziehen (K1), KI über Google Agent Platform, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
@@ -266,6 +266,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.18.2 gebaut (9,9 MB), noch nicht installiert.
 - 2026-11-09 KI mit Google Agent Platform (0.18.2, PATCH): Schlüssel des Nutzers (beginnt mit `AQ.`) ist ein Agent-Platform-Schlüssel, bei generativelanguage.googleapis.com gesperrt (403 API_KEY_SERVICE_BLOCKED). Die OpenAI-kompatible Adresse `https://aiplatform.googleapis.com/v1/projects/<Projekt>/locations/global/endpoints/openapi` mit Modell `google/gemini-3.8-flash` antwortet mit curl, aber nur mit dem Kopf `x-goog-api-key`; `Authorization: Bearer` wird dort als OAuth-Token gelesen (401). `chat` schickt den Schlüssel bei *aiplatform.googleapis.com jetzt so, Test in ai.test.ts. Nicht in der App selbst geprüft (Schlüssel tippt der Nutzer ein). Der Nutzer hatte geminikey.txt im Repo-Ordner: lokal über .git/info/exclude ausgeschlossen, nicht über .gitignore.
 - 2026-11-09 Installer 0.18.1 gebaut (9,9 MB), noch nicht installiert.
 - 2026-11-09 K1 Kugel abziehen (0.18.1, Fehlerbehebung = PATCH, da 0.18.0 schon gebaut): Nutzer wollte eine Halbkugel-Mulde, das Häkchen „Abziehen“ war bei der Kugel ausgeblendet (`f.rev && !f.ball`), der Kern konnte es schon (`isCut` = `rev ? sub`). Häkchen jetzt bei jedem Drehkörper, bei der Kugel „(Loch)“. Kern-Test: Würfel 20×20×10 minus Kugel r5 mit Mitte auf der Fläche = 4000 − ½·Kugel. Gelernt: im Test muss die Kugel im selben Körper liegen (kein `body`), sonst bleibt sie ein eigener Körper und es wird nichts abgezogen. Im Browser: 30×30×20 minus Kugel r8 = 16,93 cm³, Mulde sichtbar. Offen: eine neue Kugel ist zunächst immer aufgesetzt, Abziehen erst danach per Häkchen.
