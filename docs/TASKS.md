@@ -137,7 +137,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE F5 (0.19.0) Rippe/Steg: Linie zeichnen, im Seitenfeld „Rippe“ → Wand (Dicke 3 mm, im Feld änderbar, 0 = weg) quer zur Linie bis an den Körper.
 - [x] DONE F6 (0.19.0) Lippe/Falz: Seitenfeld der Schale „Rand“ = Lippe (Kiste) oder Falz (Deckel), Breite/Höhe/Spiel (Vorgabe halbe Wand, 2 mm, 0,2 mm).
 - [x] DONE F7 (0.19.0) Benannte Maße: Liste „Parameter“ unter den Schritten (Name = Wert); jedes Maßfeld im Seitenfeld nimmt Namen und Rechnungen (breite/2 + 3), gebundene Maße rechnen bei Änderung neu.
-- [ ] TODO R1 Rippe gegen Fehlbedienung: Stück, das entlang der Linie über sie hinausreicht, ablehnen (verständliche Meldung, wie man
+- [x] DONE R1 (0.22.1) Rippe gegen Fehlbedienung: Stück, das entlang der Linie über sie hinausreicht, ablehnen (verständliche Meldung, wie man
       die Linie legt); Skizze auf einer Körperfläche: Wand von der Fläche nach innen statt mittig. Fall des Nutzers als Kern-Test.
 - [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht. (erst nach 3d)
 - [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen. (erst nach 3d)
@@ -245,6 +245,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.22.1** Rippe: keine Riesenplatte mehr bei einer Linie auf der Wandfläche, Meldung mit Anleitung; auf einer Körperfläche gezeichnet geht die Wand bündig nach innen (R1)
 - **0.22.0** Feste Leisten links und rechts mit Splittern, 3D-Ansicht nimmt den Rest, bei Platzmangel links nur Symbole; Mindestgröße 1024×576 (L2)
 - **0.21.1** Seitenfeld scrollt und endet über dem Baum (L1)
 - **0.21.0** Vier Skins zur Auswahl (Graphit, Hell, Nacht, Kontrast) unter den Ansichten
@@ -294,6 +295,10 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 R1 (0.22.1, PATCH): ribSolid misst, wie weit das gewählte Stück quer zur Linie reicht (Ecken der Hüllbox auf die Querrichtung);
+  mehr als 2·Länge + 2·Dicke + 5 mm = Riesenplatte → abgelehnt mit Anleitung („Linie auf eine Ebene quer durch das Teil legen …“). Skizze auf einer
+  Körperfläche: Wand von −Dicke bis 0 entlang n statt mittig, Probe in der Wandmitte. Kern-Test mit dem Fall des Nutzers (senkrechte Linie auf der
+  Wandinnenseite: Fehler, Volumen unverändert) und Stirnfläche (Dreieck × 3 mm, bündig bei z = 10). Nicht im Browser oder in der Exe nachgestellt.
 - 2026-11-09 Installer 0.22.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Feldnotiz Rippe (Nutzer, 0.21.0): Linie senkrecht auf der Wandfläche eines L-Winkels gezeichnet → riesige Platte über die ganze Länge
   („Monster“). Ursache: Skizze auf einer Körperfläche statt quer durch das Profil; die Rippe liegt dann in der Wandebene und das gewählte Stück

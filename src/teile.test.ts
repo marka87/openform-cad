@@ -718,3 +718,19 @@ test('Benannte Maße (F7): Ausdrücke, Bindung, Neurechnen nach Parameteränderu
   expect(() => parseModel(JSON.stringify({ features: [], params: { '<img>': 1 } }))).toThrow('Parameter');
   expect(() => parseModel(JSON.stringify({ features: [{ ...kasten, ex: { 'p.w': { e: 1 } } }] }))).toThrow('Gebundene');
 });
+
+test('Rippe (R1): Linie auf der Wandfläche gibt keine Riesenplatte, Skizze auf der Stirnfläche gibt bündige Rippe nach innen', () => {
+  const boden = rect(GROUND, [0, -10], [40, 10], 1, 5, false), wand = rect(GROUND, [0, -10], [5, 10], 2, 40, false);
+  const ohne = measureVolume(buildBody([boden, wand]).body!);
+  // Fall des Nutzers: senkrechte Linie auf der Innenseite der Wand (Ebene x = 5), von der Grundplatte bis oben
+  const wandFlaeche: Frame = { o: [5, 0, 0], n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] };
+  const monster = buildBody([boden, wand, { ...wandFlaeche, id: 3, type: 'line', p: {}, pts: [[0, 5], [0, 40]], d: 0, open: true, onFace: true, rib: 5 } as Extrude]);
+  expect(monster.errors.get(3)).toMatch(/quer durch das Teil/);
+  expect(measureVolume(monster.body!)).toBeCloseTo(ohne, 3); // nichts angebaut
+  // richtig: schräge Linie auf der Stirnfläche (z = 10), Wand geht von dort nach innen und schließt bündig ab
+  const stirn: Frame = { o: [0, 0, 10], n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] };
+  const gut = buildBody([boden, wand, { ...stirn, id: 3, type: 'line', p: {}, pts: [[5, 30], [35, 5]], d: 0, open: true, onFace: true, rib: 3 } as Extrude]);
+  expect([...gut.errors]).toEqual([]);
+  expect(measureVolume(gut.body!)).toBeCloseTo(ohne + 0.5 * 30 * 25 * 3, 1);
+  expect(gut.body!.boundingBox.bounds[1][2]).toBeCloseTo(10, 3); // nicht aus dem Teil heraus
+});

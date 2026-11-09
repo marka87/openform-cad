@@ -111,26 +111,40 @@ const dot3 = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] 
 // Rippe (F5): offene Linie als Wand der Dicke rib, mittig auf der Skizzenebene. Die Wand reicht quer zur Linie (in der Ebene) bis an
 // den Körper: Streifen von der Linie weg, Körper abziehen, das Stück an der Linie bleibt. Seite = die, auf der der Körper den Streifen
 // begrenzt; begrenzt er beide, die kleinere. Probe für „an der Linie“: Mitte der ersten Seite, knapp daneben.
+// Skizze auf einer Körperfläche (z. B. Stirnfläche): Wand von der Fläche nach innen, bündig, statt halb aus dem Teil heraus.
+// Gegen Fehlbedienung (Linie auf der Wandfläche statt quer durch das Profil, R1): ein Stück, das quer zur Linie viel weiter reicht
+// als die Linie lang ist, wird abgelehnt statt als Riesenplatte angebaut.
 // shortcut: Richtung quer zur Sehne vom ersten zum letzten Punkt; bei stark gebogenen Linienzügen ungenau → Richtung je Abschnitt
+const RIB_HOW = 'Linie auf eine Ebene quer durch das Teil legen (z. B. Stirnfläche) und schräg von Wand zu Boden zeichnen';
 function ribSolid(g: Extrude, body: Shape3D): Shape3D {
   const t = g.rib!, pts = g.pts!, a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (L < 1e-6 || t <= 0) throw new Error('Linie zu kurz für eine Rippe');
   const m = [(a[1] - b[1]) / L, (b[0] - a[0]) / L], [lo, hi] = body.boundingBox.bounds, D = 2 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) + 10;
-  const at = (x: number, y: number) => makeVertex(g.o.map((o, i) => o + x * g.u[i] + y * g.v[i]) as Vec);
+  const z0 = g.onFace ? -t : -t / 2, zm = z0 + t / 2; // Unterseite und Mitte der Wand entlang n
+  const world = (x: number, y: number, z = 0) => g.o.map((o, i) => o + x * g.u[i] + y * g.v[i] + z * g.n[i]) as Vec;
+  const mw = g.u.map((u, i) => u * m[0] + g.v[i] * m[1]), A = world(a[0], a[1]);
   const q = [(a[0] + pts[1][0]) / 2, (a[1] + pts[1][1]) / 2];
-  let best: { s: Shape3D; v: number; open: boolean } | null = null;
+  let best: { s: Shape3D; v: number; open: boolean } | null = null, tooFar = false;
   for (const k of [1, -1]) {
     const far = (p: number[]) => [p[0] + k * D * m[0], p[1] + k * D * m[1]];
-    const slab = solidOf({ ...g, type: 'poly', p: {}, pts: [...pts.slice(0, -1), [b[0], b[1]], far(b), far(a)], open: undefined, rib: undefined, cons: undefined, onFace: false, thru: undefined, o: g.o.map((o, i) => o - t / 2 * g.n[i]) as Vec, d: t });
-    const full = measureVolume(slab), rest = slab.cut(body) as Shape3D, probe = at(q[0] + k * 0.05 * m[0], q[1] + k * 0.05 * m[1]);
+    const slab = solidOf({ ...g, type: 'poly', p: {}, pts: [...pts.slice(0, -1), [b[0], b[1]], far(b), far(a)], open: undefined, rib: undefined, cons: undefined, onFace: false, thru: undefined, o: world(0, 0, z0), d: t });
+    const full = measureVolume(slab), rest = slab.cut(body) as Shape3D, probe = makeVertex(world(q[0] + k * 0.05 * m[0], q[1] + k * 0.05 * m[1], zm));
     slab.delete();
     const near = (rest.solids ?? []).map(s => ({ s, dist: measureDistanceBetween(s, probe) })).sort((x, y) => x.dist - y.dist)[0];
     probe.delete();
     const v = near ? measureVolume(near.s) : 0, open = v > full * 0.999; // nichts begrenzt: Streifen läuft ins Leere
-    if (near && near.dist < 0.1 && (!best || best.open && !open || best.open === open && v < best.v)) { best?.s.delete(); best = { s: near.s.clone() as Shape3D, v, open }; }
+    if (near && near.dist < 0.1) {
+      const [p0, p1] = near.s.boundingBox.bounds, corners = [0, 1, 2, 3, 4, 5, 6, 7].map(c => [c & 1 ? p1[0] : p0[0], c & 2 ? p1[1] : p0[1], c & 4 ? p1[2] : p0[2]]);
+      const reach = Math.max(...corners.map(c => k * c.reduce((s, x, i) => s + (x - A[i]) * mw[i], 0)));
+      if (!open && reach > 2 * L + 2 * t + 5) tooFar = true; // Riesenplatte statt Rippe
+      else if (!best || best.open && !open || best.open === open && v < best.v) { best?.s.delete(); best = { s: near.s.clone() as Shape3D, v, open }; }
+    }
     rest.delete();
   }
-  if (!best || best.open) { best?.s.delete(); throw new Error('Rippe trifft den Körper nicht – Linie näher an den Körper legen'); }
+  if (!best || best.open) {
+    best?.s.delete();
+    throw new Error(tooFar ? `Rippe würde weit über die Linie hinaus wachsen – ${RIB_HOW}` : `Rippe trifft den Körper nicht – ${RIB_HOW}`);
+  }
   return best.s;
 }
 
