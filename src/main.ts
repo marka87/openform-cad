@@ -60,6 +60,15 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-100, 
 const shadowFloor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.ShadowMaterial({ opacity: 0.22, depthWrite: false })); // sonst verdeckt der Boden halbdurchsichtige Skizzen darunter
 shadowFloor.rotation.x = -Math.PI / 2; shadowFloor.position.y = -0.03; shadowFloor.receiveShadow = true; shadowFloor.raycast = () => {};
 scene.add(shadowFloor);
+// Skins: Farben der Szene je Skin (Oberfläche: index.html, :root[data-skin]); Auswahl unter „Darstellung“
+const SKINS = {
+  graphit: { bg: 0x1e2126, g1: 0x555b66, g2: 0x3a3f48, fine: 0x2c3037, edge: 0x1a1d22 },
+  hell: { bg: 0xe9ecf0, g1: 0x9aa3ae, g2: 0xc3c9d1, fine: 0xd9dde3, edge: 0x2e343d },
+  nacht: { bg: 0x0f1624, g1: 0x3d5072, g2: 0x283753, fine: 0x1a2438, edge: 0x070b14 },
+  kontrast: { bg: 0x000000, g1: 0x8a8a8a, g2: 0x4a4a4a, fine: 0x262626, edge: 0x000000 },
+};
+type Skin = keyof typeof SKINS;
+const sk = () => SKINS[display.skin] ?? SKINS.graphit;
 const grid = new THREE.GridHelper(400, 40, 0x555b66, 0x3a3f48); scene.add(grid);
 const fine = new THREE.GridHelper(400, 400, 0x2c3037, 0x2c3037); fine.position.y = -0.01; scene.add(fine);
 // Raster auf einer Fläche (Doppelklick): dort weiterskizzieren, auch über den Rand der Fläche hinaus
@@ -288,7 +297,7 @@ function bodyMesh(m: BodyMesh) {
   eg.setAttribute('position', new THREE.BufferAttribute(m.lines, 3));
   mesh.castShadow = mesh.receiveShadow = true;
   mesh.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }))); // unsichtbar, zum Anklicken
-  const fat = new LineSegments2(new LineSegmentsGeometry().setPositions(m.lines), new LineMaterial({ color: 0x1a1d22, linewidth: 1.6 }));
+  const fat = new LineSegments2(new LineSegmentsGeometry().setPositions(m.lines), new LineMaterial({ color: sk().edge, linewidth: 1.6 }));
   fat.raycast = () => {};
   mesh.add(fat);
   // Hervorheben beim Überfahren: teilen sich die Puffer des Körpers, zeigen per drawRange nur eine Fläche bzw. Kante
@@ -958,7 +967,7 @@ function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
   }
   else { // ohne Mittellinien: dort liegen die farbigen Achsen
     const h = (grid.userData.size ?? 400) / 2, all = [[-h, -h], [h, h]];
-    faceGrid.add(faceLines(all, 10, 0x3a3f48, 1, 1), faceLines(all, 1, 0x2c3037, 1, 1));
+    faceGrid.add(faceLines(all, 10, sk().g2, 1, 1), faceLines(all, 1, sk().fine, 1, 1));
   }
   faceGrid.matrix.makeBasis(V(pl.u), V(pl.n), V(pl.v)).setPosition(V(pl.o).addScaledVector(V(pl.n), b ? 0.02 : 0)); // knapp über der Fläche
   faceGrid.matrixAutoUpdate = false;
@@ -3183,7 +3192,7 @@ function fitGrid() {
   const size = Math.max(400, 200 * Math.ceil(ext * 1.25 / 100));
   if (size === grid.userData.size) return;
   grid.userData.size = size;
-  for (const [g, n, c1, c2] of [[grid, size / 10, 0x555b66, 0x3a3f48], [fine, size, 0x2c3037, 0x2c3037]] as const) {
+  for (const [g, n, c1, c2] of [[grid, size / 10, sk().g1, sk().g2], [fine, size, sk().fine, sk().fine]] as const) {
     g.geometry.dispose(); g.geometry = new THREE.GridHelper(size, n, c1, c2).geometry;
   }
 }
@@ -3231,7 +3240,7 @@ function renderCube() {
 document.querySelectorAll<HTMLButtonElement>('#views button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view!));
 
 // ---------- Darstellung: Draht, transparent, Kanten, Schnitt, Render, Farbe (nur Anzeige, wird lokal gemerkt) ----------
-const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 0, unit: 'mm' as 'mm' | 'in',
+const display = { wire: false, glass: false, edges: true, section: 0, secOff: 0, render: false, color: '#c9ced6', grid: 0, unit: 'mm' as 'mm' | 'in', skin: 'graphit' as Skin,
   snap: { grid: true, lines: true, points: true, body: true, edges: true, showPts: true, hints: true } as Record<string, boolean> }; // Einrasten-Menü
 try { Object.assign(display, JSON.parse(localStorage.getItem('openform-view') ?? '{}')); } catch {}
 let envMap: THREE.Texture | null = null;
@@ -3241,6 +3250,13 @@ function applyDisplay() {
   envMap ??= new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = envMap;
   scene.environmentIntensity = display.render ? 1 : 0.3;
+  if (grid.userData.skin !== display.skin) { // Skin gewechselt: Oberfläche, Hintergrund und Raster (Farben stecken in der Geometrie) neu
+    if (!SKINS[display.skin]) display.skin = 'graphit';
+    grid.userData.skin = display.skin; grid.userData.size = 0;
+    document.documentElement.dataset.skin = display.skin;
+    (scene.background as THREE.Color).set(sk().bg);
+    fitGrid();
+  }
   renderer.toneMapping = display.render ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   workMarks.visible = !!workHit && gridAllowed() && display.snap.showPts && display.snap.body;
   renderer.localClippingEnabled = !!display.section;
@@ -3264,6 +3280,7 @@ function applyDisplay() {
     mesh.userData.cap.material.clippingPlanes = display.section ? [cut] : null;
     m.needsUpdate = true;
     mesh.userData.fat.visible = display.edges;
+    mesh.userData.fat.material.color.set(sk().edge);
   }
   document.querySelectorAll<HTMLButtonElement>('#views button[data-show]').forEach(b => {
     const v = display[b.dataset.show as 'wire'];
@@ -3277,7 +3294,9 @@ function applyDisplay() {
   $('gridUnit').textContent = display.unit;
   gizmo.setTranslationSnap(U() > 1 ? 2.54 : 1); // 0,1 in bzw. 1 mm
   $<HTMLSelectElement>('unit').value = display.unit;
+  $<HTMLSelectElement>('skin').value = display.skin;
 }
+$<HTMLSelectElement>('skin').onchange = e => { display.skin = (e.target as HTMLSelectElement).value as Skin; applyDisplay(); updateGrid(); wakeShadow(); };
 $<HTMLInputElement>('secOff').oninput = e => { display.secOff = +(e.target as HTMLInputElement).value; applyDisplay(); };
 $<HTMLSelectElement>('unit').onchange = e => { display.unit = (e.target as HTMLSelectElement).value as 'mm' | 'in'; applyDisplay(); renderPanel(); renderTree(); renderParams(); buildDims(); };
 $<HTMLSelectElement>('gridStep').onchange = e => { display.grid = +(e.target as HTMLSelectElement).value; applyDisplay(); };

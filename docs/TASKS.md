@@ -236,6 +236,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.21.0** Vier Skins zur Auswahl (Graphit, Hell, Nacht, Kontrast) unter den Ansichten
 - **0.20.0** Leisten mit Tab (oder Knopf „Leisten aus“) ausblenden, Baum einklappbar und auf hohen Bildschirmen höher, Parameter-Zeile passt in den Baum
 - **0.19.0** Benannte Maße/Parameter (F7); Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
@@ -282,6 +283,12 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Skins (0.21.0): Nutzer wählte nach einer HTML-Vorschau „alle zur Auswahl“. index.html: alle festen Farben auf Variablen
+  (--field, --hover, --hover2, --onaccent, --cube, --shadow, --blur), je Skin ein Satz unter :root[data-skin]; Leisten bekommen Schatten/Glas,
+  wo der Skin sie hat. main.ts: SKINS mit Hintergrund, Raster (Farben stecken in der GridHelper-Geometrie → bei Wechsel neu erzeugt) und
+  Kantenfarbe; Auswahl „Skin“ neben „Einheit“, gemerkt in openform-view. 3D-Markierungen bleiben orange in allen Skins (einheitlich).
+  Browser 1920×1000: alle vier umgeschaltet, Leistenfarben/Schatten je Skin geprüft, Hell als Bild, Kern rechnet weiter. Nicht: Exe,
+  Zeichnungs-Editor und KI-Dialog bleiben dunkel/eigene Farben.
 - 2026-11-09 Bedienung 1080p (0.20.0, MINOR wegen neuer Funktion Ausblenden). Nutzer-Screenshot 1920×1080: Parameter-Zeile lief aus dem Baum
   (Querbalken). Jetzt Zeile als Flex mit festen Wertfeldern, Baum ohne Querscrollen, ab 900 px Höhe 45 % statt 35 % hoch, ▾ klappt ihn auf die
   Kopfzeile ein. Tab blendet Werkzeuge, Ansichten und Baum aus (wie in Bildbearbeitungen; Tab beim Maßtippen bleibt Maß-Trenner), oben, Seitenfeld

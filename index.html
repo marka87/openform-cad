@@ -5,7 +5,16 @@
 <title>OpenForm CAD</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  :root { --bg:#1e2126; --panel:#2a2e35; --line:#3a3f48; --text:#e6e8eb; --muted:#9aa1ab; --accent:#ff9a3c; }
+  /* Skins (Darstellung → Skin): nur Farben, Schatten und Glas; die 3D-Szene färbt main.ts (SKINS) */
+  :root, :root[data-skin="graphit"] { --bg:#1e2126; --panel:#2a2e35; --line:#3a3f48; --text:#e6e8eb; --muted:#9aa1ab; --accent:#ff9a3c; --onaccent:#1e2126;
+    --field:#1e2126; --hover:#353a42; --hover2:#4a515c; --cube:rgba(53,58,66,.92); --shadow:none; --blur:none; }
+  :root[data-skin="hell"] { --bg:#e9ecf0; --panel:rgba(255,255,255,.93); --line:#d6dbe1; --text:#1f2329; --muted:#646c79; --accent:#2f7cf6; --onaccent:#fff;
+    --field:#f2f4f7; --hover:#e6edf9; --hover2:#d4e1f7; --cube:rgba(255,255,255,.92); --shadow:0 4px 18px rgba(20,30,50,.13); --blur:blur(8px); }
+  :root[data-skin="nacht"] { --bg:#0f1624; --panel:rgba(24,34,54,.82); --line:#2b3a57; --text:#e3ecff; --muted:#8fa0bf; --accent:#38d0ff; --onaccent:#0f1624;
+    --field:#0f1624; --hover:#22314d; --hover2:#2e4266; --cube:rgba(30,44,70,.92); --shadow:0 6px 24px rgba(0,0,0,.45); --blur:blur(10px); }
+  :root[data-skin="kontrast"] { --bg:#000; --panel:#111; --line:#6a6a6a; --text:#fff; --muted:#d4d4d4; --accent:#ffd400; --onaccent:#000;
+    --field:#000; --hover:#2c2c2c; --hover2:#444; --cube:#1a1a1a; --shadow:none; --blur:none; }
+  #toolbar, #top, #panel, #tree, #views, #palette, #ctx, #flyout, #snapMenu { box-shadow:var(--shadow); backdrop-filter:var(--blur); }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,sans-serif; }
   canvas { display:block; }
@@ -13,7 +22,7 @@
     background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px; }
   #toolbar button, #top button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:10px;
     padding:6px 10px; cursor:pointer; font:inherit; text-align:left; }
-  #toolbar button:hover, #top button:hover { background:#353a42; }
+  #toolbar button:hover, #top button:hover { background:var(--hover); }
   #toolbar button, #top button, #views button { transition:background-color .12s, border-color .12s, color .12s; }
   #toolbar button { padding:1px 10px; }
   #toolbar button.on { border-color:var(--accent); color:var(--accent); }
@@ -24,24 +33,24 @@
     border-radius:14px; padding:12px; display:none; }
   #panel h3 { margin:0 0 10px; font-size:13px; }
   #panel label { display:flex; justify-content:space-between; align-items:center; margin:6px 0; color:var(--muted); }
-  #panel select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:3px; font:inherit; max-width:120px; }
+  #panel select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:3px; font:inherit; max-width:120px; }
   #panel details { margin:8px 0; color:var(--muted); }
-  #panel button.act { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:6px; cursor:pointer; font:inherit; }
-  #panel details button { display:block; width:100%; margin:4px 0; background:#353a42; color:var(--text); border:0; border-radius:6px; padding:5px; cursor:pointer; font:inherit; }
-  #panel input { width:90px; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
-  #panel .seg { display:flex; gap:2px; margin:0 0 8px; background:#1e2126; border-radius:8px; padding:2px; }
+  #panel button.act { display:block; width:100%; margin:4px 0; background:var(--hover); color:var(--text); border:0; border-radius:6px; padding:6px; cursor:pointer; font:inherit; }
+  #panel details button { display:block; width:100%; margin:4px 0; background:var(--hover); color:var(--text); border:0; border-radius:6px; padding:5px; cursor:pointer; font:inherit; }
+  #panel input { width:90px; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
+  #panel .seg { display:flex; gap:2px; margin:0 0 8px; background:var(--field); border-radius:8px; padding:2px; }
   #panel .seg button { flex:1; background:transparent; color:var(--muted); border:0; border-radius:6px; padding:5px 2px; cursor:pointer; font:inherit; }
-  #panel .seg button.on { background:#353a42; color:var(--text); }
+  #panel .seg button.on { background:var(--hover); color:var(--text); }
   #panel .row2 { display:flex; gap:4px; align-items:center; }
   #panel .row2 input { width:60px; }
-  #panel .row2 button { background:#353a42; color:var(--text); border:0; border-radius:6px; padding:4px 7px; cursor:pointer; font:inherit; }
-  #panel button.run { background:var(--accent); color:#1e2126; font-weight:600; margin-top:8px; }
+  #panel .row2 button { background:var(--hover); color:var(--text); border:0; border-radius:6px; padding:4px 7px; cursor:pointer; font:inherit; }
+  #panel button.run { background:var(--accent); color:var(--onaccent); font-weight:600; margin-top:8px; }
   #panel .del { margin-top:10px; width:100%; background:#4a2a2a; color:#ffb4b4; border:0; border-radius:8px; padding:7px; cursor:pointer; }
   #tree { position:fixed; right:12px; bottom:48px; width:220px; max-height:35vh; overflow:auto; background:var(--panel);
     border:1px solid var(--line); border-radius:14px; padding:8px; }
   #tree h3 { margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:600; }
   #tree .row { display:flex; align-items:center; gap:4px; padding:3px 6px; border-radius:6px; cursor:pointer; }
-  #tree .row:hover { background:#353a42; }
+  #tree .row:hover { background:var(--hover); }
   #tree .row.on { color:var(--accent); }
   #tree .row.off span { opacity:.45; text-decoration:line-through; }
   #tree .row span { flex:1; outline:none; }
@@ -50,17 +59,17 @@
   #tree .row.unsure span { color:#e0b84f; }
   #aiBar { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); width:min(680px, calc(100% - 32px)); z-index:40; display:none; gap:6px; align-items:center;
     background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:6px; }
-  #aiBar input { flex:1; min-width:0; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
+  #aiBar input { flex:1; min-width:0; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
   #aiBar .res { color:var(--muted); font-size:12px; max-width:40%; }
   #aiBar.long { flex-wrap:wrap; } #aiBar.long .res { order:-1; flex-basis:100%; max-width:none; padding:2px 4px; }
-  #aiBar button { background:#353a42; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 9px; font:inherit; cursor:pointer; }
+  #aiBar button { background:var(--hover); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 9px; font:inherit; cursor:pointer; }
   #aiDlg { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; padding:16px; }
   #aiDlg .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; width:min(460px, 100%); }
   #aiDlg h3 { margin:0 0 10px; }
   #aiDlg label { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0; color:var(--muted); }
   #aiDlg label.row, #aiDlg .row { display:flex; justify-content:flex-start; gap:8px; align-items:center; color:var(--text); }
-  #aiDlg input:not([type=checkbox]) { flex:1; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
-  #aiDlg button { background:#353a42; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font:inherit; cursor:pointer; }
+  #aiDlg input:not([type=checkbox]) { flex:1; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
+  #aiDlg button { background:var(--hover); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font:inherit; cursor:pointer; }
   #aiDlg .presets { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
   #aiDlg .warn { color:#ffcf8a; font-size:12px; margin:6px 0; }
   #aiDlg .note, #aiDlg .keynote { color:var(--muted); font-size:12px; margin:4px 0; min-height:1em; }
@@ -71,14 +80,14 @@
   #sheetEd .area { flex:1; min-height:0; padding:10px; display:flex; justify-content:center; cursor:crosshair; }
   #sheetEd .area svg { height:100%; max-width:100%; box-shadow:0 2px 12px #0008; }
   #sheetEd [data-dim] { cursor:move; }
-  #tree .row span[contenteditable=true] { background:#1e2126; border-radius:4px; padding:0 3px; }
+  #tree .row span[contenteditable=true] { background:var(--field); border-radius:4px; padding:0 3px; }
   #tree .rollEnd { display:block; width:100%; margin:0 0 6px; background:#4a3a20; color:var(--accent); border-radius:6px; padding:4px; }
   #tree button { background:transparent; color:var(--muted); border:0; cursor:pointer; padding:0 4px; font:inherit; }
   #tree { overflow-x:hidden; }
   #tree .ph { margin-top:8px; }
   #tree .prow { display:flex; align-items:center; gap:4px; padding:2px 6px; }
   #tree .prow span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-  #tree input { min-width:0; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:2px 5px; font:inherit; }
+  #tree input { min-width:0; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:2px 5px; font:inherit; }
   #tree .pv, #tree .pnv { flex:none; width:64px; }
   #tree .pn { flex:1; }
   /* Baum einklappbar: nur die Kopfzeile bleibt */
@@ -92,26 +101,26 @@
   @media (min-height:900px) { #tree { max-height:45vh; } }
   #palette { position:fixed; top:70px; left:50%; transform:translateX(-50%); width:340px; background:var(--panel);
     border:1px solid var(--accent); border-radius:12px; padding:8px; display:none; z-index:10; }
-  #palette input { width:100%; background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
+  #palette input { width:100%; background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
   #palette div div { padding:5px 9px; border-radius:6px; cursor:pointer; }
-  #palette div div:hover, #palette div div.first { background:#353a42; }
+  #palette div div:hover, #palette div div.first { background:var(--hover); }
   #views { position:fixed; left:12px; bottom:14px; width:290px; display:flex; flex-wrap:wrap; gap:4px; background:var(--panel);
     border:1px solid var(--line); border-radius:12px; padding:5px; }
   #views button { background:transparent; color:var(--text); border:1px solid transparent; border-radius:8px; padding:2px 7px; cursor:pointer; font:inherit; }
-  #views button:hover { background:#353a42; }
+  #views button:hover { background:var(--hover); }
   #views label { color:var(--muted); font-size:12px; display:inline-flex; align-items:center; gap:3px; }
-  #views select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
+  #views select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
   #toolbar button svg { width:16px; height:16px; vertical-align:-3px; margin-right:7px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linejoin:round; stroke-linecap:round; }
   #views input[type=color] { width:26px; height:24px; border:0; padding:0; background:transparent; cursor:pointer; vertical-align:middle; }
   #views button.on { border-color:var(--accent); color:var(--accent); }
-  #measLabel { position:fixed; pointer-events:none; font:12px system-ui; color:#1e2126; background:#ff9a3c; border-radius:5px; padding:2px 7px; display:none; transform:translate(-50%, -130%); white-space:nowrap; }
-  #snapTip { position:fixed; pointer-events:none; font:11px system-ui; color:#1e2126; background:#ffd2a8; border-radius:4px; padding:1px 5px; display:none; }
-  #hud b { display:inline-block; min-width:34px; background:#1e2126; color:var(--accent); border-radius:4px; padding:0 4px; margin:0 2px; text-align:right; }
-  #hud b.on { outline:2px solid #1e2126; background:#fff; color:#1e2126; }
+  #measLabel { position:fixed; pointer-events:none; font:12px system-ui; color:var(--onaccent); background:#ff9a3c; border-radius:5px; padding:2px 7px; display:none; transform:translate(-50%, -130%); white-space:nowrap; }
+  #snapTip { position:fixed; pointer-events:none; font:11px system-ui; color:var(--onaccent); background:#ffd2a8; border-radius:4px; padding:1px 5px; display:none; }
+  #hud b { display:inline-block; min-width:34px; background:var(--field); color:var(--accent); border-radius:4px; padding:0 4px; margin:0 2px; text-align:right; }
+  #hud b.on { outline:2px solid var(--field); background:#fff; color:var(--onaccent); }
   /* Untermenü: eigener, gut treffbarer Knopf (vorher kleines ▸, schwer zu sehen und zu treffen) */
   #toolbar .dd { float:right; margin:0 -6px 0 8px; min-width:22px; padding:0 4px; text-align:center; font-size:15px; line-height:16px;
-    border:1px solid var(--line); border-radius:6px; background:#2b2f36; color:var(--text); }
-  #toolbar .dd:hover { background:#4a515c; border-color:var(--accent); }
+    border:1px solid var(--line); border-radius:6px; background:var(--hover); color:var(--text); }
+  #toolbar .dd:hover { background:var(--hover2); border-color:var(--accent); }
   #toolbar .grp { color:var(--muted); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px 0; line-height:10px; display:flex; align-items:center; gap:8px; }
   #toolbar .grp::after { content:""; flex:1; height:1px; background:var(--line); }
   #toolbar small.mode { color:var(--muted); font-size:11px; margin-left:3px; }
@@ -119,19 +128,19 @@
   #snapMenu b { margin-top:4px; color:var(--muted); font-weight:600; }
   #snapMenu label { display:flex; align-items:center; gap:6px; }
   #snapMenu small { color:var(--muted); }
-  #snapMenu select { background:#1e2126; color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
+  #snapMenu select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
   #flyout { position:fixed; display:none; z-index:20; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px; }
   #flyout button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:5px 12px; cursor:pointer; font:inherit; }
-  #flyout button:hover { background:#353a42; }
+  #flyout button:hover { background:var(--hover); }
   #flyout button.on { color:var(--accent); }
   #ctx { position:fixed; display:none; z-index:20; min-width:190px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px;
     box-shadow:0 6px 24px rgba(0,0,0,.4); }
   #ctx button { display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
-  #ctx button:hover { background:#353a42; }
+  #ctx button:hover { background:var(--hover); }
   #ctx hr { border:0; border-top:1px solid var(--line); margin:3px 0; }
   #cubeTurn { position:fixed; left:110px; top:30px; display:flex; flex-direction:column; gap:4px; }
   #cubeTurn button { width:28px; height:28px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:16px; line-height:1; padding:0; }
-  #cubeTurn button:hover { background:#353a42; }
+  #cubeTurn button:hover { background:var(--hover); }
   #top .sep { width:1px; margin:4px 3px; background:var(--line); }
   #top button { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; padding:6px 7px; }
   #top svg, #views svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linejoin:round; stroke-linecap:round; }
@@ -159,11 +168,11 @@
   #panel fieldset .f { flex:1; min-width:0; color:var(--muted); font-size:12px; }
   #panel fieldset .r { display:flex; gap:2px; margin-top:3px; align-items:center; }
   #panel fieldset input { width:100%; min-width:0; flex:1; }
-  #panel fieldset .r button { flex:none; width:24px; height:26px; background:#353a42; color:var(--text); border:0; border-radius:5px; cursor:pointer; padding:0; font:inherit; }
+  #panel fieldset .r button { flex:none; width:24px; height:26px; background:var(--hover); color:var(--text); border:0; border-radius:5px; cursor:pointer; padding:0; font:inherit; }
   #cube { position:fixed; left:12px; top:12px; width:96px; height:96px; }
   #cube .face { width:56px; height:56px; display:flex; align-items:center; justify-content:center; font:600 10px system-ui; color:var(--text);
-    background:rgba(53,58,66,.92); border:1px solid #5a606b; box-sizing:border-box; cursor:pointer; user-select:none; }
-  #cube .face:hover { background:var(--accent); color:#1e2126; }
+    background:var(--cube); border:1px solid var(--line); box-sizing:border-box; cursor:pointer; user-select:none; }
+  #cube .face:hover { background:var(--accent); color:var(--onaccent); }
   #dims { position:fixed; inset:0; pointer-events:none; }
   #dims svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; fill:#f2f4f7; filter:drop-shadow(0 0 1px rgba(0,0,0,.9)); }
   #dims svg .st { fill:none; stroke:#f2f4f7; stroke-width:1; }
@@ -174,11 +183,11 @@
   #dims.pass span { pointer-events:none; }
   #dims input { position:absolute; transform:translate(-50%,-50%); width:6em; font:11px system-ui; pointer-events:auto; }
   #boxSel { position:fixed; display:none; border:1px dashed var(--accent); background:rgba(255,154,60,.08); pointer-events:none; z-index:5; }
-  #dims span.lock { background:var(--accent); color:#1e2126; font-weight:600; }
+  #dims span.lock { background:var(--accent); color:var(--onaccent); font-weight:600; }
   #panel .cons input { width:58px; }
   #panel .cons input.lock { border-color:var(--accent); }
   #panel .cons span { display:flex; gap:2px; align-items:center; }
-  #panel .cons .hv, #panel .cons .pair button, #panel .cons .con button { background:#353a42; color:var(--text); border:1px solid transparent; border-radius:5px;
+  #panel .cons .hv, #panel .cons .pair button, #panel .cons .con button { background:var(--hover); color:var(--text); border:1px solid transparent; border-radius:5px;
     padding:2px 6px; cursor:pointer; font:inherit; width:auto; margin:0; display:inline-block; }
   #panel .cons .hv.on { border-color:var(--accent); color:var(--accent); }
   #panel .cons .pair { display:flex; gap:4px; justify-content:flex-end; margin:4px 0; }
@@ -187,7 +196,7 @@
     border:1px solid var(--line); border-radius:10px; padding:6px 12px; pointer-events:none; max-width:calc(100vw - 540px); }
   #scale { position:fixed; right:16px; bottom:16px; color:var(--muted); font:12px system-ui; text-align:center; pointer-events:none; }
   #scale div { height:6px; border:2px solid var(--muted); border-top:none; margin-bottom:3px; }
-  #hud { position:fixed; pointer-events:none; background:var(--accent); color:#1e2126; font-weight:600; border-radius:6px;
+  #hud { position:fixed; pointer-events:none; background:var(--accent); color:var(--onaccent); font-weight:600; border-radius:6px;
     padding:2px 6px; display:none; }
 </style>
 </head>
@@ -271,6 +280,7 @@
   <div class="vg">Systemeinstellungen</div>
   <button id="bSnap" title="Einrasten: was rastet ein, Rastergröße">Einrasten ▸</button>
   <label title="Einheit für Anzeige und Eingabe (das Modell rechnet in mm)">Einheit <select id="unit"><option value="mm">mm</option><option value="in">Zoll</option></select></label>
+  <label title="Farben der Oberfläche">Skin <select id="skin"><option value="graphit">Graphit</option><option value="hell">Hell</option><option value="nacht">Nacht</option><option value="kontrast">Kontrast</option></select></label>
   <button id="bBare" title="Werkzeuge, Ansichten und Baum ausblenden (Tab)">Leisten aus</button>
 </div>
 <button id="bareBtn" title="Leisten wieder zeigen (Tab)">☰ Leisten</button>
