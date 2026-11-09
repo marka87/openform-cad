@@ -819,6 +819,16 @@ function bodyDepth(f: Extrude) {
   const hs = depthRay.intersectObjects(bodyGroup.children.filter(m => m.userData.body === bodyOf(f)), false);
   return hs.length ? Math.max(...hs.map(h => h.distance)) - 0.01 : null;
 }
+// Höhen aller ebenen Körperflächen parallel zur Skizze, gemessen entlang ihrer Normalen ab der Skizzenebene (I6: beim Ziehen daran einrasten)
+function faceLevels(f: Extrude) {
+  const M = moveMatrix(movesAfter(live(), live().findIndex(g => g.id === f.id))), n = V(f.n).transformDirection(M), o = V(f.o).applyMatrix4(M);
+  const out = new Set<number>(), p = new THREE.Vector3(), q = new THREE.Vector3();
+  for (const m of bodyGroup.children as THREE.Mesh[]) {
+    const P = m.geometry.attributes.position, N = m.geometry.attributes.normal;
+    for (let i = 0; i < P.count; i++) if (Math.abs(q.fromBufferAttribute(N, i).dot(n)) > 0.999) out.add(Math.round(p.fromBufferAttribute(P, i).sub(o).dot(n) * 1000) / 1000);
+  }
+  return [...out];
+}
 // Größe eines Bildschirmpixels in mm auf Höhe des Drehpunkts
 const pxSize = () => 2 * camera.position.distanceTo(controls.target) * Math.tan(camera.fov * Math.PI / 360) / el.clientHeight;
 // Ziel einer neuen Skizze: angeklickte Fläche, sonst das Flächenraster, sonst der Boden
@@ -1568,6 +1578,11 @@ function onMove(e: PointerEvent) {
     const s = lineParam(drag.P0, drag.D);
     if (s === null) return;
     let [label, val] = applyPush(drag.f, drag.f0, drag.part, drag.k, snap(s, e, pullStep()), drag.i);
+    if (drag.part === 'end' && !e.shiftKey && !drag.f.rev) { // an Höhen anderer Flächen einrasten (I6), Shift = frei
+      drag.levels ??= faceLevels(drag.f0);
+      const t = drag.levels.reduce((b: number | null, x: number) => Math.abs(x - drag.f.d) < 8 * pxSize() && (b === null || Math.abs(x - drag.f.d) < Math.abs(b - drag.f.d)) ? x : b, null);
+      if (t !== null && Math.abs(t) > 1e-6) { drag.f.d = t; label = 'bis Fläche'; val = Math.abs(t); }
+    }
     if (drag.part === 'end' && drag.f.onFace && !drag.f.rev && drag.f.d < 0) { // über den Boden hinaus = durch alles (I5); Tiefe des Körpers einmal je Ziehen messen
       drag.T ??= bodyDepth(drag.f0);
       if (drag.T && -drag.f.d >= drag.T) { drag.f.d = -drag.T; drag.f.thru = true; label = 'durch alles'; val = drag.T; }
