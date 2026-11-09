@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { parseModel, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -524,6 +524,17 @@ test('Kugel: Werkzeug, Vollkreis als Drehkörper, Skizze quer über die Achse', 
   expect(measureVolume(halb.body!)).toBeCloseTo(soll(30) / 2, 1);
   const hb = halb.body!.boundingBox.bounds;
   expect([hb[0][1], hb[1][1]].map(x => Math.round(x * 1e3) / 1e3)).toEqual([0, 30]);
+  // Teilen und eine Hälfte als Schritt löschen: übrig bleibt eine Halbkugel; ohne den Schritt beide
+  const ebene = { id: 6, type: 'plane' as const, c: [0, 0, 0] as Vec, n: [0, 1, 0] as Vec, u: [1, 0, 0] as Vec, v: [0, 0, -1] as Vec, off: 0 };
+  const ganz: Feature[] = [{ ...k, p: { cx: 0, cy: 0, r: 30 } }, ebene, { id: 7, type: 'split', body: 1, plane: 6 }];
+  expect([...buildBody(ganz).bodies.keys()].sort()).toEqual([1, 7]);
+  const rest = buildBody([...ganz, { id: 8, type: 'drop', body: 7 }]);
+  expect([...rest.errors]).toEqual([]);
+  expect([...rest.bodies.keys()]).toEqual([1]);
+  expect(measureVolume(rest.body!)).toBeCloseTo(soll(30) / 2, 1);
+  expect(buildBody([...ganz, { id: 8, type: 'drop', body: 99 }]).errors.get(8)).toContain('nicht vorhanden');
+  expect(parseModel(JSON.stringify({ features: [{ id: 8, type: 'drop', body: 7 }] })).features).toHaveLength(1);
+  expect(() => parseModel(JSON.stringify({ features: [{ id: 8, type: 'drop' }] }))).toThrow('Körper fehlt');
   // Vollkreis mit Achse durch die Mitte ist auch ohne Werkzeug eine Kugel
   const voll: Extrude = { ...circle(GROUND, [0, 0], 10, 1, 0, false), rev: 360 };
   expect(measureVolume(buildBody([voll]).body!)).toBeCloseTo(soll(10), 3);

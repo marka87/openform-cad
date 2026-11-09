@@ -238,6 +238,12 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         bodies.set(k, back); bodies.set(f.id, front); names.set(k, nB); names.set(f.id, nF);
         continue;
       }
+      if (f.type === 'drop') {
+        const k = key(f.body), s = bodies.get(k);
+        if (!s) throw new Error('Körper nicht vorhanden');
+        s.delete(); bodies.delete(k); names.delete(k);
+        continue;
+      }
       if (f.type === 'move') {
         const k = key(f.body), s = bodies.get(k);
         if (!s) continue;

@@ -304,8 +304,9 @@ function exportNow(m: ToWorker) {
   const bad = [...problems].filter(([, p]) => p.bad).map(([id]) => `#${id}`);
   const why = [bad.length ? `Schritt ${bad.join(', ')} ist fehlgeschlagen und fehlt im Teil.` : '', roll !== null ? 'Das Modell ist zurückgespult, spätere Schritte fehlen.' : ''].filter(Boolean).join(' ');
   if (m.type === 'export' && !m.force && why && !confirm(`${why} Trotzdem exportieren?`)) return;
-  send(m);
+  send(m.type === 'export' ? { ...m, skip: hiddenBodies() } : m);
 }
+const hiddenBodies = () => bodyIds.filter(b => meta[b]?.hidden); // ausgeblendete Körper: nicht in Export und Zeichnung
 let busy = false, pending = false;
 let pathPreview: Sweep | null = null; // Zug, dessen Pfad gerade gezeichnet wird: wird zur Vorschau mitberechnet
 function requestBuild() {
@@ -620,6 +621,7 @@ function nameOf(f: Feature) {
   if (f.type === 'import') return 'Import';
   if (f.type === 'shell') return 'Schale';
   if (f.type === 'split') return `${bodyName(f.body)} teilen`;
+  if (f.type === 'drop') return `${bodyName(f.body)} löschen`;
   if (f.type === 'loft') return 'Übergang';
   if (f.type === 'pattern') return f.mir ? 'Spiegeln' : f.rot ? `Kreis-Muster ${f.a.n}` : `Muster ${f.a.n}${f.b && f.b.n > 1 ? ` × ${f.b.n}` : ''}`;
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
@@ -1786,7 +1788,7 @@ function renderFeaturePanel() {
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'pattern') return renderPatternPanel(f);
-  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'loft') {
+  if (f.type === 'move' || f.type === 'combine' || f.type === 'split' || f.type === 'drop' || f.type === 'loft') {
     panel.innerHTML = `<h3>${esc(nameOf(f))}</h3><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
@@ -2295,6 +2297,7 @@ function dropEdgeOps(ops: EdgeOp[]) {
   edgeSel = ops.map(o => ({ at: o.at, dir: o.dir, body: o.body })); selId = null; multi.clear();
 }
 function deleteSel() {
+  if (selId === null && !multi.size && selBody !== null) { pushHistory(); add({ id: nextId++, type: 'drop', body: selBody }); clearSel(); detachGizmo(); return refresh(); } // Entf bei ausgewähltem Körper
   const ids = new Set([selId, ...multi]);
   if (!features.some(f => ids.has(f.id))) return;
   pushHistory();
@@ -2470,7 +2473,7 @@ function sheet(format: 'A4' | 'A3', print: boolean) {
 function editSheet() {
   if (!bodyIds.length) return alert('Noch kein Körper vorhanden.');
   openSheetEditor({
-    request: f => send({ type: 'sheet', info: sheetInfo(f), dims: sheetDims }),
+    request: f => send({ type: 'sheet', info: sheetInfo(f), dims: sheetDims, skip: hiddenBodies() }),
     dims: () => sheetDims,
     change: (d, history) => { if (history) pushHistory(); sheetDims = d; save(); },
     print: f => sheet(f, true), save: f => sheet(f, false),
@@ -2771,7 +2774,8 @@ function renderBodyPanel(b: number) {
     (planes.length ? `<label>an <select class="pl">${planes.map(p => `<option value="${p.id}">${esc(nameOf(p))} #${p.id}</option>`).join('')}</select></label><button class="split">Teilen</button>`
       : `<p style="color:var(--muted)">Teilen: erst mit E eine Ebene anlegen</p>`) +
     (others.length ? `<label>mit <select class="other">${others.map(o => `<option value="${o}">Körper #${o}</option>`).join('')}</select></label>
-    <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '');
+    <button class="op" data-op="fuse">Vereinigen</button><button class="op" data-op="cut">Abziehen</button><button class="op" data-op="common">Schnittmenge</button>` : '') +
+    `<button class="drop">Körper löschen</button>`;
   panel.querySelectorAll<HTMLButtonElement>('button').forEach(x => x.classList.add('act'));
   const q = <T extends HTMLElement>(c: string) => panel.querySelector<T>(c)!;
   q<HTMLButtonElement>('.gT').onclick = () => attachGizmo('translate');
@@ -2785,6 +2789,7 @@ function renderBodyPanel(b: number) {
   q<HTMLInputElement>('.col').onchange = e => setMeta('color', (e.target as HTMLInputElement).value);
   const split = panel.querySelector<HTMLButtonElement>('.split');
   if (split) split.onclick = () => { pushHistory(); add({ id: nextId++, type: 'split', body: b, plane: +q<HTMLSelectElement>('.pl').value }); detachGizmo(); refresh(); };
+  q<HTMLButtonElement>('.drop').onclick = () => { pushHistory(); add({ id: nextId++, type: 'drop', body: b }); clearSel(); detachGizmo(); refresh(); }; // als Schritt: Strg+Z oder Schritt löschen bringt ihn zurück
   q('.info').textContent = bodyVol[b] ? `${volText(bodyVol[b])}${massText(b)}` : '';
   q<HTMLButtonElement>('.scl').onclick = () => {
     const s = num('.sc') / 100;

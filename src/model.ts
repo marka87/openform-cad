@@ -43,6 +43,8 @@ export interface Import { id: number; type: 'import'; name: string; step: string
 export interface Shell { id: number; type: 'shell'; at: Vec; more?: Vec[]; t: number; faces?: FaceRef[]; hidden?: boolean; body?: number } // faces: Bezüge zu at, more
 // Körper an der Hilfsebene plane teilen: der Teil auf der Seite der Normalen wird ein neuer Körper (Nummer = id)
 export interface Split { id: number; type: 'split'; body: number; plane: number; hidden?: boolean }
+// Körper löschen: als Schritt, damit auch eine Hälfte aus „Teilen“ wegfallen kann und Zurückspulen ihn wiederbringt
+export interface DropBody { id: number; type: 'drop'; body: number; hidden?: boolean }
 // Übergang (Loft) zwischen zwei flachen Skizzen a und b, mit dem Körper vereinigt
 export interface Loft { id: number; type: 'loft'; a: number; b: number; body?: number; hidden?: boolean }
 // Profil (flache Skizze profile) entlang eines Pfads ziehen. Der Pfad ist ein Linienzug in eigener Ebene (Frame):
@@ -90,8 +92,8 @@ export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } //
 // Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
 export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean; skip?: string[] } // skip: weggelassene Exemplare (Schlüssel wie in patternCopies, I4)
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string }; // name = eigener Name im Baum
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
 // Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
 export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`);
 // Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
@@ -464,7 +466,7 @@ export function bodyCopy(features: Feature[], b: number, nextId: number, move: {
   let id = nextId;
   const nb = nextId;
   for (const f of features) {
-    if (f.hidden || f.type === 'combine' || f.type === 'split' || f.type === 'plane' || f.type === 'import') continue;
+    if (f.hidden || f.type === 'combine' || f.type === 'split' || f.type === 'drop' || f.type === 'plane' || f.type === 'import') continue;
     if ((f.type === 'move' ? f.body : bodyOf(f)) !== b) continue;
     const g: any = structuredClone(f);
     ids.set(f.id, id); g.id = id++; g.body = nb;
@@ -805,6 +807,7 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     if (!f || typeof f !== 'object' || !int(f.id) || typeof f.type !== 'string') bad('ohne Nummer oder Art');
     for (const k of ['body', 'profile', 'plane', 'of']) if (f[k] !== undefined && !int(f[k])) bad(`Bezug ${k} ist keine Zahl`);
     if ((f.type === 'loft' || f.type === 'combine') && !(int(f.a) && int(f.b))) bad('Bezug a/b ist keine Zahl');
+    if (f.type === 'drop' && !int(f.body)) bad('Körper fehlt');
     if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');
     if (f.name !== undefined && typeof f.name !== 'string') bad('Name ist kein Text');
     if (f.skip !== undefined && !(Array.isArray(f.skip) && f.skip.every((k: unknown) => typeof k === 'string'))) bad('Weggelassene Exemplare sind keine Liste');

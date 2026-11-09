@@ -1,7 +1,7 @@
 // Kern im Web Worker, damit Ziehen und Drehen flüssig bleiben, während OpenCascade rechnet.
 import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
-import { loadFont, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
+import { loadFont, makeCompound, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
 import { shownEdges, newCache, dropCache, buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
 import type { Dim, Feature, Frame } from './model';
@@ -9,8 +9,8 @@ import type { EdgeRef, Named } from './topo';
 
 export type ToWorker =
   | { type: 'build'; features: Feature[] }
-  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[]; force?: boolean }
-  | { type: 'sheet'; info: SheetInfo; dims: Dim[] } // Blatt für den Maß-Editor
+  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[]; force?: boolean; skip?: number[] } // skip: ausgeblendete Körper
+  | { type: 'sheet'; info: SheetInfo; dims: Dim[]; skip?: number[] } // Blatt für den Maß-Editor
   | { type: 'project'; body: number; pl: Frame } // Kanten eines Körpers in eine Ebene projizieren (P)
   | { type: 'check'; features: Feature[] } // nur rechnen, Fehler zurück, Anzeige bleibt (KI-Korrekturrunde, T8.6)
   | { type: 'maxEdge'; features: Feature[]; id: number }; // größtes Maß, bei dem Rundung/Fase id noch gelingt (I2)
@@ -110,20 +110,33 @@ async function handle(data: ToWorker) {
     const s = bodies.get(data.body);
     post({ type: 'projected', lines: s ? projectBody(s, names.get(data.body) ?? [], data.pl) : [] });
   } else if (data.type === 'sheet') {
-    if (!body) return post({ type: 'export', format: 'svg', blob: null });
-    const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};
-    const svg = sheetSVG(body, data.info, d.ok, L);
-    post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.rv ?? 0) * L.k!]), bad: d.bad });
+    const { body, bodies, drop } = shown(data.skip);
+    try {
+      if (!body) return post({ type: 'export', format: 'svg', blob: null });
+      const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};
+      const svg = sheetSVG(body, data.info, d.ok, L);
+      post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.rv ?? 0) * L.k!]), bad: d.bad });
+    } finally { drop(); }
   } else {
-    if (!body) return post({ type: 'export', format: data.format, blob: null });
-    if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!, resolveDims(data.dims ?? [], bodies, names).ok)], { type: 'image/svg+xml' }) });
-    if (data.format === 'dxf') return post({ type: 'export', format: 'dxf', blob: new Blob([drawingSVG(body)]) }); // Umwandlung im Hauptthread (braucht das DOM)
-    const invalid = data.force ? [] : invalidBodies(bodies);
-    if (invalid.length) return post({ type: 'export', format: data.format, blob: null, invalid });
-    if (data.format === '3mf') return post({ type: 'export', format: '3mf', blob: new Blob([to3MF([...bodies.values()])], { type: 'model/3mf' }) });
-    const s = forExport(body);
-    const blob = data.format === 'step' ? s.blobSTEP() : s.blobSTL({ binary: true, tolerance: 0.01, angularTolerance: 0.1 });
-    s.delete();
-    post({ type: 'export', format: data.format, blob });
+    const { body, bodies, drop } = shown(data.skip);
+    try {
+      if (!body) return post({ type: 'export', format: data.format, blob: null });
+      if (data.format === 'svg') return post({ type: 'export', format: 'svg', blob: new Blob([sheetSVG(body, data.info!, resolveDims(data.dims ?? [], bodies, names).ok)], { type: 'image/svg+xml' }) });
+      if (data.format === 'dxf') return post({ type: 'export', format: 'dxf', blob: new Blob([drawingSVG(body)]) }); // Umwandlung im Hauptthread (braucht das DOM)
+      const invalid = data.force ? [] : invalidBodies(bodies);
+      if (invalid.length) return post({ type: 'export', format: data.format, blob: null, invalid });
+      if (data.format === '3mf') return post({ type: 'export', format: '3mf', blob: new Blob([to3MF([...bodies.values()])], { type: 'model/3mf' }) });
+      const s = forExport(body);
+      const blob = data.format === 'step' ? s.blobSTEP() : s.blobSTL({ binary: true, tolerance: 0.01, angularTolerance: 0.1 });
+      s.delete();
+      post({ type: 'export', format: data.format, blob });
+    } finally { drop(); }
   }
+}
+// Nur die sichtbaren Körper; drop gibt einen eigens gebauten Verbund wieder frei
+function shown(skip?: number[]) {
+  if (!skip?.length) return { body, bodies, drop: () => {} };
+  const bs = new Map([...bodies].filter(([k]) => !skip.includes(k))), all = [...bs.values()];
+  const b = all.length > 1 ? makeCompound(all.map(s => s.clone())) as Shape3D : all[0] ?? null; // makeCompound gibt seine Teile frei
+  return { body: b, bodies: bs, drop: () => { if (all.length > 1) b?.delete(); } };
 }
