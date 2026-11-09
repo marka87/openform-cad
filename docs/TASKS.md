@@ -297,6 +297,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 Installer 0.23.0 gebaut (9,5 MB, Heimrechner), dem Nutzer geschickt, noch nicht installiert.
 - 2026-11-09 Knotenblech (0.23.0, MINOR): Feldnotiz Nutzer (Exe 0.22.0): „als Mensch mit Maus kann ich dort keine Linie ziehen, nur auf die flache
   Fläche“ – eine Ebene quer durch das Teil ist mit der Maus kaum zu treffen. Darum: scheitert die bisherige Rippe und liegt die Linie auf einer
   Körperfläche, sucht `gusset` das Linienende an einer Wand (kleiner Würfel knapp hinter dem Ende, 1 mm über der Fläche, schneidet Material;
