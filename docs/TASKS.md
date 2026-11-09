@@ -232,8 +232,9 @@ Datenverlust = sofort ein Paket.
 ### Teil 3: (Name, Datum, wofür)
 
 ## Versionen
-Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
-Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
+Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `src-tauri/Cargo.lock`. Jedes Paket mit
+Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
+groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
 - **0.19.0** Benannte Maße/Parameter (F7); Lippe und Falz am Rand einer Schale (F6); Rippe aus einer Linie (F5); echtes Gewinde für Bolzen und Bohrung (F4); Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); STL/OBJ/3MF als Referenz öffnen (F2); Referenzbild zum Nachzeichnen (F3); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)

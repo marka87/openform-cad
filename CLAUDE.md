@@ -57,11 +57,12 @@ Bei jedem Start und nach jedem fertigen Paket:
 1. docs/TASKS.md lesen. Steht etwas auf DOING → dort weitermachen.
 2. Sonst oberstes TODO nehmen, auf DOING setzen.
 3. Umsetzen, Kern-Tests schreiben und grün machen.
-4. Commit mit aussagekräftiger Nachricht, Paket auf DONE. Versionsnummer
-   (package.json und src-tauri/Cargo.toml) nach der Regel in
-   docs/TASKS.md heben und dort eintragen: Fehlerbehebung = PATCH,
-   neue Funktion = MINOR. Mehrere Pakete eines Tages dürfen eine Nummer
-   teilen; spätestens vor jedem Installer-Bau muss sie neu sein.
+4. Commit mit aussagekräftiger Nachricht, Paket auf DONE. Jedes Paket
+   mit Code-Änderung hebt die Versionsnummer, keine Nummer wird geteilt:
+   kleine Änderung/Fehlerbehebung = PATCH, große Änderung/neue Funktion =
+   MINOR (der Agent entscheidet). Stellen: package.json, package-lock.json
+   (2×), src-tauri/Cargo.toml, src-tauri/Cargo.lock; unter „Versionen“ in
+   docs/TASKS.md eintragen. Reine Doku-Commits zählen nicht.
 5. Zeile unter "Log": was geändert, was gelernt, was dadurch neu nötig
    wurde (als neue TODO-Pakete unten anhängen).
 6. Zurück zu 1. Nicht auf Bestätigung warten.
