@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, roundCorners, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -403,7 +403,8 @@ function rebuild() {
   const k = s && (isExtrude(s) && (s.type === 'poly' || s.type === 'line') || s.type === 'sweep') && !movesAfter(features, features.indexOf(s)).length ? s as Extrude | Sweep : null;
   if (k) k.pts!.forEach(([x, y], i) => {
     if (k.type === 'sweep' && i === 0) return;
-    const m = new THREE.Mesh(new THREE.SphereGeometry(5 * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: 0xffd2a8, depthTest: false }));
+    const on = corner?.id === k.id && corner.i === i; // angeklickte Ecke (F1)
+    const m = new THREE.Mesh(new THREE.SphereGeometry((on ? 7 : 5) * pxSize(), 12, 6), new THREE.MeshBasicMaterial({ color: on ? 0xff9a3c : 0xffd2a8, depthTest: false }));
     m.position.copy(V(k.o).addScaledVector(V(k.u), x).addScaledVector(V(k.v), y));
     m.renderOrder = 1;
     m.userData.i = i;
@@ -1648,6 +1649,7 @@ el.addEventListener('pointerup', e => {
   hideSnap();
   const wasLine = drag.kind === 'line';
   if (drag.kind === 'push') for (const o of [drag, ...drag.more ?? []]) if (o.f.and && Math.abs(o.f.d) < 1e-6) { features = features.filter(f => f !== o.f); multi.delete(o.f.id); } // flacher Bereich bringt nichts
+  if (drag.kind === 'point' && !drag.started) corner = corner && corner.id === drag.f.id && corner.i === drag.i ? null : { id: drag.f.id, i: drag.i }; // Klick auf Punkt: Ecke wählen bzw. abwählen
   if (drag.kind === 'edge' && drag.sharp) dropEdgeOps([drag.f, ...drag.more]); // bis auf 0 zurückgezogen
   if (drag.kind === 'offset' && drag.f && Math.abs(drag.f.d) < 1e-6) features = features.filter(f => f !== drag.f);  // Versatz 0 bringt nichts
   if (drag.kind === 'patd' && drag.made && !drag.f[drag.k].d) { if (drag.k === 'b') delete drag.f.b; else { features = features.filter(f => f !== drag.f); selId = null; } } // hin und zurück gezogen: Abstand 0 bringt nichts
@@ -1837,7 +1839,8 @@ function renderFeaturePanel() {
     (isFlat(f) && !f.rev ? revHtml : '') +
     (isFlat(f) ? `<button class="act sw" data-ax="u">Zug: Pfad zeichnen</button><button class="act sw" data-ax="v">Zug: Pfad quer dazu</button>` : '') +
     (!loftTo && isFlat(f) ? `<p style="color:var(--muted);margin:4px 0">Übergang: zweite Skizze mit Shift+Klick dazu</p>` : '') +
-    (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '');
+    (f.type === 'circle' && isCut(f) && !f.rev ? `<button class="act cb">Senkung anlegen</button>` : '') +
+    (['rect', 'poly', 'line'].includes(f.type) && !f.smooth ? `<label title="Punkt anklicken = nur diese Ecke">${corner?.id === f.id ? `Ecke (Punkt ${corner.i + 1})` : 'Alle Ecken'} <input type="number" step="0.5" value="${uval(2)}" class="cr"></label><button class="act crR">Runden</button><button class="act crF">Fasen</button>` : '');
   panel.innerHTML = `<h3>${esc(name)} #${f.id}</h3>` +
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
     (isSlot(f) ? `<details open class="cons"><summary>Maße</summary><label>Länge <input type="number" step="0.5" class="len" data-i="0" value="${uval(sideLen(f.pts!, 0))}"></label><label>Radius <input type="number" step="0.5" class="rad" data-i="1" value="${uval(arcR(f.pts!, 1))}"></label><button class="act free" title="Jede Seite und jeder Bogen lässt sich dann einzeln ändern">Freie Form</button></details>`
@@ -1892,6 +1895,11 @@ function renderFeaturePanel() {
   });
   const thru = panel.querySelector<HTMLInputElement>('.thru');
   if (thru) thru.onchange = () => { pushHistory(); if (thru.checked) f.thru = true; else delete f.thru; refresh(); };
+  panel.querySelectorAll<HTMLButtonElement>('.crR, .crF').forEach(b => b.onclick = () => {
+    const g = roundCorners(f, corner?.id === f.id ? [corner.i] : null, mmOf(panel.querySelector<HTMLInputElement>('.cr')!), b.classList.contains('crF'));
+    if (!g) return showNotice('Geht nicht: Seite zu kurz für dieses Maß, oder keine Ecke (Bögen bleiben)');
+    pushHistory(); features[features.indexOf(f)] = g; corner = null; refresh();
+  });
   const sub = panel.querySelector<HTMLInputElement>('.sub');
   if (sub) sub.onchange = () => { pushHistory(); f.sub = sub.checked; if (f.ball && f.sub) f.rev = 360; refresh(); }; // halbe Kuppel läge außerhalb: ganze Kugel gibt die Mulde
   const half = panel.querySelector<HTMLInputElement>('.half');
@@ -2079,6 +2087,7 @@ function patDims(f: Pattern) {
   }
 }
 // Feld am Kanten-Pfeil (E1): „Rundung ▾“ bzw. „Fase ▾“ und Maß; Wort = Art umschalten, Zahl = tippen (über das Seitenfeld .r)
+let corner: { id: number; i: number } | null = null; // angeklickter Eckpunkt einer Skizze: nur diese Ecke runden/fasen (F1)
 let edgeKind: EdgeOp['type'] = 'fillet'; // Art für markierte Kanten, die noch keine Rundung haben
 function edgeDims() {
   const ea = edgeArrowAt();

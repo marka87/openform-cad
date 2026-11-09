@@ -324,6 +324,45 @@ export function polyFeature(pl: Frame, pts: number[][], id: number, onFace: bool
     ? { id, d: 0, onFace, ...structuredClone(pl), type: 'poly', p: {}, pts: structuredClone(pts), ...smooth && { smooth } } : null;
 }
 
+// Ecken einer Skizze runden (Bogen mit Radius r) bzw. fasen (Abstand r auf beiden Seiten), F1. Rechteck wird dabei zum Vieleck.
+// idx = Eckpunkte, null = alle. Ecken an Bögen bleiben, wie sie sind. Ergebnis null = nichts gerundet oder eine Seite zu kurz.
+// Abhängigkeiten der beiden Seiten an der Ecke, die sich verkürzen (Länge, gleich lang, fester Punkt), fallen weg; die übrigen rutschen mit.
+export function roundCorners(f: Extrude, idx: number[] | null, r: number, chamfer = false): Extrude | null {
+  if (r <= 0 || f.smooth || (f.type !== 'rect' && f.type !== 'poly' && f.type !== 'line')) return null;
+  const P = f.p, pts = f.type === 'rect' ? [[P.x, P.y], [P.x + P.w, P.y], [P.x + P.w, P.y + P.h], [P.x, P.y + P.h]] : structuredClone(f.pts!);
+  let cons = f.type === 'rect' ? [] : structuredClone(f.cons ?? []), done = 0;
+  const all = idx ?? pts.map((_, i) => i);
+  for (const i of [...new Set(all)].sort((a, b) => b - a)) { // von hinten: vordere Nummern bleiben gültig
+    const n = pts.length;
+    if (f.open && (i === 0 || i === n - 1)) continue;
+    const a = pts[(i - 1 + n) % n], b = pts[i], c = pts[(i + 1) % n];
+    if (a[2] || b[2]) continue; // Bogen an der Ecke
+    const la = Math.hypot(a[0] - b[0], a[1] - b[1]), lc = Math.hypot(c[0] - b[0], c[1] - b[1]);
+    if (la < 1e-9 || lc < 1e-9) continue;
+    const ua = [(a[0] - b[0]) / la, (a[1] - b[1]) / la], uc = [(c[0] - b[0]) / lc, (c[1] - b[1]) / lc];
+    const al = Math.acos(Math.max(-1, Math.min(1, ua[0] * uc[0] + ua[1] * uc[1])));
+    if (al < 1e-3 || al > Math.PI - 1e-3) continue; // keine Ecke
+    const t = chamfer ? r : r / Math.tan(al / 2);
+    if (t >= la - 1e-6 || t >= lc - 1e-6) return null; // Seite zu kurz: lieber gar nicht als nur ein Teil der Ecken
+    const p1 = [b[0] + ua[0] * t, b[1] + ua[1] * t], p2 = [b[0] + uc[0] * t, b[1] + uc[1] * t];
+    let bulge = 0;
+    if (!chamfer) {
+      const w = [ua[0] + uc[0], ua[1] + uc[1]], lw = Math.hypot(w[0], w[1]), h = r / Math.sin(al / 2) - r; // Ecke bis Bogenmitte
+      bulge = bulge3(p1, p2, [b[0] + w[0] / lw * h, b[1] + w[1] / lw * h]);
+    }
+    pts.splice(i, 1, [p1[0], p1[1], ...bulge ? [bulge] : []], [p2[0], p2[1]]);
+    const side = (k: number) => k === i || k === (i - 1 + n) % n;
+    cons = cons.filter(q => !(q.t === 'fix' ? q.i === i : ['len', 'eq', 'rad', 'tan'].includes(q.t) && (side(q.i) || (q.j !== undefined && side(q.j)))))
+      .map(q => ({ ...q, i: q.i > i || (q.t !== 'fix' && q.i === i) ? q.i + 1 : q.i, ...q.j !== undefined && { j: q.j > i || q.j === i ? q.j + 1 : q.j } }));
+    done++;
+  }
+  if (!done) return null;
+  const g: Extrude = { ...structuredClone(f), type: f.type === 'rect' ? 'poly' : f.type, p: f.type === 'rect' ? {} : structuredClone(f.p), pts };
+  if (cons.length) g.cons = cons; else delete g.cons;
+  delete g.slot; // Langloch-Merkmal passt nicht mehr
+  return g;
+}
+
 // Neue Skizze im Abstand d um f herum (d < 0 = nach innen); null, wenn nichts übrig bleibt
 // shortcut: Ecken zwischen Bogen und Gerade ohne Tangente werden nur angenähert, Selbstüberschneidungen nicht erkannt → Kern-Offset (replicad) nutzen
 export function offsetFeature(f: Extrude, d: number, id: number): Extrude | null {

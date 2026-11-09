@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { parseModel, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { parseModel, roundCorners, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -608,4 +608,18 @@ test('Langloch: Länge und Radius ändern beide Seiten gemeinsam, freie Form än
   const r = buildBody([{ ...f, slot: true, pts: slotLength(pts, 40), d: 10 } as Extrude]);
   expect(valid(r.body!)).toBe(true);
   expect(measureVolume(r.body!)).toBeCloseTo((40 * 10 + Math.PI * 25) * 10, 2);
+});
+
+test('Skizzen-Ecken runden und fasen (F1)', () => {
+  const r = rect(GROUND, [0, 0], [20, 10], 1, 5, false), vol = (f: Extrude | null) => measureVolume(buildBody([f!]).body!);
+  expect(vol(roundCorners(r, null, 2))).toBeCloseTo((200 - 4 * (4 - Math.PI)) * 5, 3);
+  expect(vol(roundCorners(r, null, 2, true))).toBeCloseTo((200 - 4 * 2) * 5, 3);
+  const eine = roundCorners(r, [2], 3)!; // eine Ecke: Vieleck mit 5 Punkten, ein Bogen
+  expect([eine.type, eine.pts!.length, eine.pts!.filter(q => q[2]).length]).toEqual(['poly', 5, 1]);
+  expect(vol(eine)).toBeCloseTo((200 - (9 - Math.PI * 9 / 4)) * 5, 3);
+  expect(roundCorners(r, null, 5.5)).toBeNull(); // Seite 10 reicht nicht für 2 × 5,5
+  expect(roundCorners(eine, [2], 1)).toBeNull(); // Ecke am Bogen bleibt
+  // Abhängigkeiten: Länge der verkürzten Seite fällt weg, die gegenüberliegende rutscht eine Nummer weiter
+  const v = { ...eine, pts: [[0, 0], [20, 0], [20, 10], [0, 10]], cons: [{ t: 'len' as const, i: 1, val: 10 }, { t: 'len' as const, i: 3, val: 10 }, { t: 'h' as const, i: 2 }] };
+  expect(roundCorners(v, [2], 2)!.cons).toEqual([{ t: 'len', i: 4, val: 10 }, { t: 'h', i: 3 }]);
 });

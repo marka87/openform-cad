@@ -129,6 +129,17 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE K1 (0.18.1) Kugel abziehen: Häkchen „Abziehen (Loch)“ im Seitenfeld der Kugel; Mitte auf der Fläche = Halbkugel-Mulde.
 - [x] DONE E2 (0.18.0) Kante mit Vorzeichen (Wunsch des Nutzers): 0 = scharf, in den Körper = Rundung, raus = Fase; durch 0 wechselt die Art im selben Zug, bei 0 loslassen entfernt den Eintrag; Maßfeld: negativ = Fase, 0 = scharf.
 
+### 3c. Fehlende Funktionen, vom Nutzer freigegeben 2026-11-09 — Claude, in dieser Reihenfolge
+- [x] DONE F1 (0.19.0) Skizzen-Ecken runden/fasen: Seitenfeld „Alle Ecken“ bzw. nach Klick auf einen Eckpunkt „Ecke (Punkt n)“, Maß, „Runden“/„Fasen“.
+- [ ] TODO F2 STL/3MF/OBJ öffnen als Referenz: Netz anzeigen, daran messen und skizzieren; kein Volumenkörper, nicht im Export.
+- [ ] TODO F3 Referenzbild: Foto/Scan auf eine Ebene legen, auf Maß skalieren (zwei Punkte + Länge), nachzeichnen.
+- [ ] TODO F4 Echtes Gewinde: Außen-/Innengewinde metrisch und 1/4"-20 (Stativ) an Zylinderfläche bzw. Bohrung, druckbar.
+- [ ] TODO F5 Rippe/Steg: Linie zeichnen → Wand mit Dicke bis zum Körper.
+- [ ] TODO F6 Lippe/Falz für Deckel: umlaufende Stufe an einer Kante einer Schale, mit Spiel.
+- [ ] TODO F7 Benannte Maße (Parameter): Name = Wert, in Maßfeldern statt Zahl verwendbar.
+- [ ] TODO F8 Zeichnung: Schnittansicht und Detailansicht.
+- [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen.
+
 ### 4. Durchgehende Bohrung — Claude, nach Punkt 1
 - [x] „Durch alles“ als echte Eigenschaft (Haken im Seitenfeld). Schneidet durch den
       ganzen Körper, bei einem Gehäuse also auch durch die Gegenwand; nur durch eine
@@ -224,7 +235,7 @@ Datenverlust = sofort ein Paket.
 Steht in `package.json` und `src-tauri/Cargo.toml`. Fehlerbehebung = PATCH, neue
 Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer neu.
 
-- **0.19.0** Halbkugel per Häkchen (K2); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
+- **0.19.0** Halbkugel per Häkchen (K2); Skizzen-Ecken runden/fasen (F1); ausgeblendete Körper nicht mehr im Export, Körper löschen als Schritt (K3)
 - **0.18.2** KI: Google Agent Platform (Vertex) mit API-Schlüssel geht über die OpenAI-kompatible Adresse (Schlüssel im Kopf x-goog-api-key)
 - **0.18.1** Kugel lässt sich abziehen (Häkchen „Abziehen (Loch)“), z. B. für eine Halbkugel-Mulde (K1)
 - **0.18.0** Ideen I1–I8 (siehe Plan 3b): Fläche füllen (I1); größtmögliche Rundung/Fase per Knopf (I2); Muster nach beiden Seiten (Alt beim Ziehen oder Häkchen, I3); Exemplare per Alt+Klick weglassen (I4); Bohrung rastet beim Ziehen auf „durch alles“ ein (I5); Höhe rastet an anderen Flächen ein (I6); Bohrungsvorlagen für den 3D-Druck und Mutternfalle (I7); zuletzt geöffnete Dateien unter „Öffnen“ (I8); Kante mit Vorzeichen: in den Körper = Rundung, raus = Fase, durch 0 wechselt die Art, bei 0 scharf (E2)
@@ -269,6 +280,7 @@ Funktion = MINOR, 1.0.0 erst, wenn `.ofc` als stabil gilt. Vor jedem Installer n
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-09 F1 Skizzen-Ecken (0.19.0, gleiche Nummer, noch kein Installer): `roundCorners` in model.ts ersetzt einen Eckpunkt durch zwei Punkte (Abstand r/tan(α/2) bzw. r) mit Bogen (bulge über `bulge3` aus der Bogenmitte); Rechteck wird zum Vieleck. Alle oder keine: reicht eine Seite nicht, kommt null (sonst halb gerundete Formen). Abhängigkeiten an den zwei verkürzten Seiten (Länge, gleich, fest, Radius, tangential) fallen weg, die übrigen rücken um eins. Bedienung: Seitenfeld (unter „Mehr“), Klick auf Eckpunkt wählt die Ecke (orange, größer); Rechteck hat keine Punkt-Griffe, dort nur alle Ecken. Kern-Test: Volumen alle/eine/Fase, zu groß, Ecke am Bogen, Abhängigkeiten. Browser: Rechteck 30×20×10 alle R3 = 5,92 cm³; Vieleck Punkt 2 Fase 4 = 5,92 cm³. Nicht: Ziehen am Radius (nur Tippen), Zoll.
 - 2026-11-09 K3 Körper ausblenden/löschen (0.19.0, gleiche Nummer, noch kein Installer): (1) Export (STEP, STL, 3MF, SVG, DXF) und Zeichnungsblatt nahmen alle Körper, auch ausgeblendete; OBJ nahm schon nur sichtbare. Jetzt schickt `exportNow` bzw. das Blatt `skip` = ausgeblendete Körper mit, der Worker baut in `shown()` den Verbund nur aus den sichtbaren und gibt ihn danach frei. (2) Neuer Schritt-Typ `drop` {body} (Entscheidung: als Schritt statt Features löschen, weil eine Hälfte aus „Teilen“ keinen eigenen Schritt hat; Zurückspulen und Strg+Z bringen den Körper wieder). Kern löscht den Körper aus `bodies`, fehlt er: Fehler „Körper nicht vorhanden“. parseModel prüft `body`. Ältere Programmversionen kennen `drop` nicht und ignorieren ihn. Kern-Test: Kugel r30 teilen, Hälfte 7 löschen = ½ Kugel, Fehlerfall, parseModel. Browser: STL 1,52 MB → 0,76 MB mit ausgeblendeter Hälfte; „Körper löschen“ lässt 56,55 cm³ (= ½ Kugel r30) und den Baum-Eintrag „Körper #7 löschen“. Nicht geprüft: STEP/3MF/Zeichnung mit ausgeblendetem Körper (gleicher Weg), Zoll.
 - 2026-11-09 K2 Halbkugel (0.19.0, neue Funktion = MINOR): Nutzer kam mit Teilen an einer Ebene nicht zurecht (Ebene nicht mittig setzbar; Körper statt Schritt auswählen nicht zu finden). Kern hatte es schon: Kugel = Halbkreis um die Achse u gedreht, 180° statt 360° gibt genau die Hälfte auf der +n-Seite. Häkchen setzt `rev` 180/360; bei „Abziehen“ ausgeblendet und `rev` zurück auf 360 (die halbe Kuppel läge außerhalb, die ganze Kugel gibt die Mulde). Kern-Test: Volumen ½ Kugel, y-Bereich [0, r]. Browser: Platte 80×80×10 + Halbkugel r30 = 120,55 cm³. Gefunden, offen: ausgeblendete Körper gehen wohl trotzdem in den Export, einzelnen Körper löschen gibt es nicht.
 - 2026-11-09 Installer 0.18.2 gebaut (9,9 MB), noch nicht installiert.
