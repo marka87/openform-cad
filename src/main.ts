@@ -173,7 +173,7 @@ function hoverHint(h: { face: Hit | null; edge: EdgeHit | null }) {
   if (!hintAuto || drag) return;
   const g = h.face?.grip, f = g && g.f;
   const hh = ray.intersectObjects(handles.children)[0]?.object.userData;
-  const text = hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung' : hh?.pk ? 'ziehen = Abstand des Musters ändern' : hh ? 'ziehen = Punkt verschieben'
+  const text = hh?.edgeArrow ? 'wegziehen = runden · hineinschieben = fasen' : hh?.push ? 'ziehen = hochziehen oder hineindrücken' : hh?.pnew ? 'ziehen = Muster in diese Richtung' : hh?.pk ? 'ziehen = Abstand des Musters ändern' : hh ? 'ziehen = Punkt verschieben'
     : h.edge ? 'ziehen = runden · hinein = fasen'
     : !h.face ? 'ziehen = Rahmen auswählen · rechts ziehen = drehen'
     : !g || g.part === 'import' ? 'ziehen = Fläche versetzen'
@@ -445,6 +445,15 @@ function rebuild() {
       m.applyMatrix4(M); m.renderOrder = 1; m.userData.pnew = ax;
       handles.add(m);
     }
+  }
+  // ⇔-Pfeil an der markierten Kante bzw. Rundung/Fase: wegziehen = runden, hineinschieben = fasen (E1)
+  const ea = edgeArrowAt();
+  if (ea) for (const k of [1, -1]) {
+    const r = pxSize(), m = new THREE.Mesh(new THREE.ConeGeometry(8 * r, 14 * r, 16), new THREE.MeshBasicMaterial({ color: 0x4d8dff, depthTest: false }));
+    m.position.copy(ea.P).addScaledVector(ea.out, k * 9 * r);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ea.out.clone().multiplyScalar(k));
+    m.renderOrder = 1; m.userData.edgeArrow = true;
+    handles.add(m);
   }
   handles.updateMatrixWorld(true);
   buildDims();
@@ -757,6 +766,14 @@ const hud = $('hud');
 function showHud(e: PointerEvent, text: string) { hud.style.display = 'block'; hud.style.left = e.clientX + 16 + 'px'; hud.style.top = e.clientY + 16 + 'px'; hud.textContent = text; }
 
 // Richtung von der Kante ins Freie: Summe der Normalen der beiden angrenzenden Flächen (stimmt auch an Innenecken)
+// Wo der Kanten-Pfeil sitzt: markierte Kante (noch ohne Rundung) oder ausgewählte Rundung/Fase. Nach dem Runden liegt der
+// Kantenpunkt nicht mehr am Körper, dann zeigt der Pfeil quer zur Kante zum Betrachter hin
+function edgeArrowAt() {
+  const s = getSel(), a = s && isEdgeOp(s) ? s : edgeSel[0];
+  if (!a) return null;
+  const P = V(a.at), view = camera.position.clone().sub(P).normalize();
+  return { a, op: s && isEdgeOp(s) ? s : null, P, out: edgeOutward(P) ?? V(a.dir).cross(view).cross(V(a.dir)).normalize() };
+}
 function edgeOutward(at: THREE.Vector3): THREE.Vector3 | null {
   const tri = new THREE.Triangle(), q = new THREE.Vector3(), n = new THREE.Vector3(), normals: THREE.Vector3[] = [];
   for (const mesh of bodyGroup.children as THREE.Mesh[]) {
@@ -1323,6 +1340,10 @@ function onDown(e: PointerEvent) {
   } else if (hp?.object.userData.push) { // ⇕-Pfeil: wie die Fläche ziehen, aber immer die ganze Skizze, kein Teilbereich (whole)
     const f = getById(hp.object.userData.push) as Extrude;
     drag = { kind: 'push', f, f0: structuredClone(f), part: 'end', k: 1, whole: true, P0: hp.object.position.clone(), D: V(f.n).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(f)))), sx: e.clientX, sy: e.clientY, started: false };
+  } else if (hp?.object.userData.edgeArrow) { // Kanten-Pfeil: wie die Kante selbst ziehen
+    const ea = edgeArrowAt()!;
+    drag = ea.op ? { kind: 'edge', f: ea.op, P0: V(ea.op.at), sx: e.clientX, sy: e.clientY, started: false }
+      : { kind: 'edge', f: null, edge: edgeSel[0], P0: V(edgeSel[0].at), sx: e.clientX, sy: e.clientY, started: false };
   } else if (hp?.object.userData.pnew) { // Pfeil einer neuen Muster-Richtung: Muster bzw. Richtung 2 entsteht beim ersten Ziehen (M3)
     const s = getSel()!, ax: Vec = hp.object.userData.pnew;
     drag = { kind: 'patd', f: s.type === 'pattern' ? s : null, src: s, ax, k: s.type === 'pattern' ? 'b' : 'a', d0: 0, P0: hp.object.position.clone(), D: V(ax).transformDirection(moveMatrix(movesAfter(live(), live().indexOf(s)))), sx: e.clientX, sy: e.clientY, started: false };
@@ -1902,6 +1923,7 @@ function buildDims(of?: Extrude, live = false) {
   dimsLive = live;
   const f = of ?? getSel();
   if (f?.type === 'pattern') return patDims(f);
+  if (!of && (isEdgeOp(f) || !f && edgeSel.length)) return edgeDims();
   if (!f || !isExtrude(f) || f.smooth || f.p.ry) return;
   const M = live ? new THREE.Matrix4() : moveMatrix(movesAfter(features, features.indexOf(f))), world = (q: number[]) => V(f.o).addScaledVector(V(f.u), q[0]).addScaledVector(V(f.v), q[1]);
   const label = (text: string, at: number[], out: number[], target: string, lock = false, end?: number[]) => {
@@ -1953,19 +1975,41 @@ function patDims(f: Pattern) {
     dimLabels.push({ el, p: p.clone().applyMatrix4(M), q: p.add(dir).applyMatrix4(M), plain: true });
   }
 }
+// Feld am Kanten-Pfeil (E1): „Rundung ▾“ bzw. „Fase ▾“ und Maß; Wort = Art umschalten, Zahl = tippen (über das Seitenfeld .r)
+let edgeKind: EdgeOp['type'] = 'fillet'; // Art für markierte Kanten, die noch keine Rundung haben
+function edgeDims() {
+  const ea = edgeArrowAt();
+  if (!ea) return;
+  const kind = ea.op?.type ?? edgeKind, el = document.createElement('span'), r = pxSize();
+  el.innerHTML = `<i>${kind === 'fillet' ? 'Rundung' : 'Fase'} ▾</i> <b data-t=".r">${ea.op ? fmt(ea.op.r) : '0'}</b>`;
+  el.title = 'Rundung/Fase anklicken = umschalten · Zahl anklicken = tippen';
+  el.onmousedown = e => e.preventDefault();
+  el.onclick = e => {
+    e.stopPropagation();
+    const t = (e.target as HTMLElement).dataset.t;
+    if (t) return editDim(el, t, ea.op ? undefined : v => addEdgeOps(edgeKind, v));
+    if (!ea.op) { edgeKind = edgeKind === 'fillet' ? 'chamfer' : 'fillet'; return buildDims(); }
+    pushHistory(); for (const g of [ea.op, ...[...multi].map(getById).filter(isEdgeOp)]) g.type = g.type === 'fillet' ? 'chamfer' : 'fillet'; refresh();
+  };
+  dims.append(el);
+  const p = ea.P.clone().addScaledVector(ea.out, 30 * r);
+  dimLabels.push({ el, p, q: p.clone().add(ea.out), plain: true });
+}
 // Maß an der Skizze bearbeiten: Eingabefeld an Ort und Stelle, Enter übernimmt, Esc bricht ab
-function editDim(span: HTMLSpanElement, target: string) {
+// apply: eigene Übernahme statt über ein Feld im Seitenfeld (Kante ohne Rundung: legt erst beim Tippen an)
+function editDim(span: HTMLSpanElement, target: string, apply?: (v: number) => void) {
   const field = panel.querySelector<HTMLInputElement>(target);
-  if (!field) return showHint('Dieses Maß lässt sich hier nicht tippen (z. B. offene Linie) – im Seitenfeld ändern');
+  if (!field && !apply) return showHint('Dieses Maß lässt sich hier nicht tippen (z. B. offene Linie) – im Seitenfeld ändern');
   const inp = document.createElement('input');
-  inp.type = 'number'; inp.step = '0.5'; inp.value = field.value;
+  inp.type = 'number'; inp.step = '0.5'; inp.value = field?.value ?? '';
   inp.style.left = span.style.left; inp.style.top = span.style.top;
   span.replaceWith(inp); inp.focus(); inp.select();
   let done = false;
   dimEditing = true;
   const finish = (ok: boolean) => {
     if (done) return; done = true; dimEditing = false;
-    if (ok && inp.value !== field.value) { field.value = inp.value; field.dispatchEvent(new Event('change')); }
+    if (ok && apply) { const v = parseFloat(inp.value) * U(); if (v > 0) apply(v); }
+    else if (ok && field && inp.value !== field.value) { field.value = inp.value; field.dispatchEvent(new Event('change')); }
     inp.remove(); buildDims();
   };
   inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
@@ -2025,9 +2069,9 @@ function renderEdgePanel(f: EdgeOp) {
   const more = [...multi].map(getById).filter(isEdgeOp); // markierte Rundungen und Fasen ändern sich mit
   panel.innerHTML = `<h3>${f.type === 'fillet' ? 'Rundung' : 'Fase'} #${f.id}${more.length ? ` + ${more.length} weitere` : ''}</h3>
     <label>Art <select><option value="fillet">Rundung</option><option value="chamfer">Fase</option></select></label>
-    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input type="number" step="0.5" value="${uval(f.r)}"></label>
+    <label>${f.type === 'fillet' ? 'Radius' : 'Abstand'} <input class="r" type="number" step="0.5" value="${uval(f.r)}"></label>
     <button class="del">Löschen</button>`;
-  const sel = panel.querySelector('select')!, inp = panel.querySelector('input')!;
+  const sel = panel.querySelector('select')!, inp = panel.querySelector<HTMLInputElement>('.r')!;
   sel.value = f.type;
   sel.onchange = () => { pushHistory(); for (const g of [f, ...more]) g.type = sel.value as EdgeOp['type']; refresh(); };
   inp.onchange = () => {
@@ -2076,14 +2120,14 @@ function renderShellPanel(f: Shell) {
 // Mehrere Kanten auf einmal runden oder fasen (Shift+Klick auf Kanten)
 function renderEdgeSetPanel() {
   panel.innerHTML = `<h3>${edgeSel.length} Kante${edgeSel.length > 1 ? 'n' : ''}</h3><p style="color:var(--muted);margin:0 0 6px">Shift+Klick = weitere Kanten · eine davon ziehen = alle runden</p>
-    <label>Maß <input type="number" step="0.5" value="${uval(2)}" class="r"></label>
+    <label>Maß <input type="number" step="0.5" placeholder="${uval(2)}" class="r"></label>
     <button class="act" data-t="fillet">Runden</button><button class="act" data-t="chamfer">Fasen</button>`;
-  panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => {
-    const r = Math.max(0.5, mmOf(panel.querySelector<HTMLInputElement>('.r')!) || 2);
-    pushHistory();
-    for (const a of edgeSel) add({ id: nextId++, type: b.dataset.t as EdgeOp['type'], at: a.at, dir: a.dir, r, body: a.body });
-    selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
-  });
+  panel.querySelectorAll<HTMLButtonElement>('button[data-t]').forEach(b => b.onclick = () => addEdgeOps(b.dataset.t as EdgeOp['type'], mmOf(panel.querySelector<HTMLInputElement>('.r')!) || 2));
+}
+function addEdgeOps(type: EdgeOp['type'], r: number) {
+  pushHistory();
+  for (const a of edgeSel) add({ id: nextId++, type, at: a.at, dir: a.dir, r: Math.max(0.5, r), body: a.body });
+  selId = (features.at(-1) as EdgeOp).id; edgeSel = []; refresh();
 }
 function deleteSel() {
   const ids = new Set([selId, ...multi]);
