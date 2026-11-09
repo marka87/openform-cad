@@ -4,7 +4,7 @@ import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad
 import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
-import { parseModel, fillGrid, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -1035,6 +1035,16 @@ test('Text aus der mitgelieferten Schrift: erhaben auf dem Boden, graviert in de
   expect(measureVolume(r.body!)).toBeLessThan(2000 - 1);                       // Gravur nimmt Material weg
   expect(measureVolume(r.body!)).toBeGreaterThan(2000 - 6 * 6);
   expect(buildBody([box(), T(3, TOPO, '  ', -1, 1)]).errors.get(3)).toBe('Kein Text eingegeben');
+});
+
+test('Mutternfalle (I7): Sechskant-Tasche M3 mit Luft, an der Bohrung, als Schnitt', () => {
+  const h = { ...sketchFeature('circle', TOP, [0, 0], [1, 0], 2, true)!, d: -4 }, trap = nutTrap(h, 'M3', 3)!; // Bohrung Ø2 liegt ganz in der Tasche
+  expect(trap.name).toBe('Mutternfalle M3');
+  expect(trap.d).toBeCloseTo(-2.6, 6);                                        // Mutter 2,4 + 0,2
+  const hex = Math.sqrt(3) / 2 * 5.8 ** 2;                                     // Schlüsselweite 5,5 + 0,3 Luft
+  const v = measureVolume(buildBody([box(), h, trap]).body!);
+  expect(v).toBeCloseTo(2000 - Math.PI * 4 - (hex - Math.PI) * 2.6, 0);
+  expect(nutTrap(h, 'M99', 3)).toBeNull();
 });
 
 test('Größtmögliche Rundung (I2): zu groß → größtes machbares Maß, unmöglich → null', () => {

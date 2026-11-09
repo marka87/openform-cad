@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { parseModel, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
@@ -1815,7 +1815,7 @@ function renderFeaturePanel() {
     fields.map(([l, k]) => `<label>${l} <input type="number" step="0.5" data-k="${k}" value="${k === 'rev' ? get(k) : uval(get(k))}"></label>`).join('') +
     (isSlot(f) ? `<details open class="cons"><summary>Maße</summary><label>Länge <input type="number" step="0.5" class="len" data-i="0" value="${uval(sideLen(f.pts!, 0))}"></label><label>Radius <input type="number" step="0.5" class="rad" data-i="1" value="${uval(arcR(f.pts!, 1))}"></label><button class="act free" title="Jede Seite und jeder Bogen lässt sich dann einzeln ändern">Freie Form</button></details>`
       : f.type === 'poly' && !f.smooth ? consHtml(f) : '') +
-    (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Gewinde <select class="thr"><option value="">–</option>${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
+    (f.type === 'circle' && isCut(f) && !f.rev ? `<label>Vorlage <select class="thr"><option value="">–</option><optgroup label="Gewinde (Kernloch)">${Object.keys(THREADS).map(m => `<option>${m}</option>`).join('')}</optgroup><optgroup label="3D-Druck">${Object.keys(PRINT_HOLES).map(m => `<option>${m}</option>`).join('')}</optgroup></select></label><label>Mutternfalle <select class="nut"><option value="">–</option>${Object.keys(NUTS).map(m => `<option>${m}</option>`).join('')}</select></label>` : '') +
     (isCut(f) && !f.rev ? `<label>Durch alles <input type="checkbox" class="thru"${f.thru ? ' checked' : ''} style="width:auto"></label>` : '') +
     (f.rev && !f.ball ? revHtml + `<label>Abziehen (Nut) <input type="checkbox" class="sub"${f.sub ? ' checked' : ''} style="width:auto"></label>` : '') +
     (loftTo ? `<button class="act loft">Übergang (Loft) zu ${esc(nameOf(loftTo))} #${loftTo.id}</button>` : '') +
@@ -1842,8 +1842,21 @@ function renderFeaturePanel() {
   });
   const thr = panel.querySelector<HTMLSelectElement>('.thr');
   if (thr) { // Kernloch für metrisches Gewinde (Bohrung bekommt den Namen, Gewinde selbst wird nicht modelliert)
-    thr.value = Object.keys(THREADS).find(m => f.name === `Gewinde ${m}`) ?? '';
-    thr.onchange = () => { pushHistory(); if (thr.value) { f.p.r = THREADS[thr.value] / 2; f.name = `Gewinde ${thr.value}`; } else delete f.name; refresh(); };
+    thr.value = Object.keys(THREADS).find(m => f.name === `Gewinde ${m}`) ?? Object.keys(PRINT_HOLES).find(m => f.name === m) ?? '';
+    thr.onchange = () => {
+      pushHistory();
+      const pr = PRINT_HOLES[thr.value]; // 3D-Druck (I7): Ø und bei Einschmelzmuttern auch die Tiefe
+      if (pr) { f.p.r = pr.d / 2; if (pr.depth) { f.d = -pr.depth; delete f.thru; } f.name = thr.value; }
+      else if (thr.value) { f.p.r = THREADS[thr.value] / 2; f.name = `Gewinde ${thr.value}`; } else delete f.name;
+      refresh();
+    };
+  }
+  const nut = panel.querySelector<HTMLSelectElement>('.nut');
+  if (nut) nut.onchange = () => { // Mutternfalle: Sechskant-Tasche an derselben Stelle (I7)
+    const g = nutTrap(f, nut.value, nextId);
+    if (!g) return;
+    pushHistory(); nextId++; add(g); selId = g.id; refresh();
+    showNotice(`${g.name}: Sechskant-Tasche ${len(Math.abs(g.d))} tief, Ausrichtung mit dem Drehen-Griff ändern`);
   }
   panel.querySelector<HTMLButtonElement>('.cb')?.addEventListener('click', () => { // Senkung: weitere Bohrung, 1,8-facher Durchmesser, 1/3 so tief
     pushHistory(); const g: Extrude = { ...structuredClone(f), id: nextId++, p: { ...f.p, r: f.p.r * 1.8 }, d: -Math.max(1, Math.abs(f.d) / 3) };

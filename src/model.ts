@@ -134,6 +134,23 @@ function allCopies(p: Pattern): PatternCopy[] {
 }
 // Kernlochdurchmesser für metrische Regelgewinde in mm
 export const THREADS: Record<string, number> = { M3: 2.5, M4: 3.3, M5: 4.2, M6: 5, M8: 6.8, M10: 8.5, M12: 10.2 };
+// 3D-Druck (I7): Bohrung Ø und Tiefe in mm, übliche Werte (Drucker streuen, bei Bedarf im Feld anpassen). Einschmelzmutter: Ø nach gängigen
+// Herstellerangaben, Tiefe = Länge + 1 mm; direkt in Kunststoff = Schraube schneidet sich ihr Gewinde selbst; Durchgang = ISO 273 mittel
+export const PRINT_HOLES: Record<string, { d: number; depth?: number }> = {
+  'Einschmelzmutter M2': { d: 3.2, depth: 5 }, 'Einschmelzmutter M2,5': { d: 3.6, depth: 6.7 }, 'Einschmelzmutter M3': { d: 4, depth: 6.7 },
+  'Einschmelzmutter M4': { d: 5.6, depth: 9.1 }, 'Einschmelzmutter M5': { d: 6.4, depth: 10.5 },
+  'M3 direkt in Kunststoff': { d: 2.7 }, 'M4 direkt in Kunststoff': { d: 3.6 },
+  'Durchgang M3': { d: 3.4 }, 'Durchgang M4': { d: 4.5 }, 'Durchgang M5': { d: 5.5 },
+};
+// Sechskantmutter ISO 4032: Schlüsselweite s, Höhe m; Mutternfalle = Sechskant-Tasche mit 0,3 mm Luft, 0,2 mm tiefer als die Mutter
+export const NUTS: Record<string, { s: number; m: number }> = { M3: { s: 5.5, m: 2.4 }, M4: { s: 7, m: 3.2 }, M5: { s: 8, m: 4.7 } };
+export function nutTrap(f: Extrude, size: string, id: number): (Extrude & { name: string }) | null {
+  const nut = NUTS[size];
+  if (!nut || f.type !== 'circle') return null;
+  const R = (nut.s + 0.3) / Math.sqrt(3), c = [f.p.cx, f.p.cy]; // Umkreis aus Schlüsselweite
+  const g = polyFeature({ o: f.o, n: f.n, u: f.u, v: f.v }, ngonPts(c, [c[0] + R, c[1]], 6), id, !!f.onFace);
+  return g && { ...g, d: -(nut.m + 0.2), ...f.body !== undefined && { body: f.body }, name: `Mutternfalle ${size}` };
+}
 export const isExtrude = (f: Feature): f is Extrude => f.type === 'rect' || f.type === 'circle' || f.type === 'poly' || f.type === 'line';
 // Bildet keine Fläche: Hilfslinie oder offene Skizzenlinie (nie extrudiert, nicht in Bereichen)
 export const noFace = (f: Extrude) => !!f.aux || f.type === 'line';
