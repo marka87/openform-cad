@@ -15,6 +15,7 @@ import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, 
 import { evalExpr, varsIn, applyParams, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
+import type { SheetExtra } from './kernel';
 import { GcsWrapper, init_planegcs_module } from '@salusoft89/planegcs';
 import gcsWasm from '@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url';
 import { solveSketch } from './sketchSolver';
@@ -204,9 +205,10 @@ let roll: number | null = null; // Rückspul-Marke: nur die Schritte davor werde
 const live = () => roll === null ? features : features.slice(0, roll);
 function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else { features.splice(roll, 0, ...fs); roll += fs.length; } }
 let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
-const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims, ...Object.keys(params).length && { params } });
+let sheetX: SheetExtra = {}; // Schnitt und Einzelheit der Zeichnung (F8), gehören zum Modell
+const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims, ...Object.keys(params).length && { params }, ...Object.keys(sheetX).length && { sheet: sheetX } });
 function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); redoStack.length = 0; }
-function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; params = d.params; renderParams(); }
+function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; sheetX = d.sheet; params = d.params; renderParams(); }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push({ s: snapshot(), path: filePath }); step(undoStack.pop()!); } }
 function redo() { if (redoStack.length) { undoStack.push({ s: snapshot(), path: filePath }); step(redoStack.pop()!); } }
@@ -2574,7 +2576,7 @@ function download(name: string, blob: Blob) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-$('bNew').onclick = () => { if (features.length && discardOk('Neu anfangen')) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; setFile(null); clearSel(); refresh(); } };
+$('bNew').onclick = () => { if (features.length && discardOk('Neu anfangen')) { pushHistory(); features = []; meta = {}; roll = null; sheetDims = []; sheetX = {}; setFile(null); clearSel(); refresh(); } };
 $('bUndo').onclick = undo;
 $('bRedo').onclick = redo;
 // Modell als .ofc (dasselbe JSON wie im Autosave). Desktop: Speichern schreibt in die geöffnete Datei, sonst Dialog
@@ -2664,7 +2666,7 @@ $('bStep').onclick = () => sendExport({ type: 'export', format: 'step' });
 let printNext = false; // nächstes Blatt drucken statt speichern
 function sheetInfo(format: 'A4' | 'A3') {
   const b = bodyIds.find(b => !meta[b]?.hidden) ?? bodyIds[0];
-  return { sheet: format, title: (b !== undefined && meta[b]?.name) || 'Modell', material: b !== undefined ? meta[b]?.mat ?? '' : '', date: new Date().toLocaleDateString('de-DE'), unit: display.unit };
+  return { sheet: format, title: (b !== undefined && meta[b]?.name) || 'Modell', material: b !== undefined ? meta[b]?.mat ?? '' : '', date: new Date().toLocaleDateString('de-DE'), unit: display.unit, ...sheetX };
 }
 function sheet(format: 'A4' | 'A3', print: boolean) {
   printNext = print;
@@ -2676,6 +2678,7 @@ function editSheet() {
     request: f => send({ type: 'sheet', info: sheetInfo(f), dims: sheetDims, skip: hiddenBodies() }),
     dims: () => sheetDims,
     change: (d, history) => { if (history) pushHistory(); sheetDims = d; save(); },
+    extra: () => sheetX, setExtra: (x, history) => { if (history) pushHistory(); sheetX = x; save(); },
     print: f => sheet(f, true), save: f => sheet(f, false),
   });
 }

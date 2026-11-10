@@ -1,20 +1,23 @@
 // Maß-Editor: Zeichnungsblatt im Vordergrund, Maße anklicken, ablegen, verschieben, löschen (Epic 3).
 // Das Blatt rechnet der Kern-Worker; hier wird nur gezeigt, angeklickt und das Maß-Modell geändert.
-import type { Cands } from './kernel';
+import type { Cands, SheetExtra } from './kernel';
 import type { Dim } from './model';
 
-export type SheetMsg = { svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][] };
+export type SheetMsg = { svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][]; lay: { k: number; o: number[][]; box: number[][] } };
 type Deps = {
   request: (sheet: 'A4' | 'A3') => void;               // Blatt neu rechnen lassen → showSheet
   dims: () => Dim[];
   change: (d: Dim[], history: boolean) => void;        // Maße übernehmen (mit/ohne Rückgängig-Schritt), speichern
+  extra: () => SheetExtra;                             // Schnitt und Einzelheit (F8)
+  setExtra: (x: SheetExtra, history: boolean) => void;
   print: (sheet: 'A4' | 'A3') => void;
   save: (sheet: 'A4' | 'A3') => void;
 };
-type Mode = 'sel' | 'lin' | 'dia' | 'rad' | 'ang';
-const LABEL: Record<Mode, string> = { sel: 'Auswählen', lin: 'Länge', dia: '⌀ Durchmesser', rad: 'R Radius', ang: '∠ Winkel' };
+type Mode = 'sel' | 'lin' | 'dia' | 'rad' | 'ang' | 'det';
+const LABEL: Record<Mode, string> = { sel: 'Auswählen', lin: 'Länge', dia: '⌀ Durchmesser', rad: 'R Radius', ang: '∠ Winkel', det: 'Einzelheit B' };
 const HELP: Record<Mode, string> = {
-  sel: 'Maß anklicken = auswählen, ziehen = verschieben, Entf = löschen; Toleranz oben eintragen',
+  sel: 'Maß anklicken = auswählen, ziehen = verschieben, Entf = löschen; Toleranz oben eintragen · Schnittlinie A ziehen = Schnitt verlegen',
+  det: 'Einzelheit: Mitte in einer Ansicht anklicken, dann den Rand des Kreises (wird doppelt so groß daneben gezeichnet)',
   lin: 'Länge: zwei Eckpunkte in einer Ansicht anklicken, dann die Maßlinie ablegen (Shift = schräg entlang der Punkte; in Iso immer schräg, wahre Länge)',
   dia: 'Durchmesser: Kreis anklicken, dann die Zahl ablegen',
   rad: 'Radius: Kreis anklicken, dann die Zahl ablegen',
@@ -22,7 +25,7 @@ const HELP: Record<Mode, string> = {
 };
 
 let deps: Deps, ed: HTMLDivElement | null = null, last: SheetMsg | null = null;
-let mode: Mode = 'sel', picks: any[] = [], sel: number | null = null, drag: { id: number; moved: boolean } | null = null;
+let mode: Mode = 'sel', picks: any[] = [], sel: number | null = null, drag: { id: number; moved: boolean } | null = null; // id −1 = Schnittlinie
 const q = <T extends HTMLElement>(s: string) => ed!.querySelector<T>(s)!;
 const sheetSize = () => q<HTMLSelectElement>('.fmt').value as 'A4' | 'A3';
 const redraw = () => deps.request(sheetSize());
@@ -34,6 +37,7 @@ export function openSheetEditor(d: Deps) {
     ed.id = 'sheetEd';
     ed.innerHTML = `<div class="bar">${(Object.keys(LABEL) as Mode[]).map(m => `<button data-m="${m}">${LABEL[m]}</button>`).join('')}
       <label>Toleranz <input class="tol" placeholder="±0,1 oder H7" size="10"></label><button class="del">Maß löschen</button>
+      <select class="cut" title="Schnittansicht A–A, erscheint rechts; die Linie A lässt sich ziehen"><option value="">kein Schnitt</option><option value="x">Schnitt quer (wie Seitenansicht)</option><option value="z">Schnitt längs (wie Vorderansicht)</option><option value="y">Schnitt waagrecht (wie Draufsicht)</option></select><button class="nodet">Einzelheit entfernen</button>
       <span style="flex:1"></span><select class="fmt"><option>A4</option><option>A3</option></select>
       <button class="pdf">Drucken / PDF</button><button class="svg">SVG</button><button class="close">Schließen</button></div>
       <div class="hint"></div><div class="area"></div>`;
@@ -44,6 +48,11 @@ export function openSheetEditor(d: Deps) {
     q('.svg').onclick = () => deps.save(sheetSize());
     q<HTMLSelectElement>('.fmt').onchange = redraw;
     q('.del').onclick = remove;
+    q<HTMLSelectElement>('.cut').onchange = e => { // neue Ebene liegt in der Körpermitte (at fehlt)
+      const ax = (e.target as HTMLSelectElement).value as 'x' | 'y' | 'z' | '', { cut: _, ...rest } = deps.extra();
+      deps.setExtra(ax ? { ...rest, cut: { ax } } : rest, true); redraw();
+    };
+    q('.nodet').onclick = () => { const { det: _, ...rest } = deps.extra(); deps.setExtra(rest, true); redraw(); };
     q<HTMLInputElement>('.tol').onchange = e => {
       if (sel === null) return;
       const t = (e.target as HTMLInputElement).value.trim();
@@ -61,6 +70,7 @@ export function openSheetEditor(d: Deps) {
     }, true);
   }
   ed.style.display = 'flex';
+  q<HTMLSelectElement>('.cut').value = deps.extra().cut?.ax ?? '';
   setMode('sel');
   redraw();
 }
@@ -74,6 +84,7 @@ export function showSheet(m: SheetMsg) {
   svg.removeAttribute('width'); svg.removeAttribute('height'); // auf die Fenstergröße einpassen (viewBox bleibt in mm)
   svg.insertAdjacentHTML('beforeend', '<g class="hl" fill="none" stroke="#1a7cff" stroke-width="0.5"></g>');
   if (sel !== null) svg.querySelector(`[data-dim="${sel}"]`)?.setAttribute('stroke', '#1a7cff');
+  q<HTMLButtonElement>('.nodet').disabled = !deps.extra().det;
   showHelp();
 }
 
@@ -139,9 +150,23 @@ function offFor(d: Pick<Dim, 't' | 'dir'>, P: number[][], R: number, m: number[]
   return { off: d.t === 'ang' ? dist(m, P[0]) : dist(m, P[0]) - R };
 }
 
+// Blattpunkt → Ansicht (0–2) und Punkt in Ansichtskoordinaten (mm am Modell); null = neben allen Ansichten
+function viewAt(m: number[]) {
+  const { k, o, box } = last!.lay, v = box.findIndex(b => m[0] > b[0] - 5 && m[0] < b[0] + b[2] + 5 && m[1] > b[1] - 5 && m[1] < b[1] + b[3] + 5);
+  return v < 0 ? null : { v, c: [(m[0] - o[v][0]) / k, (o[v][1] - m[1]) / k] };
+}
 function down(e: PointerEvent) {
   const m = at(e);
   if (!m || !last) return;
+  if (mode === 'det') { // erster Klick = Mitte, zweiter = Rand
+    if (!picks.length) { const p = viewAt(m); if (p) { picks.push({ ...p, m }); showHelp('Rand des Kreises anklicken'); } return; }
+    const r = Math.round(dist(m, picks[0].m) / last.lay.k * 10) / 10;
+    if (r < 0.5) return;
+    deps.setExtra({ ...deps.extra(), det: { v: picks[0].v, c: picks[0].c, r } }, true);
+    setMode('sel');
+    return redraw();
+  }
+  if (mode === 'sel' && (e.target as Element).closest('[data-cut]')) { drag = { id: -1, moved: false }; return q('.area').setPointerCapture(e.pointerId); }
   if (mode === 'sel') {
     const g = (e.target as Element).closest('[data-dim]');
     sel = g ? +g.getAttribute('data-dim')! : null;
@@ -164,6 +189,15 @@ function down(e: PointerEvent) {
 function move(e: PointerEvent) {
   const m = at(e);
   if (!m || !last) return;
+  if (drag?.id === -1) { // Schnittlinie ziehen: Lage der Ebene aus der Maus, auf 0,5 mm gerastet (Shift = frei)
+    const x = deps.extra(), ax = x.cut?.ax, { k, o } = last.lay;
+    if (!ax) return;
+    const raw = ax === 'x' ? (m[0] - o[0][0]) / k : ax === 'y' ? (o[0][1] - m[1]) / k : -(o[1][1] - m[1]) / k, at = e.shiftKey ? raw : Math.round(raw * 2) / 2;
+    if (at === x.cut!.at) return;
+    deps.setExtra({ ...x, cut: { ax, at } }, !drag.moved);
+    drag.moved = true;
+    return redraw();
+  }
   if (drag) { // Maß verschieben: Lage live nachführen, Rückgängig-Schritt nur beim ersten Schritt
     const g = last.geo.find(x => x[0] === drag!.id), d = deps.dims().find(x => x.id === drag!.id);
     if (!g || !d) return;
@@ -172,6 +206,7 @@ function move(e: PointerEvent) {
     return redraw();
   }
   if ((mode === 'lin' && picks.length === 2) || ((mode === 'dia' || mode === 'rad') && picks.length === 1)) return preview(m, e.shiftKey || picks[0].v === 3);
+  if (mode === 'det') return void (picks.length && (q('.area').querySelector('.hl')!.innerHTML = `<circle cx="${picks[0].m[0]}" cy="${picks[0].m[1]}" r="${dist(m, picks[0].m)}" stroke-dasharray="1 0.6"/>`));
   highlight(mode === 'sel' ? null : nearest(m));
 }
 // Vorschau der Maßlinie, solange nur noch die Lage fehlt (T3.6): gleiche Lage wie beim Ablegen (offFor), gestrichelt

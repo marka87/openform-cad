@@ -898,7 +898,7 @@ export function applyParams(features: Feature[], params: Record<string, number>)
 // Modell aus .ofc/.json/Autosave prüfen, bevor etwas übernommen wird (A5): fremde oder kaputte Dateien werfen einen
 // verständlichen Fehler statt das Modell zu leeren. Bezüge auf andere Schritte müssen Zahlen sein, sie landen in der
 // Oberfläche (A1). Fehlende Nebenangaben alter Dateien (meta, roll, dims, nextId) werden ergänzt
-export function parseModel(text: string): { features: Feature[]; nextId: number; meta: Record<number, BodyMeta>; roll: number | null; dims: Dim[]; params: Record<string, number> } {
+export function parseModel(text: string): { features: Feature[]; nextId: number; meta: Record<number, BodyMeta>; roll: number | null; dims: Dim[]; params: Record<string, number>; sheet: { cut?: { ax: 'x' | 'y' | 'z'; at?: number }; det?: { v: number; c: number[]; r: number } } } {
   let d: any;
   try { d = JSON.parse(text); } catch { throw new Error('Keine gültige Modelldatei (kein JSON)'); }
   if (!d || typeof d !== 'object' || !Array.isArray(d.features)) throw new Error('Keine OpenForm-Datei (Schrittliste fehlt)');
@@ -924,5 +924,9 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     meta: d.meta && typeof d.meta === 'object' ? d.meta : {},
     roll: int(d.roll) && d.roll >= 0 && d.roll <= d.features.length ? d.roll : null,
     dims: Array.isArray(d.dims) ? d.dims : [], params,
+    sheet: { // Schnitt und Einzelheit der Zeichnung (F8): Unbrauchbares fällt still weg, das Modell bleibt lesbar
+      ...['x', 'y', 'z'].includes(d.sheet?.cut?.ax) && { cut: { ax: d.sheet.cut.ax, ...Number.isFinite(d.sheet.cut.at) && { at: d.sheet.cut.at } } },
+      ...[0, 1, 2].includes(d.sheet?.det?.v) && d.sheet.det.r > 0 && Array.isArray(d.sheet.det.c) && d.sheet.det.c.length === 2 && d.sheet.det.c.every(Number.isFinite) && { det: { v: d.sheet.det.v, c: d.sheet.det.c, r: d.sheet.det.r } },
+    },
   };
 }

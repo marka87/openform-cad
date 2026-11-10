@@ -569,7 +569,39 @@ export function drawingSVG(body: Shape3D) {
     + placed.map(v => paths(v.hidden, ' stroke="#888" stroke-width="0.25" stroke-dasharray="2 1.2"') + paths(v.visible)).join('') + '</svg>';
 }
 
-export type SheetInfo = { sheet: 'A4' | 'A3'; title: string; material: string; date: string; unit?: 'mm' | 'in' }; // Maße in mm (Standard) oder Zoll
+// Zusatzansichten des Blatts (F8), gehören zum Modell. cut: Schnitt A–A an der Ebene ax = at (Modell, Y oben; at fehlt = Körpermitte).
+// det: Einzelheit B, Kreis um c (Ansichtskoordinaten in mm) mit Radius r in Ansicht v (0 vorne, 1 oben, 2 seitlich), doppelt so groß gezeichnet
+export type SheetExtra = { cut?: { ax: 'x' | 'y' | 'z'; at?: number }; det?: { v: number; c: number[]; r: number } };
+export type SheetInfo = { sheet: 'A4' | 'A3'; title: string; material: string; date: string; unit?: 'mm' | 'in' } & SheetExtra; // Maße in mm (Standard) oder Zoll
+// Schnitt je Achse: sv = Ansicht, in deren Richtung man auf die Schnittfläche schaut; pv = Ansicht, in der die Ebene als Linie erscheint
+// (horiz = waagrecht); dir = Blickrichtung an dieser Linie auf dem Blatt
+const CUT = { x: { sv: 2, pv: 0, horiz: false, dir: [1, 0] }, y: { sv: 1, pv: 0, horiz: true, dir: [0, 1] }, z: { sv: 0, pv: 1, horiz: true, dir: [0, -1] } };
+const DETAIL = 2; // Vergrößerung der Einzelheit gegenüber dem Blattmaßstab
+export type SheetLayout = { S?: (i: number, p: number[]) => number[]; k?: number; o?: number[][]; box?: number[][] }; // o: Blattpunkt des Ansichts-Ursprungs, box: x, y, b, h je Ansicht 0–2
+
+// Schnittansicht: weg, was zwischen Betrachter und Ebene liegt; Ansicht des Rests und die Dreiecke der Schnittfläche (zum Schraffieren)
+// in Ansichtskoordinaten. null = Ebene trifft nichts
+function sectionOf(body: Shape3D, ax: 'x' | 'y' | 'z', at: number): { view: Drawing; tris: number[][] } | null {
+  const B = 1e4, i = 'xyz'.indexOf(ax), lo = [-B, -B, -B], hi = [B, B, B], P = PROJ[CUT[ax].sv], tris: number[][] = [];
+  if (ax === 'x') hi[0] = at; else lo[i] = at; // Betrachter: Seitenansicht von −x, Vorderansicht von +z, Draufsicht von +y
+  const half = makeBox(lo as Vec, hi as Vec);
+  const parts = [...iterTopo(body.wrapped, 'solid')].map(s => (cast(s) as Shape3D).cut(half)).filter(c => c.faces.length);
+  half.delete();
+  if (!parts.length) return null;
+  for (const c of parts) {
+    const m = c.mesh({ tolerance: 0.05, angularTolerance: 0.2 }), on = (k: number) => Math.abs(m.vertices[3 * k + i] - at) < 1e-4;
+    for (let t = 0; t < m.triangles.length; t += 3) { // nur Flächen in der Ebene haben Dreiecke mit allen drei Ecken darauf
+      const q = [m.triangles[t], m.triangles[t + 1], m.triangles[t + 2]];
+      if (q.every(on)) tris.push(q.flatMap(k => P([m.vertices[3 * k], m.vertices[3 * k + 1], m.vertices[3 * k + 2]])));
+    }
+  }
+  if (!tris.length) { parts.forEach(c => c.delete()); return null; } // Ebene liegt neben dem Körper
+  const all = parts.length > 1 ? makeCompound(parts) as Shape3D : parts[0], s = forExport(all); // makeCompound gibt seine Teile frei
+  all.delete();
+  const view = drawProjection(s, VIEWS[CUT[ax].sv]).visible;
+  s.delete();
+  return { view, tris };
+}
 
 // Modellpunkt (Y-oben) → 2D-Koordinaten der Ansicht, wie drawProjection sie liefert (vorne, oben, seitlich; im Test geprüft)
 // Iso: Kamera (1, −1, 1) im Z-oben-Export = Blick aus (1, 1, 1) im Modell, Achsen der ProjectionCamera
@@ -629,20 +661,28 @@ const num = (x: number) => (Math.round(x * 10) / 10).toString().replace('.', ','
 
 // Technische Zeichnung auf einem Blatt (quer): drei Ansichten mit Gesamtmaßen, Iso-Ansicht, Rahmen und Schriftfeld.
 // Maßstab = größter Normmaßstab, bei dem alles auf das Blatt passt
-// shortcut: nur Gesamtmaße je Ansicht, keine Einzelmaße, Schnitte oder Details → Bemaßung aus Skizzenmaßen (M5)
+// Dritte Spalte bei Bedarf: Schnitt A–A (oben) und Einzelheit B (unten), siehe SheetExtra.
 // layout.S: Abbildung Ansicht i, Ansichtspunkt → Blatt (für den Maß-Editor)
-export function sheetSVG(body: Shape3D, info: SheetInfo, dims: DimGeo[] = [], layout?: { S?: (i: number, p: number[]) => number[]; k?: number }) {
+export function sheetSVG(body: Shape3D, info: SheetInfo, dims: DimGeo[] = [], layout?: SheetLayout) {
   const s = forExport(body);
   const views = [...VIEWS.map(v => drawProjection(s, v)), drawProjection(s, new ProjectionCamera([0, 0, 0], [1, -1, 1]))];
   s.delete();
   const bb = views.map(v => v.visible.boundingBox.bounds), size = bb.map(([a, b]) => [b[0] - a[0], b[1] - a[1]]);
+  const cut = info.cut && { ...CUT[info.cut.ax], ax: info.cut.ax, at: info.cut.at ?? body.boundingBox.center['xyz'.indexOf(info.cut.ax)] };
+  let sec: ReturnType<typeof sectionOf> = null;
+  try { sec = cut ? sectionOf(body, cut.ax, cut.at) : null; } catch (e) { console.warn('Schnittansicht fehlgeschlagen', e); } // Blatt kommt dann ohne Schnitt
+  const sb = sec?.view.boundingBox.bounds, det = info.det && info.det.v >= 0 && info.det.v < 3 && info.det.r > 0 ? info.det : null;
   const [W, H] = SHEETS[info.sheet], gap = 22, x0 = 35, y0 = 15; // gap: Platz für Maße zwischen den Ansichten
   const availW = W - x0 - 10, availH = H - y0 - 10 - 32;              // 32 = Schriftfeld unten
-  const fits = (k: number) => Math.max(size[0][0], size[1][0]) * k + gap + Math.max(size[2][0], size[3][0]) * k <= availW
-    && Math.max(size[0][1], size[2][1]) * k + gap + Math.max(size[1][1], size[3][1]) * k <= availH;
+  // Zellen [Spalte, Zeile, Breite, Höhe] in Modell-mm: Vorder-, Drauf-, Seiten-, Iso-Ansicht, dann Schnitt und Einzelheit
+  const cells = [[0, 0, ...size[0]], [0, 1, ...size[1]], [1, 0, ...size[2]], [1, 1, ...size[3]],
+    ...sb ? [[2, 0, sb[1][0] - sb[0][0], sb[1][1] - sb[0][1]]] : [], ...det ? [[2, 1, 2 * DETAIL * det.r, 2 * DETAIL * det.r]] : []];
+  const span = (d: number) => Array.from({ length: Math.max(...cells.map(c => c[d])) + 1 }, (_, j) => Math.max(0, ...cells.filter(c => c[d] === j).map(c => c[2 + d])));
+  const cw = span(0), rh = span(1), sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+  const fits = (k: number) => sum(cw) * k + gap * (cw.length - 1) <= availW && sum(rh) * k + gap * (rh.length - 1) <= availH;
   const k = SCALES.find(fits) ?? SCALES.at(-1)!;
-  const col2 = x0 + Math.max(size[0][0], size[1][0]) * k + gap, row2 = y0 + Math.max(size[0][1], size[2][1]) * k + gap;
-  const pos = [[x0, y0], [x0, row2], [col2, y0], [col2, row2]]; // Vorder-, Drauf-, Seiten-, Iso-Ansicht
+  const pos = cells.map(c => [x0 + sum(cw.slice(0, c[0])) * k + gap * c[0], y0 + sum(rh.slice(0, c[1])) * k + gap * c[1]]);
+  const ratio = (k: number) => k >= 1 ? `${k}:1` : `1:${Math.round(1 / k)}`;
   const paths = (d: Drawing, attrs = '') => { try { return d.toSVGPaths().flat().map(p => `<path d="${p}"${attrs}/>`).join(''); } catch { return ''; } };
   let out = '';
   const len = (mm: number) => info.unit === 'in' ? (Math.round(mm / 25.4 * 1000) / 1000).toString().replace('.', ',') : num(mm);
@@ -662,13 +702,33 @@ export function sheetSVG(body: Shape3D, info: SheetInfo, dims: DimGeo[] = [], la
   }
   // Einzelmaße: S = Ansichtspunkt → Blatt
   const S = (i: number, p: number[]) => [pos[i][0] - k * bb[i][0][0] + k * p[0], pos[i][1] + k * (bb[i][1][1] - p[1])];
-  if (layout) { layout.S = S; layout.k = k; }
+  if (layout) Object.assign(layout, { S, k, o: [0, 1, 2].map(i => S(i, [0, 0])), box: [0, 1, 2].map(i => [...pos[i], size[i][0] * k, size[i][1] * k]) });
+  const r3 = (x: number) => Math.round(x * 1e3) / 1e3;
+  if (cut && sec && sb) { // Schnitt A–A: schraffierte Schnittfläche, Umrisse, darunter der Name; Schnittlinie mit Blickpfeilen in der Ansicht pv
+    const [px, py] = pos[4], h = 2.5 / k, i = cut.pv, p = S(i, cut.horiz ? [0, cut.ax === 'z' ? -cut.at : cut.at] : [cut.at, 0]);
+    out += `<g transform="translate(${px - k * sb[0][0]} ${py + k * sb[1][1]}) scale(${k})" stroke-width="${0.5 / k}">`
+      + `<pattern id="hat" patternUnits="userSpaceOnUse" width="${h}" height="${h}" patternTransform="rotate(45)"><path d="M0 ${h / 2}H${h}" stroke-width="${0.18 / k}"/></pattern>`
+      + `<path fill="url(#hat)" stroke="none" d="${sec.tris.map(t => `M${r3(t[0])} ${r3(-t[1])}L${r3(t[2])} ${r3(-t[3])}L${r3(t[4])} ${r3(-t[5])}z`).join('')}"/>` + paths(sec.view) + '</g>'
+      + `<text x="${px + (sb[1][0] - sb[0][0]) * k / 2}" y="${py + (sb[1][1] - sb[0][1]) * k + 6}" text-anchor="middle">A–A</text>`;
+    const a = cut.horiz ? [pos[i][0] - 13, p[1]] : [p[0], pos[i][1] - 6], b = cut.horiz ? [pos[i][0] + size[i][0] * k + 6, p[1]] : [p[0], pos[i][1] + size[i][1] * k + 13]; // 13: an den Gesamtmaßen (8 mm) vorbei
+    const [dx, dy] = cut.dir, ang = Math.atan2(-dy, -dx), line = `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`;
+    out += `<g data-cut="1" stroke-width="0.35"><path d="${line}" stroke-dasharray="6 1.5 1 1.5"/><path d="${line}" stroke-opacity="0" stroke-width="4"/>` // breite unsichtbare Linie zum Greifen
+      + [a, b].map(q => `<path d="M${q[0]} ${q[1]}l${5 * dx} ${5 * dy}"/>${arrow(q[0] + 5 * dx, q[1] + 5 * dy, ang)}`
+        + `<text x="${q[0] + 8 * dx + (dx ? 0 : -1.2)}" y="${q[1] + 8 * dy + 1.2}" text-anchor="${dx < 0 ? 'end' : dx ? 'start' : 'middle'}">A</text>`).join('') + '</g>';
+  }
+  if (det) { // Einzelheit B: Kreis in der Ansicht, daneben derselbe Ausschnitt vergrößert
+    const K = k * DETAIL, R = det.r * K, [px, py] = pos[cells.length - 1], cx = px + R, cy = py + R, P = S(det.v, det.c), v = views[det.v];
+    out += `<circle data-det="1" cx="${P[0]}" cy="${P[1]}" r="${det.r * k}" stroke-width="0.25"/><text x="${P[0] + det.r * k * 0.71 + 1}" y="${P[1] - det.r * k * 0.71 - 1}">B</text>`
+      + `<clipPath id="detc"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath><g clip-path="url(#detc)"><g transform="translate(${cx - K * det.c[0]} ${cy + K * det.c[1]}) scale(${K})" stroke-width="${0.5 / K}">`
+      + paths(v.hidden, ` stroke="#777" stroke-width="${0.25 / K}" stroke-dasharray="${2 / K} ${1 / K}"`) + paths(v.visible) + `</g></g><circle cx="${cx}" cy="${cy}" r="${R}" stroke-width="0.25"/>`
+      + `<text x="${cx}" y="${cy + R + 6}" text-anchor="middle">B (${ratio(K)})</text>`;
+  }
   for (const d of dims) {
     const t = `${d.t === 'dia' ? '⌀' : d.t === 'rad' ? 'R' : ''}${d.t === 'ang' ? num(d.val) : len(d.val)}${d.t === 'ang' ? '°' : ''}${d.tol ? ' ' + d.tol : ''}`;
     out += `<g stroke-width="0.25" data-dim="${d.id}">${dimSVG(d, d.pts.map(p => S(d.v, p)), (d.rv ?? 0) * k, esc(t), arrow)}</g>`;
   }
   // Rahmen und Schriftfeld (unten rechts)
-  const tx = W - 10 - 140, ty = H - 10 - 28, scale = k >= 1 ? `${k}:1` : `1:${Math.round(1 / k)}`;
+  const tx = W - 10 - 140, ty = H - 10 - 28, scale = ratio(k);
   const cell = (x: number, y: number, label: string, value: string, big = false) =>
     `<text x="${tx + x + 1.5}" y="${ty + y + 3}" font-size="2" fill="#555">${label}</text><text x="${tx + x + 1.5}" y="${ty + y + (big ? 11 : 8.5)}" font-size="${big ? 5 : 3.5}">${esc(value)}</text>`;
   out += `<rect x="20" y="10" width="${W - 30}" height="${H - 20}" stroke-width="0.7"/>`

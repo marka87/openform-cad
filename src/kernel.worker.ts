@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, makeCompound, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { shownEdges, newCache, dropCache, buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo , invalidBodies } from './kernel';
+import { shownEdges, newCache, dropCache, buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo, type SheetLayout , invalidBodies } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
@@ -24,7 +24,7 @@ export type FromWorker =
   | { type: 'notice'; text: string }
   | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
   // geo: Punkte jedes darstellbaren Maßes in Blattkoordinaten (zum Verschieben); bad: nicht auflösbare Maße mit Grund
-  | { type: 'sheet'; svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][] }; // geo: id, Punkte, Kreisradius auf dem Blatt
+  | { type: 'sheet'; svg: string; cands: Cands; geo: [number, number[][], number][]; bad: [number, string][]; lay: { k: number; o: number[][]; box: number[][] } }; // lay: Lage der Ansichten 0–2 (Schnittlinie ziehen, Einzelheit setzen) // geo: id, Punkte, Kreisradius auf dem Blatt
 
 // faces/edges: je Fläche bzw. Kante [Start, Anzahl] in Dreiecks-Indizes bzw. Linienpunkten, zum Hervorheben
 export type BodyMesh = { body: number; volume: number; vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array; faces: Int32Array; edges: Int32Array };
@@ -113,9 +113,9 @@ async function handle(data: ToWorker) {
     const { body, bodies, drop } = shown(data.skip);
     try {
       if (!body) return post({ type: 'export', format: 'svg', blob: null });
-      const d = resolveDims(data.dims, bodies, names), L: { S?: (i: number, p: number[]) => number[]; k?: number } = {};
+      const d = resolveDims(data.dims, bodies, names), L: SheetLayout = {};
       const svg = sheetSVG(body, data.info, d.ok, L);
-      post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.rv ?? 0) * L.k!]), bad: d.bad });
+      post({ type: 'sheet', svg, cands: sheetCands(bodies, names, L.S!, L.k!), geo: d.ok.map(g => [g.id, g.pts.map(p => L.S!(g.v, p)), (g.rv ?? 0) * L.k!]), bad: d.bad, lay: { k: L.k!, o: L.o!, box: L.box! } });
     } finally { drop(); }
   } else {
     const { body, bodies, drop } = shown(data.skip);

@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
-import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF } from './kernel';
+import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF, type SheetLayout } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
 import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
@@ -362,6 +362,37 @@ test('Ellipse und Bogen durch drei Punkte', () => {
   expect(Math.min(...pts.map(p => p[1]))).toBeCloseTo(-0.4, 1); // Bogen läuft durch den Punkt
   const big = bulge3([0, 0], [2, 0], [1, -3]);                // großer Bogen über den Halbkreis hinaus
   expect(Math.abs(big)).toBeGreaterThan(1);
+});
+
+test('Zeichnungsblatt: Schnitt A–A und Einzelheit B (F8)', () => {
+  const body = buildBody([box(), hole(-4)]).body!, info = { sheet: 'A4' as const, title: '', material: '', date: '' };
+  // Schraffierte Fläche = Querschnitt: Summe der Dreiecke im Pfad mit der Schraffur
+  const hatched = (svg: string) => {
+    const n = svg.match(/fill="url\(#hat\)" stroke="none" d="([^"]*)"/)![1].match(/-?[\d.]+/g)!.map(Number);
+    let a = 0;
+    for (let i = 0; i < n.length; i += 6) a += Math.abs((n[i + 2] - n[i]) * (n[i + 5] - n[i + 1]) - (n[i + 4] - n[i]) * (n[i + 3] - n[i + 1])) / 2;
+    return a;
+  };
+  const mid = sheetSVG(body, { ...info, cut: { ax: 'x' } }); // Mitte x = 10: durch die Bohrung ⌀6, 4 tief
+  expect(mid).toContain('>A–A<'); expect(mid).toContain('data-cut');
+  expect(hatched(mid)).toBeCloseTo(100 - 6 * 4, 3);
+  expect(hatched(sheetSVG(body, { ...info, cut: { ax: 'x', at: 2 } }))).toBeCloseTo(100, 3); // neben der Bohrung
+  expect(hatched(sheetSVG(body, { ...info, cut: { ax: 'z', at: -5 } }))).toBeCloseTo(200 - 6 * 4, 3);
+  expect(hatched(sheetSVG(body, { ...info, cut: { ax: 'y', at: 8 } }))).toBeCloseTo(200 - Math.PI * 9, 0); // Kreis als Vieleck
+  expect(sheetSVG(body, { ...info, cut: { ax: 'x', at: 50 } })).not.toContain('A–A'); // Ebene neben dem Körper: Blatt ohne Schnitt
+  expect(sheetSVG(body, info)).not.toContain('#hat');
+  const zwei = buildBody([box(), { ...box(), id: 5, body: 5, o: [30, 0, 0] }]).body!; // zwei Körper: Ebene trifft nur den zweiten
+  expect(hatched(sheetSVG(zwei, { ...info, cut: { ax: 'x', at: 40 } }))).toBeCloseTo(100, 3);
+  const L: SheetLayout = {}, det = sheetSVG(body, { ...info, det: { v: 1, c: [10, 5], r: 4 } }, [], L);
+  expect(det).toContain('>B (4:1)<'); expect(det).toContain('clip-path="url(#detc)"'); // Blatt 2:1, Einzelheit doppelt so groß
+  expect(det).toMatch(/2:1 · mm/);
+  expect(L.o).toHaveLength(3);
+  expect(L.S!(1, [10, 5])).toEqual([L.o![1][0] + 10 * L.k!, L.o![1][1] - 5 * L.k!]); // Editor rechnet damit zurück
+  // Datei: Schnitt und Einzelheit bleiben, Unsinn fällt weg
+  const m = (sheet: unknown) => parseModel(JSON.stringify({ features: [], sheet })).sheet;
+  expect(m({ cut: { ax: 'y', at: 3 }, det: { v: 2, c: [1, 2], r: 3 } })).toEqual({ cut: { ax: 'y', at: 3 }, det: { v: 2, c: [1, 2], r: 3 } });
+  expect(m({ cut: { ax: 'q' }, det: { v: 7, c: [1], r: -1 } })).toEqual({});
+  expect(m(undefined)).toEqual({});
 });
 
 test('Zeichnungsblatt: Maßstab, Gesamtmaße, Schriftfeld', () => {
