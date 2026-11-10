@@ -102,11 +102,11 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 
 ### 3. Echte Teile — Nutzer, das Wichtigste
 - [x] Teil 1: Gehäuse mit Lochraster
-- [ ] DOING Teil 2 (Zahnbürstenständer, begonnen 2026-10-31), Feldnotizen führen
-- [ ] TODO Teil 3, Feldnotizen führen
+- [x] DONE Teil 2 (Zahnbürstenständer, begonnen 2026-10-31; fertig laut Nutzer 2026-11-10)
+- [x] DONE Teil 3 (laut Nutzer 2026-11-10 fertig; Name, Zweck und Feldnotizen noch nicht eingetragen)
 - [ ] TODO Auswerten: Was mehrfach stört, kommt hier ganz nach oben
 - [ ] TODO Die drei Teile als Regressionstest ins Repo, mit „wofür brauchst du es“
-- [ ] TODO Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
+- [x] DONE (laut Nutzer 2026-11-10) Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
       STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.2 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8, Kante mit Vorzeichen (E2), Kugel abziehen (K1), KI über Google Agent Platform, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
 
@@ -314,6 +314,8 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-10 Nutzer meldet Teil 2, Teil 3 und Installer durchklicken als erledigt (nur Doku). Feldnotizen zu Teil 3 fehlen;
+  Stolperstellen kamen in den letzten Tagen als Screenshots (Rippe R1, Leisten L1–L3, Pfeile 0.22.2) und sind dort eingeflossen.
 - 2026-11-10 P5 (0.25.4, PATCH): Beim Slicer-Test gefunden: Schräge (und Fläche löschen) auf einem Punkt ohne Fläche dieses Körpers taten\n  still nichts, kein roter Schritt. Jetzt Fehler „Fläche nicht gefunden – neu anklicken“ (`picked` in kernel.ts). Kern-Test für beide.\n  3MF im Anycubic Slicer Next (Orca-Basis) per Kommandozeile geladen und neu gespeichert: zwei Körper, 24 Ecken / 40 Dreiecke wie vorher.\n  STEP in FreeCAD: vom Nutzer auf dem Arbeitsrechner bestätigt.
 - 2026-11-10 P3 (0.25.3, PATCH, Audit): Winkelfeld der Schräge über evalExpr (Komma, Parameter; Grad ohne Zoll-Umrechnung), bei Unsinn\n  Meldung und altes Feld. Kern-Test Zylinder 3° = Kegelstumpf, STEP raus und wieder rein gleiches Volumen, Bezug nachgetragen. Gelernt: ein\n  Punkt genau auf der Naht eines Zylinders trifft zwei Flächen, dann wird kein Bezug gespeichert (geneigt wird trotzdem). Etikett p.h = Tiefe,\n  auskommentiertes .sort in lipOn gelöscht. Winkelfeld nicht im Browser durchgeklickt.
 - 2026-11-10 P2 (0.25.2, PATCH, Audit): parseModel verlangt ganze Zahlen als Nummer der Zeichnungsmaße (landet als data-dim im Blatt-HTML);\n  applyParams geht den Bindungspfad nur über eigene Eigenschaften (`constructor.length` warf vorher und legte alle Parameter lahm).\n  Gelernt: hasOwn nur am letzten Schritt reicht nicht, Object hat ein eigenes length. Kern-Test mit präparierter Datei.
