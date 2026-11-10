@@ -73,7 +73,7 @@ Audit 2026-11-10 (nach F9), vom Nutzer freigegeben, in dieser Reihenfolge:
       nächste Parameteränderung setzt es still auf den alten Ausdruck (main.ts:1884, model.ts:887). Fix: Bindungen, deren Maß nicht mehr passt, fallen weg.
 - [x] DONE P2 (0.25.2) Datei prüfen: Maß-Nummer der Zeichnung ungeprüft ins HTML (`data-dim`, model.ts:929, kernel.ts:734); Bindungspfad
       `constructor.length` legt applyParams lahm (model.ts:892). Fix: dims-id ganze Zahl, `Object.hasOwn` vor dem Schreiben.
-- [ ] TODO P3 Schräge nachbessern: Winkel nimmt kein Komma (main.ts:1972), Test Zylinder→Kegel und STEP fehlt, Etikett p.h „Höhe“ statt
+- [x] DONE P3 (0.25.3) Schräge nachbessern: Winkel nimmt kein Komma (main.ts:1972), Test Zylinder→Kegel und STEP fehlt, Etikett p.h „Höhe“ statt
       „Tiefe“ (main.ts:1828), toter `.sort` im Kommentar (kernel.ts:97).
 - [ ] SPÄTER P4 Schnittlinie/Maß ziehen im Maß-Editor schickt je Mausbewegung ein Blatt an den Worker, staut sich; `sectionOf` gibt Teilkörper
       nicht frei (sheetEditor.ts:192, kernel.ts:594). Fix: ein Blatt zugleich, letzter Wunsch gewinnt; delete().
@@ -254,6 +254,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.25.3** Schräge: Winkel mit Komma, Test Zylinder→Kegel mit STEP; Etikett Tiefe, toter Kommentar weg (P3)
 - **0.25.2** Präparierte Datei: Maß-Nummer der Zeichnung geprüft, Bindungspfad nur über eigene Eigenschaften (P2)
 - **0.25.1** Gebundenes Maß springt nach Ziehen nicht mehr auf den alten Ausdruck zurück (P1)
 - **0.25.0** Entformungsschräge: Seitenflächen um einen Winkel neigen, Kante an der Unterseite bleibt (F9)
@@ -310,6 +311,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-10 P3 (0.25.3, PATCH, Audit): Winkelfeld der Schräge über evalExpr (Komma, Parameter; Grad ohne Zoll-Umrechnung), bei Unsinn\n  Meldung und altes Feld. Kern-Test Zylinder 3° = Kegelstumpf, STEP raus und wieder rein gleiches Volumen, Bezug nachgetragen. Gelernt: ein\n  Punkt genau auf der Naht eines Zylinders trifft zwei Flächen, dann wird kein Bezug gespeichert (geneigt wird trotzdem). Etikett p.h = Tiefe,\n  auskommentiertes .sort in lipOn gelöscht. Winkelfeld nicht im Browser durchgeklickt.
 - 2026-11-10 P2 (0.25.2, PATCH, Audit): parseModel verlangt ganze Zahlen als Nummer der Zeichnungsmaße (landet als data-dim im Blatt-HTML);\n  applyParams geht den Bindungspfad nur über eigene Eigenschaften (`constructor.length` warf vorher und legte alle Parameter lahm).\n  Gelernt: hasOwn nur am letzten Schritt reicht nicht, Object hat ein eigenes length. Kern-Test mit präparierter Datei.
 - 2026-11-10 P1 (0.25.1, PATCH, Audit): `dropStale` in model.ts, aufgerufen in refresh(): Bindung fällt weg, sobald ihr Maß nicht mehr zum\n  Ausdruck passt (Ziehen, KI, Rückgängig-Zwischenstände); nicht rechenbare Ausdrücke bleiben, Rechteck mit 0,5-mm-Grenze wie applyParams.\n  Kern-Test: gezogenes Maß bleibt nach Parameteränderung, gebundenes folgt. Nicht im Browser durchgeklickt (reine Modelllogik).
 - 2026-11-10 F9 Entformungsschräge (0.25.0, MINOR, Heimrechner; die halbe F9 vom Arbeitsrechner wurde nicht übernommen und wird dort verworfen):

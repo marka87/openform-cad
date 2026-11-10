@@ -94,7 +94,7 @@ function lipOn(f: Shell, A: Shape3D, nA: Named, N: Vec): [Shape3D, Named] {
   if (!holes.length) throw new Error('Rand der Schale nicht gefunden – Lippe nur an einer ebenen Öffnung');
   let out: [Shape3D, Named] = [A.clone() as Shape3D, nA];
   for (const hole of holes) {
-    const inner = makeFace(hole.clone()), grow = [W, -W].map(o => makeFace(hole.clone().offset2D(o))) // makeFace/offset2D verbrauchen den Draht.sort((x, y) => measureArea(y) - measureArea(x)); // größere = nach außen
+    const inner = makeFace(hole.clone()), grow = [W, -W].map(o => makeFace(hole.clone().offset2D(o))) // makeFace/offset2D verbrauchen den Draht; [0] = +W = nach außen (alle sechs Seiten eines Quaders geprüft)
     grow[1].delete();
     const vec = () => new Vector(N.map(x => x * d) as Vec), ring = basicFaceExtrusion(grow[0], vec()) as unknown as Shape3D, cavity = basicFaceExtrusion(inner, vec()) as unknown as Shape3D;
     const tool = groove ? ring : ring.cut(cavity) as Shape3D; // Falz: die Öffnung ist ohnehin leer

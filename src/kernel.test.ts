@@ -916,6 +916,17 @@ test('Entformungsschräge: Seitenflächen geneigt, unten unverändert, Deckel ab
   expect(r.errors.get(9)).toMatch(/Seitenflächen/);
 });
 
+test('Entformungsschräge am Zylinder wird Kegelstumpf, übersteht STEP (F9, P3)', async () => {
+  const zyl = { ...sketchFeature('circle', GROUND, [0, 0], [5, 0], 1, false)!, d: 10 } as Extrude;
+  const r = buildBody([zyl, { id: 9, type: 'draft', a: 3, at: [5 * Math.SQRT1_2, 5, 5 * Math.SQRT1_2] } as Feature]); // nicht auf der Naht (x-Achse): dort träfe der Punkt zwei Flächen
+  expect(r.failed).toEqual([]);
+  const R = 5, q = 5 - 10 * Math.tan(3 * Math.PI / 180);
+  expect(measureVolume(r.body!)).toBeCloseTo(Math.PI * 10 / 3 * (R * R + R * q + q * q), 1);
+  const step = await forExport(r.body!).blobSTEP().text(), back = await loadStep(step);
+  expect(measureVolume(back)).toBeCloseTo(measureVolume(r.body!), 1);
+  expect(r.fixes.get(9)).toHaveProperty('faces');                                     // Bezug nachgetragen: übersteht Neurechnen
+});
+
 test('Fläche löschen: Bohrung und Rundung verschwinden, Nachbarflächen wachsen zu (T6.1b)', () => {
   const del = (at: Vec, more?: Vec[]): Feature => ({ id: 9, type: 'remove', at, ...more && { more } });
   let r = buildBody([box(), hole(-4), del([13, 8, -5], [[10, 6, -5]])]);                // Wand und Boden der Bohrung

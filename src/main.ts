@@ -1825,7 +1825,7 @@ const panel = $('panel');
 // ---------- Benannte Maße (F7): Parameter-Liste unter den Schritten, Namen in jedem Maßfeld des Seitenfelds ----------
 let params: Record<string, number> = {};
 const paramsEl = document.createElement('div');
-const BOUND_LABEL: Record<string, string> = { 'p.w': 'Breite', 'p.h': 'Höhe', 'p.r': 'Radius', 'p.ry': 'Radius 2', d: 'Höhe/Tiefe', t: 'Wandstärke', r: 'Maß', rib: 'Rippe', 'lip.w': 'Lippe Breite', 'lip.h': 'Lippe Höhe', 'lip.c': 'Spiel', off: 'Abstand' };
+const BOUND_LABEL: Record<string, string> = { 'p.w': 'Breite', 'p.h': 'Tiefe', 'p.r': 'Radius', 'p.ry': 'Radius 2', d: 'Höhe/Tiefe', t: 'Wandstärke', r: 'Maß', rib: 'Rippe', 'lip.w': 'Lippe Breite', 'lip.h': 'Lippe Höhe', 'lip.c': 'Spiel', off: 'Abstand' };
 function setParams() {
   const errs = applyParams(features, params);
   refresh(); renderParams();
@@ -1969,7 +1969,10 @@ function renderFeaturePanel() {
     panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n), unten bleibt die Kante. Shift+Rechtsklick → weitere Fläche dazu.</p>
       <label>Winkel ° (− = oben breiter) <input type="number" step="0.5" min="-44" max="44" value="${f.a}"></label><button class="del">Löschen</button>`;
     const inp = panel.querySelector('input')!;
-    inp.onchange = () => { const v = +inp.value; if (isFinite(v) && Math.abs(v) < 45) { pushHistory(); f.a = v; refresh(); } };
+    inp.onchange = () => { // Grad, keine Länge: ohne Umrechnung in Zoll, Komma erlaubt
+      let v = NaN; try { v = evalExpr(inp.value, params); } catch (e) { showNotice(e instanceof Error ? e.message : String(e)); }
+      if (isFinite(v) && Math.abs(v) < 45) { pushHistory(); f.a = v; refresh(); } else renderPanel();
+    };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
   if (f.type === 'remove') {
