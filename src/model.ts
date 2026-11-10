@@ -889,8 +889,8 @@ export function applyParams(features: Feature[], params: Record<string, number>)
   for (const f of features) for (const [path, b] of Object.entries(f.ex ?? {})) {
     let v: number;
     try { v = evalExpr(b.e, varsIn(params, b.u)) * b.u; } catch (e) { errs.push(`#${f.id}: ${e instanceof Error ? e.message : e}`); continue; }
-    const ks = path.split('.'), key = ks.pop()!, obj = ks.reduce<any>((o, k) => o?.[k], f);
-    if (!obj || typeof obj[key] !== 'number') continue;
+    const ks = path.split('.'), key = ks.pop()!, obj = ks.reduce<any>((o, k) => o && Object.hasOwn(o, k) ? o[k] : undefined, f); // Pfad aus der Datei: nur eigene Eigenschaften (P2)
+    if (!obj || !Object.hasOwn(obj, key) || typeof obj[key] !== 'number') continue;
     if (isExtrude(f) && f.type === 'rect' && path.match(/^p\.[wh]$/)) rectSize(f, key as 'w' | 'h', Math.max(0.5, v)); // Mitte bleibt bei „aus der Mitte“
     else obj[key] = v;
   }
@@ -934,6 +934,7 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     if (f.skip !== undefined && !(Array.isArray(f.skip) && f.skip.every((k: unknown) => typeof k === 'string'))) bad('Weggelassene Exemplare sind keine Liste');
     if (f.ex !== undefined && !(f.ex && typeof f.ex === 'object' && Object.values(f.ex).every((b: any) => b && typeof b.e === 'string' && b.u > 0))) bad('Gebundene Maße unvollständig');
   });
+  if (Array.isArray(d.dims) && !d.dims.every((x: any) => x && int(x.id))) throw new Error('Zeichnungsmaß ohne Nummer'); // id landet im Blatt-HTML (P2)
   const params = d.params && typeof d.params === 'object' && !Array.isArray(d.params) ? d.params : {};
   if (!Object.entries(params).every(([k, v]) => PARAM_NAME.test(k) && typeof v === 'number' && isFinite(v))) throw new Error('Parameter: Name oder Wert ungültig');
   const max = Math.max(0, ...d.features.map((f: Feature) => f.id));

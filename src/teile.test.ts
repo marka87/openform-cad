@@ -719,6 +719,15 @@ test('Benannte Maße (F7): Ausdrücke, Bindung, Neurechnen nach Parameteränderu
   expect(() => parseModel(JSON.stringify({ features: [{ ...kasten, ex: { 'p.w': { e: 1 } } }] }))).toThrow('Gebundene');
 });
 
+test('Präparierte Datei: Maß-Nummer mit HTML und Bindung auf fremde Eigenschaft (P2)', async () => {
+  const { applyParams } = await import('./model');
+  expect(() => parseModel(JSON.stringify({ features: [], dims: [{ id: '"><b>x', v: 0 }] }))).toThrow('Zeichnungsmaß');
+  expect(parseModel(JSON.stringify({ features: [], dims: [{ id: 3, v: 0 }] })).dims).toHaveLength(1);
+  const f = { ...rect(GROUND, [0, 0], [10, 10], 1, 5, false), ex: { 'constructor.length': { e: '5', u: 1 }, d: { e: '7', u: 1 } } } as any;
+  expect(() => applyParams([f], {})).not.toThrow();
+  expect(f.d).toBe(7);                                                   // echte Bindung wird trotzdem gerechnet
+});
+
 test('Gebundenes Maß, danach gezogen: Bindung fällt weg, Parameteränderung setzt es nicht zurück (P1)', async () => {
   const { applyParams, dropStale } = await import('./model');
   const k = { ...rect(GROUND, [0, 0], [40, 20], 1, 10, false), ex: { d: { e: 'h', u: 1 }, 'p.w': { e: 'b + 2', u: 1 } } } as Extrude & { ex?: Record<string, { e: string; u: number }> };
