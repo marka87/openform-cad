@@ -106,6 +106,8 @@ function lipOn(f: Shell, A: Shape3D, nA: Named, N: Vec): [Shape3D, Named] {
   }
   return out;
 }
+// Angeklickter Punkt trifft keine Fläche dieses Körpers (falscher Körper, Fläche weggefallen): Fehler statt still nichts tun
+const picked = (faces: Face[]) => { if (!faces.length) throw new Error('Fläche nicht gefunden – neu anklicken'); return faces; };
 const dot3 = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // Rippe (F5): offene Linie als Wand der Dicke rib, mittig auf der Skizzenebene. Die Wand reicht quer zur Linie (in der Ebene) bis an
@@ -395,13 +397,13 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
       if (f.type === 'remove') {
         if (!body) continue;
         const nm = names.get(k) ?? [];
-        done(...removeFaces(body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces));
+        done(...removeFaces(body, nm, picked(anchor(f.id, anchorFaces(f, body, nm)).faces)));
         continue;
       }
       if (f.type === 'draft') {
         if (!body || Math.abs(f.a) < 1e-6) continue;
         const nm = names.get(k) ?? [];
-        done(...draftFaces(body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces, f.a));
+        done(...draftFaces(body, nm, picked(anchor(f.id, anchorFaces(f, body, nm)).faces), f.a));
         continue;
       }
       if (f.type === 'offset') {

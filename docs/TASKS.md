@@ -75,6 +75,7 @@ Audit 2026-11-10 (nach F9), vom Nutzer freigegeben, in dieser Reihenfolge:
       `constructor.length` legt applyParams lahm (model.ts:892). Fix: dims-id ganze Zahl, `Object.hasOwn` vor dem Schreiben.
 - [x] DONE P3 (0.25.3) Schräge nachbessern: Winkel nimmt kein Komma (main.ts:1972), Test Zylinder→Kegel und STEP fehlt, Etikett p.h „Höhe“ statt
       „Tiefe“ (main.ts:1828), toter `.sort` im Kommentar (kernel.ts:97).
+- [x] DONE P5 (0.25.4) Schräge/Fläche löschen: Punkt trifft keine Fläche → still nichts (beim Slicer-Test gefunden). Fix: Fehler „Fläche nicht gefunden“.
 - [ ] SPÄTER P4 Schnittlinie/Maß ziehen im Maß-Editor schickt je Mausbewegung ein Blatt an den Worker, staut sich; `sectionOf` gibt Teilkörper
       nicht frei (sheetEditor.ts:192, kernel.ts:594). Fix: ein Blatt zugleich, letzter Wunsch gewinnt; delete().
 - [x] DONE A31 (Audit 2026-11-09, 0.17.2) Kanten-Pfeil an bestehender Rundung durchsuchte bei jeder Mausbewegung zweimal alle Dreiecke (`edgeArrowAt`), Ziehen ruckelte bei großen Modellen (vom Nutzer bemerkt).
@@ -94,9 +95,10 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [x] Zufallsprobe mit Bohrungen auf Kanten findet nichts Stilles mehr (544 Läufe)
 
 ### 2. Export wirklich belegen — zusammen
-- [ ] TODO STEP in FreeCAD öffnen
+- [x] DONE STEP in FreeCAD öffnen (2026-11-10, vom Nutzer auf dem Arbeitsrechner bestätigt)
 - [ ] TODO STEP in Fusion öffnen (nur der Nutzer kann das)
-- [ ] TODO 3MF in einem echten Slicer öffnen
+- [x] DONE 3MF in einem echten Slicer öffnen (2026-11-10, Anycubic Slicer Next per Kommandozeile: zwei Körper geladen und
+      neu gespeichert, Ecken/Dreiecke gleich; G-Code scheiterte an der Druckervorgabe des Slicers, nicht an der Datei)
 
 ### 3. Echte Teile — Nutzer, das Wichtigste
 - [x] Teil 1: Gehäuse mit Lochraster
@@ -254,6 +256,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.25.4** Schräge und Fläche löschen melden, wenn der Punkt keine Fläche trifft, statt still nichts zu tun
 - **0.25.3** Schräge: Winkel mit Komma, Test Zylinder→Kegel mit STEP; Etikett Tiefe, toter Kommentar weg (P3)
 - **0.25.2** Präparierte Datei: Maß-Nummer der Zeichnung geprüft, Bindungspfad nur über eigene Eigenschaften (P2)
 - **0.25.1** Gebundenes Maß springt nach Ziehen nicht mehr auf den alten Ausdruck zurück (P1)
@@ -311,6 +314,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-10 P5 (0.25.4, PATCH): Beim Slicer-Test gefunden: Schräge (und Fläche löschen) auf einem Punkt ohne Fläche dieses Körpers taten\n  still nichts, kein roter Schritt. Jetzt Fehler „Fläche nicht gefunden – neu anklicken“ (`picked` in kernel.ts). Kern-Test für beide.\n  3MF im Anycubic Slicer Next (Orca-Basis) per Kommandozeile geladen und neu gespeichert: zwei Körper, 24 Ecken / 40 Dreiecke wie vorher.\n  STEP in FreeCAD: vom Nutzer auf dem Arbeitsrechner bestätigt.
 - 2026-11-10 P3 (0.25.3, PATCH, Audit): Winkelfeld der Schräge über evalExpr (Komma, Parameter; Grad ohne Zoll-Umrechnung), bei Unsinn\n  Meldung und altes Feld. Kern-Test Zylinder 3° = Kegelstumpf, STEP raus und wieder rein gleiches Volumen, Bezug nachgetragen. Gelernt: ein\n  Punkt genau auf der Naht eines Zylinders trifft zwei Flächen, dann wird kein Bezug gespeichert (geneigt wird trotzdem). Etikett p.h = Tiefe,\n  auskommentiertes .sort in lipOn gelöscht. Winkelfeld nicht im Browser durchgeklickt.
 - 2026-11-10 P2 (0.25.2, PATCH, Audit): parseModel verlangt ganze Zahlen als Nummer der Zeichnungsmaße (landet als data-dim im Blatt-HTML);\n  applyParams geht den Bindungspfad nur über eigene Eigenschaften (`constructor.length` warf vorher und legte alle Parameter lahm).\n  Gelernt: hasOwn nur am letzten Schritt reicht nicht, Object hat ein eigenes length. Kern-Test mit präparierter Datei.
 - 2026-11-10 P1 (0.25.1, PATCH, Audit): `dropStale` in model.ts, aufgerufen in refresh(): Bindung fällt weg, sobald ihr Maß nicht mehr zum\n  Ausdruck passt (Ziehen, KI, Rückgängig-Zwischenstände); nicht rechenbare Ausdrücke bleiben, Rechteck mit 0,5-mm-Grenze wie applyParams.\n  Kern-Test: gezogenes Maß bleibt nach Parameteränderung, gebundenes folgt. Nicht im Browser durchgeklickt (reine Modelllogik).

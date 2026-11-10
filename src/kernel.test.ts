@@ -911,6 +911,9 @@ test('Entformungsschräge: Seitenflächen geneigt, unten unverändert, Deckel ab
   expect(bb[0][0]).toBeCloseTo(0, 4); expect(bb[1][0]).toBeCloseTo(20, 4);           // an der Unterseite volle Breite
   r = buildBody([box(), dr(-5, [20, 5, -5])]);                                      // negativ: oben breiter
   expect(measureVolume(r.body!)).toBeCloseTo(2000 + 10 * 10 * t / 2 * 10, 2);
+  r = buildBody([box(), dr(5, [50, 5, -5])]);                                       // Punkt neben dem Körper
+  expect(r.errors.get(9)).toMatch(/nicht gefunden/);
+  expect(buildBody([box(), { id: 9, type: 'remove', at: [50, 5, -5] }]).errors.get(9)).toMatch(/nicht gefunden/);
   r = buildBody([box(), dr(5, [10, 10, -5])]);                                      // Deckel
   expect(r.failed).toEqual([9]);
   expect(r.errors.get(9)).toMatch(/Seitenflächen/);
