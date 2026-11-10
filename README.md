@@ -2,9 +2,17 @@
 
 Ein 3D-CAD-Programm, so intuitiv wie Shapr3D und so frei wie FreeCAD — mit optionaler KI-Unterstützung.
 
-**Status:** Modellieren, Skizzieren mit Abhängigkeiten, stabile Flächenbezüge, Zeichnungen mit Einzelbemaßung, Desktop-App und ein erster KI-Assistent sind da. Plan, Stand und Änderungen: [docs/TASKS.md](docs/TASKS.md).
+**Status:** Echte Volumenkörper (OpenCascade), Skizzen mit Abhängigkeiten, benannte Maße, Zeichnungen mit Schnitt und Einzelheit, Desktop-App für Windows; läuft auch im Browser. Kein Konto, kein Abo, keine Cloud. Plan, Stand und Änderungen: [docs/TASKS.md](docs/TASKS.md).
 
-## Starten
+## Dateien
+
+| | Formate |
+|---|---|
+| Eigenes Format | `.ofc` (Schritte als JSON, rechnet beim Öffnen neu) |
+| Öffnen | STEP; STL/3MF/OBJ als Referenz; PNG/JPG/WebP als Referenzbild |
+| Export | STEP, STL, 3MF, OBJ; Zeichnung als SVG, PDF, DXF |
+
+## Starten (Entwicklung)
 
 Braucht Node.js 20 oder neuer.
 
@@ -69,11 +77,17 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Letztes Werkzeug | `Leertaste` (Maus nicht über einer Fläche) |
 | Ansichtswürfel | Oben links: Seite anklicken; Mausrad zoomt zur Mausposition, Doppelklick zentriert |
 | Hilfsebene | `E`, Fläche anklicken = Ebene 10 mm davor (ziehen = Abstand), darauf skizzieren |
-| Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld, in mm oder Zoll; Ansichten als DXF; Körper als OBJ |
+| Zeichnung | „Zeichnung / mehr“: Blatt A4/A3 als SVG oder drucken (→ „Als PDF speichern“) mit drei Ansichten, Gesamtmaßen, Iso-Ansicht und Schriftfeld, in mm oder Zoll; im Maß-Editor Schnitt A–A und Einzelheit B (2×); Ansichten als DXF; Körper als OBJ |
 | Bemaßen | „Zeichnung / mehr“ → „Zeichnung bemaßen …“: Länge (zwei Ecken, dann ablegen; Shift = schräg), ⌀ / R (Kreis anklicken), Winkel (zwei Kanten); Maße ziehen = verschieben, Entf = löschen, Toleranz als Text (±0,1, H7). Maße hängen am Modell und folgen Änderungen |
 | Übergang (Loft) | Flache Skizze anklicken, zweite mit Shift dazu → Seitenfeld „Übergang (Loft)“ |
 | Zug (Sweep) | Flache Skizze anklicken → „Zug: Pfad zeichnen“ (oder „quer dazu“), Pfad vom Profil weg klicken, Vorschau läuft mit; Enter = offen, Klick auf den Anfang = geschlossen; runde Ecken = Bögen im Pfad; im Seitenfeld „Abziehen“ |
-| Gewinde / Senkung | Bohrung anklicken → Seitenfeld: Kernloch M3–M12, „Senkung anlegen“ |
+| Gewinde / Senkung | Extrudierten Kreis anklicken → Seitenfeld „Gewinde“: echtes ISO-Gewinde M3–M20 oder 1/4"-20 (Bolzen = außen, Bohrung = innen); bei Bohrungen Kernloch und „Senkung anlegen“ |
+| Skizzen-Ecken runden / fasen | Vieleck anklicken → „Alle Ecken“ oder Eckpunkt anklicken → „Ecke (Punkt n)“, Maß, „Runden“/„Fasen“ |
+| Rippe / Steg | Linie zeichnen → Seitenfeld „Rippe“: Wand quer zur Linie bis an den Körper, Dicke im Feld (0 = weg) |
+| Lippe / Falz | Schale anklicken → Seitenfeld „Rand“: Lippe (Kiste) oder Falz (Deckel), Breite, Höhe, Spiel |
+| Entformungsschräge | Rechtsklick auf eine Seitenfläche → „Entformungsschräge …“, Shift+Rechtsklick nimmt weitere Flächen dazu; Winkel im Seitenfeld (minus = oben breiter) |
+| Parameter | Liste „Parameter“ unter den Schritten (`breite = 40`); jedes Maßfeld nimmt Namen und Rechnungen (`breite/2 + 3`), gebundene Maße rechnen bei Änderung neu |
+| Referenz | STL/3MF/OBJ über „Öffnen“: halbdurchsichtig, zum Messen und Skizzieren, nicht im Export. Bild (PNG/JPG/WebP): Ebene, Breite, Maßstab über 2 Punkte |
 | Hilfslinie | `G`, Punkte klicken, Enter = offen fertig: gestrichelt, bildet keine Fläche, andere Werkzeuge rasten daran ein |
 | Trimmen | `T`, Hilfslinie anklicken = Stück bis zu den Schnittpunkten weg; Shift+Klick nahe einem Ende = bis zur nächsten Linie verlängern |
 | Kanten projizieren | Raster auf eine Fläche legen (Doppelklick/Leertaste), dann `P`: Kanten des Körpers werden Hilfslinien in dieser Ebene |
@@ -83,3 +97,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Raster auf einer Fläche | Doppelklick auf eine Fläche oder Leertaste mit der Maus darüber: dort erscheint ein Raster, neue Skizzen landen in dieser Ebene, auch neben der Fläche; Doppelklick ins Leere oder Esc = zurück zum Boden |
 | Löschen | `Entf` |
 | Frei (ohne Raster) | `Shift` gedrückt halten |
+
+## Mitmachen
+
+Plan, offene Pakete und Änderungsprotokoll stehen in [docs/TASKS.md](docs/TASKS.md). Tests: `npm test`.
