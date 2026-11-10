@@ -66,6 +66,8 @@ export interface Sweep extends Frame { id: number; type: 'sweep'; profile: numbe
 export interface Offset { id: number; type: 'offset'; at: Vec; n: Vec; d: number; face?: FaceRef; body?: number; hidden?: boolean }
 // Flächen löschen (Defeaturing): die Nachbarflächen wachsen zu, z. B. Bohrung, Rundung, Fase oder Absatz weg. at/more und faces wie bei Shell
 export interface Remove { id: number; type: 'remove'; at: Vec; more?: Vec[]; faces?: FaceRef[]; body?: number; hidden?: boolean }
+// Entformungsschräge (F9): Seitenflächen um a Grad neigen, Zugrichtung nach oben, neutrale Ebene = Unterseite des Körpers
+export interface Draft { id: number; type: 'draft'; at: Vec; more?: Vec[]; faces?: FaceRef[]; a: number; body?: number; hidden?: boolean }
 // Text (Schrift DejaVu Sans, vendor/fonts): Grundlinie beginnt im Ursprung o der Ebene, Schrifthöhe size (mm), um d entlang n
 // extrudiert; d < 0 = in den Körper graviert, d > 0 = erhaben
 // shortcut: die Ebene ist beim Anlegen kopiert, ein Text auf einer Fläche wandert nicht mit ihr → Bezug wie bei Skizzen (anchorSketch)
@@ -99,8 +101,8 @@ export interface PatternDir { ax: Vec; n: number; d: number; both?: boolean } //
 // Länge vom ersten bis zum letzten Exemplar in Vielfachen des Abstands
 export const spanOf = (d: PatternDir) => (Math.max(1, Math.round(d.n)) - 1) * (d.both ? 2 : 1);
 export interface Pattern { id: number; type: 'pattern'; src: number[]; a: PatternDir; b?: PatternDir; rot?: { ax: Vec; c: Vec }; mir?: { ax: Vec; c: Vec }; body?: number; hidden?: boolean; skip?: string[] } // skip: weggelassene Exemplare (Schlüssel wie in patternCopies, I4)
-export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) & { name?: string; ex?: Bound }; // name = eigener Name im Baum, ex = an Parameter gebundene Maße (F7)
-export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | TextFeature | Pattern) => f.body ?? 1;
+export type Feature = (Extrude | EdgeOp | Import | Shell | Combine | Move | RefPlane | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | Draft | TextFeature | Pattern) & { name?: string; ex?: Bound }; // name = eigener Name im Baum, ex = an Parameter gebundene Maße (F7)
+export const bodyOf = (f: Extrude | EdgeOp | Import | Shell | Split | DropBody | RefMesh | RefImage | Loft | Sweep | Offset | Remove | Draft | TextFeature | Pattern) => f.body ?? 1;
 // Text aus Modell oder Datei (Namen, Text-Features) vor dem Einsetzen in HTML/SVG schützen; sonst führt eine präparierte .ofc Skript aus (A1)
 export const esc = (t: string) => t.replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`);
 // Alle Exemplare eines Musters außer dem Original: key bleibt gleich, wenn sich die Anzahl ändert (Reihe/Raster „Spalte:Reihe“),
@@ -909,6 +911,7 @@ export function parseModel(text: string): { features: Feature[]; nextId: number;
     for (const k of ['body', 'profile', 'plane', 'of']) if (f[k] !== undefined && !int(f[k])) bad(`Bezug ${k} ist keine Zahl`);
     if ((f.type === 'loft' || f.type === 'combine') && !(int(f.a) && int(f.b))) bad('Bezug a/b ist keine Zahl');
     if (f.type === 'drop' && !int(f.body)) bad('Körper fehlt');
+    if (f.type === 'draft' && !(typeof f.a === 'number' && Math.abs(f.a) < 45)) bad('Schrägenwinkel ungültig');
     if (f.type === 'mesh' && typeof f.data !== 'string') bad('Netz fehlt');
     if (f.type === 'image' && !(typeof f.data === 'string' && f.data.startsWith('data:image/') && f.w > 0 && ['xy', 'xz', 'yz'].includes(f.pl))) bad('Bild unvollständig');
     if (f.src !== undefined && !(Array.isArray(f.src) && f.src.every(int))) bad('Quelle ist keine Liste von Zahlen');

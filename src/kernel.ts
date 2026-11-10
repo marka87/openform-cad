@@ -1,7 +1,7 @@
 // CAD-Kern: Features → B-Rep-Körper über replicad (OpenCascade). setOC() muss vorher aufgerufen sein.
 import { assembleWire, makeBox, basicFaceExtrusion, makeFace, measureArea, Vector, makeCylinder, makeVertex, measureDistanceBetween, makeHelix, loft, makePolygon, makeSolid, cast, type Edge, type Face, getOC, draw, drawCircle, drawText, type Wire, drawEllipse, drawProjection, drawRectangle, importSTEP, iterTopo, makeCompound, measureVolume, Plane, ProjectionCamera, type Drawing, type Shape3D, type Sketch } from 'replicad';
 import { esc, revSpan, bodyOf, bulge3, isCut, isExtrude, isFlat, noFace, patternCopies, revAxis, splineBeziers, type Dim, type EdgeOp, type Frame, type PointRef, type Shell, type Extrude, type Feature, type Sweep, type TextFeature, type Vec } from './model';
-import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
+import { anchorEdges, anchorFaces, anchorSketch, boolean, offsetFace, removeFaces, draftFaces, byIndex, circleOf, edgeOp, edgeRef, isValid, pointRef, resolveEdge, resolvePoint, type EdgeRef, nameLoft, nameSolid, originsOf, shell, sweep, type Named, type Origin } from './topo';
 
 // Umriss der Skizze auf ihrer Ebene (ohne Bereiche)
 function sketchOf(f: Extrude) {
@@ -396,6 +396,12 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (!body) continue;
         const nm = names.get(k) ?? [];
         done(...removeFaces(body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces));
+        continue;
+      }
+      if (f.type === 'draft') {
+        if (!body || Math.abs(f.a) < 1e-6) continue;
+        const nm = names.get(k) ?? [];
+        done(...draftFaces(body, nm, anchor(f.id, anchorFaces(f, body, nm)).faces, f.a));
         continue;
       }
       if (f.type === 'offset') {

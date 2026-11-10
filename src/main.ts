@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { evalExpr, varsIn, applyParams, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { evalExpr, varsIn, applyParams, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import type { SheetExtra } from './kernel';
@@ -685,6 +685,7 @@ function nameOf(f: Feature) {
   if (f.type === 'sweep') return f.sub ? 'Zug (abziehen)' : 'Zug entlang Pfad';
   if (f.type === 'offset') return 'Fläche versetzen';
   if (f.type === 'remove') return 'Fläche löschen';
+  if (f.type === 'draft') return 'Schräge';
   if (f.type === 'plane') return 'Ebene';
   if (f.type === 'move') return `${bodyName(f.body)} ${f.s ? f.s < 0 ? 'spiegeln' : 'skalieren' : 'bewegen'}`;
   if (f.type === 'combine') return `#${f.a} ${{ fuse: '+', cut: '−', common: '∩' }[f.op]} #${f.b}`;
@@ -1964,6 +1965,13 @@ function renderFeaturePanel() {
     inp.onchange = () => { const v = mmOf(inp); if (isFinite(v)) { pushHistory(); f.d = v; refresh(); } };
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
   }
+  if (f.type === 'draft') {
+    panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n), unten bleibt die Kante. Shift+Rechtsklick → weitere Fläche dazu.</p>
+      <label>Winkel ° (− = oben breiter) <input type="number" step="0.5" min="-44" max="44" value="${f.a}"></label><button class="del">Löschen</button>`;
+    const inp = panel.querySelector('input')!;
+    inp.onchange = () => { const v = +inp.value; if (isFinite(v) && Math.abs(v) < 45) { pushHistory(); f.a = v; refresh(); } };
+    return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
+  }
   if (f.type === 'remove') {
     panel.innerHTML = `<h3>${esc(nameOf(f))} #${f.id}</h3><p>${1 + (f.more?.length ?? 0)} Fläche(n). Shift+Rechtsklick → weitere Fläche dazu.</p><button class="del">Löschen</button>`;
     return panel.querySelector<HTMLButtonElement>('.del')!.onclick = deleteSel;
@@ -2550,7 +2558,9 @@ function openCtx(e: PointerEvent) {
   if (h) { // Fläche löschen; mit Shift zur gewählten Löschung dazu
     const cur = prev, at = h.point.toArray() as Vec;
     items.push(e.shiftKey && cur?.type === 'remove' && bodyOf(cur) === h.body ? ['Fläche auch löschen', () => { pushHistory(); (cur.more ??= []).push(at); clearSel(); selId = cur.id; refresh(); }]
-      : ['Fläche löschen', () => { const f: Remove = { id: nextId++, type: 'remove', at, body: h.body }; pushHistory(); add(f); selId = f.id; refresh(); }], null);
+      : ['Fläche löschen', () => { const f: Remove = { id: nextId++, type: 'remove', at, body: h.body }; pushHistory(); add(f); selId = f.id; refresh(); }]);
+    items.push(e.shiftKey && cur?.type === 'draft' && bodyOf(cur) === h.body ? ['Fläche auch schräg', () => { pushHistory(); (cur.more ??= []).push(at); clearSel(); selId = cur.id; refresh(); }]
+      : ['Entformungsschräge …', () => { const f: Draft = { id: nextId++, type: 'draft', at, a: 3, body: h.body }; pushHistory(); add(f); selId = f.id; refresh(); }], null);
   }
   if (selBody !== null) items.push(['Körper duplizieren (Strg+D)', () => { copySel(); paste(); }], null);
   if (clip.length) items.push(['Einfügen (Strg+V)', paste]);

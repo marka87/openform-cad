@@ -236,6 +236,23 @@ export function removeFaces(A: Shape3D, nA: Named, faces: Face[]): [Shape3D, Nam
   } finally { b.delete(); }
 }
 
+// Entformungsschräge (F9): Flächen um deg Grad neigen, positiv = oben schmaler (Material weg), Kante an der Unterseite bleibt.
+// shortcut: Zugrichtung fest nach oben (Szene +Y) und neutrale Ebene = Unterseite, für Teile, die in Z aus der Form kommen; frei wählbar erst bei Bedarf
+export function draftFaces(A: Shape3D, nA: Named, faces: Face[], deg: number): [Shape3D, Named] {
+  if (faces.some(f => Math.abs(f.normalAt().y) > 0.99)) throw new Error('Schräge: nur Seitenflächen, nicht Deckel oder Boden');
+  const oc = getOC() as any, y0 = A.boundingBox.bounds[0][1];
+  const dir = new oc.gp_Dir(0, 1, 0), p = new oc.gp_Pnt(0, y0, 0), pl = new oc.gp_Pln(p, dir), b = new oc.BRepOffsetAPI_DraftAngle(A.wrapped);
+  try {
+    for (const f of faces) {
+      b.Add(f.wrapped, dir, deg * Math.PI / 180, pl, true);
+      if (!b.AddDone()) throw new Error('Schräge: Fläche lässt sich nicht neigen (nur ebene oder runde Seitenflächen)');
+    }
+    b.Build(new oc.Message_ProgressRange());
+    if (!b.IsDone() || !isValid(b.Shape())) throw new Error('Schräge ergibt keinen gültigen Körper (Winkel kleiner?)');
+    return carry(b, nA);
+  } finally { b.delete(); pl.delete(); p.delete(); dir.delete(); }
+}
+
 // Liste aus OCCT in ein Array (Kopie, die Originalliste bleibt dem Builder)
 function list(l: any): any[] {
   const c = new (getOC() as any).NCollection_List_TopoDS_Shape(l), out: any[] = [];

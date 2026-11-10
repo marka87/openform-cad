@@ -140,7 +140,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
 - [x] DONE R1 (0.22.1) Rippe gegen Fehlbedienung: Stück, das entlang der Linie über sie hinausreicht, ablehnen (verständliche Meldung, wie man
       die Linie legt); Skizze auf einer Körperfläche: Wand von der Fläche nach innen statt mittig. Fall des Nutzers als Kern-Test.
 - [x] DONE F8 (0.24.0) Zeichnung: Schnitt A–A (quer/längs/waagrecht, Linie ziehbar) und Einzelheit B (Kreis in einer Ansicht, 2× vergrößert) im Maß-Editor; Blatt, PDF und SVG zeigen beides.
-- [ ] TODO F9 Entformungsschräge: Flächen um einen Winkel neigen. (erst nach 3d)
+- [x] DONE F9 (0.25.0) Entformungsschräge: Rechtsklick auf Seitenfläche → „Entformungsschräge …“, Shift+Rechtsklick nimmt weitere Flächen dazu, Winkel im Seitenfeld (− = oben breiter).
 
 ### 3d. Layout für alle Auflösungen, vom Nutzer freigegeben 2026-11-09 — Claude, vor F8
 Vorbild: HTML-Beispiel (Raster aus Leisten, Splitter, 3D-Ansicht in der Mitte). Prüfziel: 1080p bei 100 % und 125 %, 1366×768, 4K bei 200 %.
@@ -245,6 +245,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.25.0** Entformungsschräge: Seitenflächen um einen Winkel neigen, Kante an der Unterseite bleibt (F9)
 - **0.24.0** Zeichnung: Schnittansicht A–A mit Schraffur und ziehbarer Schnittlinie, Einzelheit B doppelt vergrößert (F8)
 - **0.23.0** Rippe als Knotenblech: Linie auf einer Fläche (Boden oder Wand), die an einer Wand beginnt, gibt ein Dreieck zwischen Fläche und Wand
 - **0.22.2** Linke Leiste aufgeräumt: ▾ verdeckt die Taste nicht mehr, Ansichten als Raster mit zwei Spalten, Einheit und Skin je eine Zeile
@@ -298,6 +299,12 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-10 F9 Entformungsschräge (0.25.0, MINOR, Heimrechner; die halbe F9 vom Arbeitsrechner wurde nicht übernommen und wird dort verworfen):
+  neuer Schritt `draft` {at, more, faces, a} wie „Fläche löschen“ (Flächen über anchorFaces, Bezüge überleben Rebuild). `draftFaces` in topo.ts über
+  BRepOffsetAPI_DraftAngle mit Historie (carry). Zugrichtung fest nach oben (Szene +Y), neutrale Ebene = Unterseite des Körpers (shortcut-Kommentar);
+  Deckel/Boden werden abgelehnt. Kern-Test: zwei Stirnseiten 5° = Trapez-Volumen, −5° = breiter, Deckel = Fehler. Browser: Quader 40×30×25, vier
+  Seiten 8° = 24,26 cm³ (Pyramidenstumpf gerechnet 24,26), −4° = 33,16, Kontextmenü legt neuen Schritt an. Winkel ist zollunabhängig.
+  Nicht: Zugrichtung/neutrale Ebene wählbar, Ziehen am Modell (nur Feld), runde Flächen nicht im Test (OCCT kann Zylinder → Kegel).
 - 2026-11-10 F8 Schnitt und Einzelheit (0.24.0, MINOR): `SheetInfo` bekommt `cut` {ax, at} und `det` {v, c, r}; im Modell als `sheet` gespeichert (parseModel lässt Unbrauchbares still weg). `sectionOf` schneidet je Körper die Hälfte zum Betrachter weg (Kasten), Schnittfläche = Netz-Dreiecke mit allen Ecken in der Ebene, als SVG-Muster schraffiert; Ebene ohne Treffer = Blatt ohne Schnitt. Blattaufbau jetzt als Raster aus Zellen (3. Spalte für Schnitt oben, Einzelheit unten), Maßstab passt sich an. Editor: Auswahl „Schnitt …“, Linie A ziehen (0,5-mm-Raster, Shift frei), Werkzeug „Einzelheit B“ (Mitte + Rand), „Einzelheit entfernen“; Worker meldet dafür die Lage der Ansichten (`lay`). Kern-Test: Schnittflächen 76/100/176/≈171,7 mm², Ebene daneben, zwei Körper, Einzelheit, Datei. Browser: Schnitt quer durch Bohrung, Linie auf x = 10 gezogen, Einzelheit B (2:1) gesetzt und gespeichert; Schnittlinie reicht jetzt über die Gesamtmaße hinaus (überdeckte sonst die 40). Nicht: Schnitt in der Iso-Ansicht, Maße in Schnitt/Einzelheit, Zoll, Exe/PDF-Druck.
 - 2026-11-09 KI Google (nur Doku, Heimrechner, curl): Nutzer hatte 403 in der App, weil die Adresse generativelanguage.googleapis.com
   eingetragen war; sein `AQ.`-Schlüssel ist dort gesperrt (API_KEY_SERVICE_BLOCKED). Richtig: Basis-URL

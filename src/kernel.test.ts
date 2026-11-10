@@ -901,6 +901,21 @@ test('Spiegeln an einer Ebene, die nicht durch den Ursprung geht; Kopie verliert
   expect(r2.origins.get(1)!.filter(o => o?.tag === 'chamfer').length).toBe(2);
 });
 
+test('Entformungsschräge: Seitenflächen geneigt, unten unverändert, Deckel abgelehnt (F9)', () => {
+  const dr = (a: number, at: Vec, more?: Vec[]): Feature => ({ id: 9, type: 'draft', a, at, ...more && { more } });
+  const t = Math.tan(5 * Math.PI / 180);
+  let r = buildBody([box(), dr(5, [20, 5, -5], [[0, 5, -5]])]);                    // beide Stirnseiten: Trapez 20 → 20 − 2·10·tan 5°
+  expect(r.failed).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo((20 + 20 - 20 * t) / 2 * 10 * 10, 2);
+  const bb = r.body!.boundingBox.bounds;
+  expect(bb[0][0]).toBeCloseTo(0, 4); expect(bb[1][0]).toBeCloseTo(20, 4);           // an der Unterseite volle Breite
+  r = buildBody([box(), dr(-5, [20, 5, -5])]);                                      // negativ: oben breiter
+  expect(measureVolume(r.body!)).toBeCloseTo(2000 + 10 * 10 * t / 2 * 10, 2);
+  r = buildBody([box(), dr(5, [10, 10, -5])]);                                      // Deckel
+  expect(r.failed).toEqual([9]);
+  expect(r.errors.get(9)).toMatch(/Seitenflächen/);
+});
+
 test('Fläche löschen: Bohrung und Rundung verschwinden, Nachbarflächen wachsen zu (T6.1b)', () => {
   const del = (at: Vec, more?: Vec[]): Feature => ({ id: 9, type: 'remove', at, ...more && { more } });
   let r = buildBody([box(), hole(-4), del([13, 8, -5], [[10, 6, -5]])]);                // Wand und Boden der Bohrung
