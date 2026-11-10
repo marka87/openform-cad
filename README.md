@@ -101,3 +101,7 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 ## Mitmachen
 
 Plan, offene Pakete und Änderungsprotokoll stehen in [docs/TASKS.md](docs/TASKS.md). Tests: `npm test`.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE). Eingebundene Teile behalten ihre eigenen Lizenzen: OpenCascade (LGPL-2.1 mit Ausnahme), replicad (MIT), Three.js (MIT), planegcs (LGPL-2.0+), Tauri (MIT/Apache-2.0), Schrift DejaVu Sans (freie Lizenz, `vendor/fonts`).
