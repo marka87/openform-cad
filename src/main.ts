@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { evalExpr, varsIn, applyParams, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { evalExpr, varsIn, applyParams, dropStale, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import type { SheetExtra } from './kernel';
@@ -658,7 +658,7 @@ function planeMesh(f: RefPlane) {
   return m;
 }
 
-function refresh() { rebuild(); renderPanel(); renderTree(); save(); }
+function refresh() { dropStale(features, params); rebuild(); renderPanel(); renderTree(); save(); }
 
 // ---------- Feature-Baum: alle Schritte in Reihenfolge; anklicken = auswählen, ↑ = früher, ● = ein/aus ----------
 const tree = $('tree');

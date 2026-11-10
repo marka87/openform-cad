@@ -68,6 +68,15 @@ oder ohnehin dort gearbeitet wird:
 - [x] DONE A28 (0.16.3) Gescheitertes Neurechnen gab Körper und Zwischenstände im Worker nicht frei, WASM-Speicher wuchs bei jedem Fehlschlag (kernel.worker.ts:55).
 - [ ] SPÄTER A29 Wirft die Schließen-Rückfrage (`askSave`), schließt das Fenster nie (Tauri schließt erst nach dem Handler). Fix: try/catch, im Fehlerfall schließen.
 - [ ] SPÄTER A30 Ändern, sofort Strg+S, sofort schließen: nachgetragene Bezüge kommen nach dem Speichern an → überflüssige Rückfrage (main.ts:332).
+Audit 2026-11-10 (nach F9), vom Nutzer freigegeben, in dieser Reihenfolge:
+- [x] DONE P1 (0.25.1) Gebundenes Maß springt zurück: Ziehen oder KI ändert ein an einen Parameter gebundenes Maß, die Bindung bleibt;
+      nächste Parameteränderung setzt es still auf den alten Ausdruck (main.ts:1884, model.ts:887). Fix: Bindungen, deren Maß nicht mehr passt, fallen weg.
+- [ ] TODO P2 Datei prüfen: Maß-Nummer der Zeichnung ungeprüft ins HTML (`data-dim`, model.ts:929, kernel.ts:734); Bindungspfad
+      `constructor.length` legt applyParams lahm (model.ts:892). Fix: dims-id ganze Zahl, `Object.hasOwn` vor dem Schreiben.
+- [ ] TODO P3 Schräge nachbessern: Winkel nimmt kein Komma (main.ts:1972), Test Zylinder→Kegel und STEP fehlt, Etikett p.h „Höhe“ statt
+      „Tiefe“ (main.ts:1828), toter `.sort` im Kommentar (kernel.ts:97).
+- [ ] SPÄTER P4 Schnittlinie/Maß ziehen im Maß-Editor schickt je Mausbewegung ein Blatt an den Worker, staut sich; `sectionOf` gibt Teilkörper
+      nicht frei (sheetEditor.ts:192, kernel.ts:594). Fix: ein Blatt zugleich, letzter Wunsch gewinnt; delete().
 - [x] DONE A31 (Audit 2026-11-09, 0.17.2) Kanten-Pfeil an bestehender Rundung durchsuchte bei jeder Mausbewegung zweimal alle Dreiecke (`edgeArrowAt`), Ziehen ruckelte bei großen Modellen (vom Nutzer bemerkt).
 - [x] DONE A32 (0.17.2) Muster-Pfeil hin und zurück gezogen ließ ein Muster mit Abstand 0 stehen.
 - [x] DONE A33 (0.17.2) Klick auf den Kanten-Pfeil ohne Ziehen hob die Mehrfachauswahl der Kanten auf.
@@ -245,6 +254,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.25.1** Gebundenes Maß springt nach Ziehen nicht mehr auf den alten Ausdruck zurück (P1)
 - **0.25.0** Entformungsschräge: Seitenflächen um einen Winkel neigen, Kante an der Unterseite bleibt (F9)
 - **0.24.0** Zeichnung: Schnittansicht A–A mit Schraffur und ziehbarer Schnittlinie, Einzelheit B doppelt vergrößert (F8)
 - **0.23.0** Rippe als Knotenblech: Linie auf einer Fläche (Boden oder Wand), die an einer Wand beginnt, gibt ein Dreieck zwischen Fläche und Wand
@@ -299,6 +309,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-10 P1 (0.25.1, PATCH, Audit): `dropStale` in model.ts, aufgerufen in refresh(): Bindung fällt weg, sobald ihr Maß nicht mehr zum\n  Ausdruck passt (Ziehen, KI, Rückgängig-Zwischenstände); nicht rechenbare Ausdrücke bleiben, Rechteck mit 0,5-mm-Grenze wie applyParams.\n  Kern-Test: gezogenes Maß bleibt nach Parameteränderung, gebundenes folgt. Nicht im Browser durchgeklickt (reine Modelllogik).
 - 2026-11-10 F9 Entformungsschräge (0.25.0, MINOR, Heimrechner; die halbe F9 vom Arbeitsrechner wurde nicht übernommen und wird dort verworfen):
   neuer Schritt `draft` {at, more, faces, a} wie „Fläche löschen“ (Flächen über anchorFaces, Bezüge überleben Rebuild). `draftFaces` in topo.ts über
   BRepOffsetAPI_DraftAngle mit Historie (carry). Zugrichtung fest nach oben (Szene +Y), neutrale Ebene = Unterseite des Körpers (shortcut-Kommentar);

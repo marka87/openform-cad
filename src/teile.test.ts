@@ -719,6 +719,27 @@ test('Benannte Maße (F7): Ausdrücke, Bindung, Neurechnen nach Parameteränderu
   expect(() => parseModel(JSON.stringify({ features: [{ ...kasten, ex: { 'p.w': { e: 1 } } }] }))).toThrow('Gebundene');
 });
 
+test('Gebundenes Maß, danach gezogen: Bindung fällt weg, Parameteränderung setzt es nicht zurück (P1)', async () => {
+  const { applyParams, dropStale } = await import('./model');
+  const k = { ...rect(GROUND, [0, 0], [40, 20], 1, 10, false), ex: { d: { e: 'h', u: 1 }, 'p.w': { e: 'b + 2', u: 1 } } } as Extrude & { ex?: Record<string, { e: string; u: number }> };
+  const p = { h: 10, b: 38 };
+  dropStale([k], p);
+  expect(Object.keys(k.ex!).sort()).toEqual(['d', 'p.w']);             // passt noch: bleibt
+  k.d = 20;                                                            // Fläche hochgezogen
+  dropStale([k], p);
+  expect(Object.keys(k.ex!)).toEqual(['p.w']);
+  applyParams([k], { h: 15, b: 48 });
+  expect([k.d, k.p.w]).toEqual([20, 50]);                              // gezogenes Maß bleibt, gebundenes folgt
+  k.ex = { d: { e: 'fehlt', u: 1 } }; k.d = 3;                          // nicht rechenbar: bleibt, applyParams meldet es
+  dropStale([k], {});
+  expect(k.ex).toEqual({ d: { e: 'fehlt', u: 1 } });
+  k.ex = { 'p.h': { e: '0.1', u: 1 } }; k.p.h = 0.5;                    // Rechteck auf 0,5 mm begrenzt wie applyParams
+  dropStale([k], {});
+  expect(k.ex).toEqual({ 'p.h': { e: '0.1', u: 1 } });
+  k.p.h = 7; dropStale([k], {});
+  expect(k.ex).toBeUndefined();
+});
+
 test('Rippe (R1): Linie auf der Wandfläche gibt keine Riesenplatte, Skizze auf der Stirnfläche gibt bündige Rippe nach innen', () => {
   const boden = rect(GROUND, [0, -10], [40, 10], 1, 5, false), wand = rect(GROUND, [0, -10], [5, 10], 2, 40, false);
   const ohne = measureVolume(buildBody([boden, wand]).body!);

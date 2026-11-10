@@ -897,6 +897,21 @@ export function applyParams(features: Feature[], params: Record<string, number>)
   return errs;
 }
 
+// Bindungen, deren Maß nicht mehr zum Ausdruck passt (gezogen, von der KI geändert), fallen weg: sonst setzt die nächste
+// Parameteränderung das Maß still auf den alten Ausdruck zurück (P1). Nicht rechenbare Ausdrücke bleiben (applyParams meldet sie)
+export function dropStale(features: Feature[], params: Record<string, number>) {
+  for (const f of features) {
+    for (const [path, b] of Object.entries(f.ex ?? {})) {
+      let v: number;
+      try { v = evalExpr(b.e, varsIn(params, b.u)) * b.u; } catch { continue; }
+      const cur = path.split('.').reduce<any>((o, k) => o?.[k], f);
+      if (isExtrude(f) && f.type === 'rect' && /^p\.[wh]$/.test(path)) v = Math.max(0.5, v); // wie applyParams
+      if (typeof cur !== 'number' || Math.abs(cur - v) > 1e-6) delete f.ex![path];
+    }
+    if (f.ex && !Object.keys(f.ex).length) delete f.ex;
+  }
+}
+
 // Modell aus .ofc/.json/Autosave prüfen, bevor etwas übernommen wird (A5): fremde oder kaputte Dateien werfen einen
 // verständlichen Fehler statt das Modell zu leeren. Bezüge auf andere Schritte müssen Zahlen sein, sie landen in der
 // Oberfläche (A1). Fehlende Nebenangaben alter Dateien (meta, roll, dims, nextId) werden ergänzt
