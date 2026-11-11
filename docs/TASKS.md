@@ -152,6 +152,7 @@ an der fertigen Rundung ein Bogen-Griff mit Zahnrad (Form der Rundung). Das Zieh
       die Linie legt); Skizze auf einer Körperfläche: Wand von der Fläche nach innen statt mittig. Fall des Nutzers als Kern-Test.
 - [x] DONE F8 (0.24.0) Zeichnung: Schnitt A–A (quer/längs/waagrecht, Linie ziehbar) und Einzelheit B (Kreis in einer Ansicht, 2× vergrößert) im Maß-Editor; Blatt, PDF und SVG zeigen beides.
 - [x] DONE F9 (0.25.0) Entformungsschräge: Rechtsklick auf Seitenfläche → „Entformungsschräge …“, Shift+Rechtsklick nimmt weitere Flächen dazu, Winkel im Seitenfeld (− = oben breiter).
+- [x] DONE V1 (0.26.0, Wunsch des Nutzers mit Bildern aus Shapr3D) Frühere Skizze ändern (z. B. Breite 25 → 25,4), die daraus gezogenen Bereiche wachsen mit; auch in älteren Dateien.
 
 ### 3d. Layout für alle Auflösungen, vom Nutzer freigegeben 2026-11-09 — Claude, vor F8
 Vorbild: HTML-Beispiel (Raster aus Leisten, Splitter, 3D-Ansicht in der Mitte). Prüfziel: 1080p bei 100 % und 125 %, 1366×768, 4K bei 200 %.
@@ -256,6 +257,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.26.0** Bereiche folgen ihren Skizzen: frühere Skizze ändern ändert die daraus gezogenen Bereiche mit (V1)
 - **0.25.4** Schräge und Fläche löschen melden, wenn der Punkt keine Fläche trifft, statt still nichts zu tun
 - **0.25.3** Schräge: Winkel mit Komma, Test Zylinder→Kegel mit STEP; Etikett Tiefe, toter Kommentar weg (P3)
 - **0.25.2** Präparierte Datei: Maß-Nummer der Zeichnung geprüft, Bindungspfad nur über eigene Eigenschaften (P2)
@@ -314,6 +316,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-11 V1 Bereiche folgen ihren Skizzen (0.26.0, MINOR): Nutzer änderte eine frühere Skizze auf 25,4, das Teil blieb gleich. Grund: ein Bereich (`regionFeature`) speichert beim Ziehen Kopien der Skizzen (`and`/`not` und die eigene Form). Neu `rs` {f, and, not, k} = Nummern der Quell-Skizzen und deren zuletzt übernommener Stand; `syncRegions` (vor jedem `rebuild`) übernimmt Form, Lage und Nachbar-Skizzen nur, wenn sich eine Quelle seit dem letzten Abgleich geändert hat, so bleiben direkt am Bereich geänderte Maße stehen. Alte Dateien: Quellen über gleiche Form erkannt (Flächenbezug ausgenommen); war die Skizze schon vorher geändert, wird nicht geraten (dann Strg+Z bis vor die Änderung oder Bereich neu ziehen). Gelöschte Quelle: Bereich rechnet mit der Kopie weiter. Kern-Test: breiter, Nachbar kleiner, alte Datei, geänderte Quelle, direkte Änderung, gelöschte Quelle. Browser: Wanne aus 2 Skizzen + 2 Bereichen als „alte Datei“, Breite 25 → 25,4: 2,07 → 2,13 cm³, Strg+Z zurück. Grenze: Skizzen, die auf einer Fläche gezeichnet wurden (z. B. oben), wandern mit der Fläche, werden aber nicht breiter; Maße zwischen Skizzen (verknüpfte Skizzen) gibt es nicht.
 - 2026-11-10 Nutzer meldet Teil 2, Teil 3 und Installer durchklicken als erledigt (nur Doku). Feldnotizen zu Teil 3 fehlen;
   Stolperstellen kamen in den letzten Tagen als Screenshots (Rippe R1, Leisten L1–L3, Pfeile 0.22.2) und sind dort eingeflossen.
 - 2026-11-10 P5 (0.25.4, PATCH): Beim Slicer-Test gefunden: Schräge (und Fläche löschen) auf einem Punkt ohne Fläche dieses Körpers taten\n  still nichts, kein roter Schritt. Jetzt Fehler „Fläche nicht gefunden – neu anklicken“ (`picked` in kernel.ts). Kern-Test für beide.\n  3MF im Anycubic Slicer Next (Orca-Basis) per Kommandozeile geladen und neu gespeichert: zwei Körper, 24 Ecken / 40 Dreiecke wie vorher.\n  STEP in FreeCAD: vom Nutzer auf dem Arbeitsrechner bestätigt.

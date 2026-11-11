@@ -4,7 +4,7 @@ import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad
 import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF, type SheetLayout } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
-import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
+import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, syncRegions, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 
@@ -148,6 +148,32 @@ test('Überschneidende Skizzen zerfallen in Bereiche', () => {
   expect(vol(circ, [25, 0, -10])).toBeCloseTo(half * 5, 0);          // nur Kreis
   const far = sketchFeature('rect', GROUND, [50, 50], [60, 60], 4, false)!;
   expect(regionFeature([rect, far], rect, [5, 0, -10], 5)).toBeNull(); // keine Überschneidung → Skizze selbst ziehen
+});
+
+test('Bereiche folgen ihren Skizzen, wenn eine frühere Skizze geändert wird', () => {
+  const rect = sketchFeature('rect', GROUND, [0, 0], [20, 20], 1, false)!, circ = sketchFeature('circle', GROUND, [20, 10], [30, 10], 2, false)!;
+  const half = Math.PI * 100 / 2, r = { ...regionFeature([rect, circ], rect, [5, 0, -10], 3)!, d: 5 }, fs: Feature[] = [rect, circ, r];
+  const vol = () => measureVolume(buildBody(fs).body!);
+  expect([r.rs!.f, r.rs!.and, r.rs!.not]).toEqual([1, [], [2]]);
+  expect(syncRegions(fs)).toBe(false); // nichts geändert
+  expect(vol()).toBeCloseTo((400 - half) * 5, 0);
+  rect.p.w = 30; // Rechteck nachträglich breiter: Kreis liegt jetzt ganz darin
+  expect(syncRegions(fs)).toBe(true);
+  expect(vol()).toBeCloseTo((600 - 2 * half) * 5, 0);
+  expect([r.d, r.id, r.p.w]).toEqual([5, 3, 30]); // Höhe und Nummer bleiben
+  circ.p.r = 5; syncRegions(fs); // Nachbar-Skizze ändert sich ebenfalls mit
+  expect(vol()).toBeCloseTo((600 - Math.PI * 25) * 5, 0);
+  // ältere Datei ohne rs: Quellen über gleiche Form erkannt; geänderte Quelle wird nicht geraten
+  const old = { ...regionFeature([rect, circ], rect, [5, 0, -10], 4)!, d: 5 }; delete old.rs;
+  expect(syncRegions([rect, circ, old])).toBe(true);
+  expect([old.rs!.f, old.rs!.and, old.rs!.not]).toEqual([1, [], [2]]);
+  old.p.w = 12; expect(syncRegions([rect, circ, old])).toBe(false); expect(old.p.w).toBe(12); // am Bereich selbst geändert: bleibt, solange die Skizzen gleich bleiben
+  const moved = { ...regionFeature([rect, circ], rect, [5, 0, -10], 5)!, d: 5 }; delete moved.rs; rect.p.h = 25;
+  expect(syncRegions([rect, circ, moved])).toBe(false);
+  expect(moved.rs).toBeUndefined();
+  // Quelle gelöscht: Bereich rechnet mit seiner Kopie weiter
+  expect(syncRegions([rect, r])).toBe(false);
+  expect(r.not).toHaveLength(1);
 });
 
 test('Versatz um Rechteck, Kreis und Vieleck mit Bogen', () => {

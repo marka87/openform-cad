@@ -30,6 +30,7 @@ export interface Extrude extends Frame {
   mid?: boolean;             // Rechteck aus der Mitte gezogen: Maßänderungen lassen die Mitte stehen
   and?: Extrude[];           // Bereich: nur wo auch diese Skizzen liegen …
   not?: Extrude[];           // … und keine von diesen (Kopien der flachen Skizzen beim Ziehen)
+  rs?: { f: number; and: number[]; not: number[]; k?: string }; // Bereich: Nummern der Quell-Skizzen, k = deren zuletzt übernommener Stand (syncRegions)
 }
 // Rundung/Fase an der Kante, die durch den Punkt at läuft (dir = Kantenrichtung dort)
 // shortcut: Kante wird über einen Punkt gefunden; ändert sich der Körper darunter, schlägt sie fehl → Bezug auf Flächen (M3)
@@ -620,7 +621,40 @@ export function regionFeature(features: Feature[], f: Extrude, P: ArrayLike<numb
     && bounds(g).every(([lo, hi], k) => lo < b[k][1] + 1e-6 && b[k][0] < hi + 1e-6));
   if (!near.length) return null;
   const has = (g: Extrude) => { const q = sub(P, g.o); return insideShape(g, dot(q, g.u), dot(q, g.v), 0); };
-  return { ...structuredClone(f), id, and: structuredClone(near.filter(has)), not: structuredClone(near.filter(g => !has(g))) };
+  const ins = near.filter(has), outs = near.filter(g => !has(g));
+  return { ...structuredClone(f), id, and: structuredClone(ins), not: structuredClone(outs), rs: { f: f.id, and: ins.map(g => g.id), not: outs.map(g => g.id), k: srcKey(f, ins, outs) } };
+}
+
+// Bereiche folgen ihren Skizzen: wird eine frühere Skizze geändert (Maß, Punkt), übernimmt der Bereich deren Form, Lage und die der
+// Nachbar-Skizzen (and/not), statt mit der Kopie vom Ziehen weiterzurechnen. Höhe, Name, Körper und Nummer bleiben.
+// Nur wenn sich eine Quelle seit dem letzten Abgleich (rs.k) geändert hat: am Bereich selbst geänderte Maße bleiben sonst stehen.
+// Bereiche ohne rs (ältere Dateien): Quellen über gleiche Form erkennen, das geht nur, solange sie seit dem Ziehen unverändert sind.
+// Fehlt eine Quelle (gelöscht), bleibt der Bereich bei seiner Kopie. true = etwas geändert
+const GEO = ['type', 'p', 'pts', 'o', 'n', 'u', 'v', 'smooth', 'onFace', 'face', 'cons', 'slot', 'mid'] as const;
+const geoKey = (g: Extrude) => JSON.stringify(GEO.map(k => g[k]));
+const srcKey = (f: Extrude, and: Extrude[], not: Extrude[]) => [f, ...and, ...not].map(geoKey).join('|');
+export function syncRegions(features: Feature[]): boolean {
+  const sk = features.filter((g): g is Extrude => isExtrude(g) && isFlat(g) && !g.and), byId = new Map(sk.map(g => [g.id, g]));
+  let changed = false;
+  for (const r of features) {
+    if (!isExtrude(r) || !r.and || !r.not) continue;
+    if (!r.rs) { // alte Datei: Quelle = flache Skizze mit genau dieser Form
+      const same = (g: Extrude) => JSON.stringify(GEO.filter(k => k !== 'face').map(k => g[k])); // Flächenbezug trägt der Kern je Schritt selbst nach
+      const find = (c: Extrude) => sk.find(g => same(g) === same(c))?.id;
+      const f = find(r), and = r.and.map(find), not = r.not.map(find);
+      if (f === undefined || [...and, ...not].includes(undefined)) continue;
+      r.rs = { f, and: and as number[], not: not as number[], k: srcKey(r, r.and, r.not) }; changed = true;
+    }
+    const src = byId.get(r.rs.f), and = r.rs.and.map(id => byId.get(id)), not = r.rs.not.map(id => byId.get(id));
+    if (!src || [...and, ...not].includes(undefined)) continue;
+    const k = srcKey(src, and as Extrude[], not as Extrude[]);
+    if (r.rs.k === k) continue;
+    r.rs.k = k; changed = true;
+    const next = { ...Object.fromEntries(GEO.map(k => [k, structuredClone(src[k])])), and: and.map(g => structuredClone(g!)), not: not.map(g => structuredClone(g!)) };
+    for (const k of GEO) if ((next as any)[k] === undefined) delete (r as any)[k];
+    Object.assign(r, Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined)));
+  }
+  return changed;
 }
 
 function insidePoly(pts: number[][], x: number, y: number) {
