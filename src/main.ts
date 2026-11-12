@@ -12,7 +12,7 @@ import { openSheetEditor, showSheet } from './sheetEditor';
 import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
 import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
-import { evalExpr, varsIn, applyParams, dropStale, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, syncRegions, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
+import { evalExpr, varsIn, applyParams, dropStale, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, ngonSidePts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, syncRegions, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
 import type { BodyMesh, FromWorker, ToWorker } from './kernel.worker';
 import type { SheetExtra } from './kernel';
@@ -29,7 +29,7 @@ const HINTS: Record<Tool, string> = {
   rect:   'Klicken = Anfang, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei „20x10“ tippen + Enter = genaues Maß · Ende = an der Maus fertig',
   sphere: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
   circle: 'Mittelpunkt klicken, Maus bewegen, nochmal klicken = fertig (oder ziehen) · dabei Zahl tippen + Enter = Radius',
-  ngon:   'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius',
+  ngon:   'Mittelpunkt klicken (Über eine Seite: erste Ecke), nochmal klicken = fertig (oder ziehen) · dabei + / − = mehr/weniger Ecken · Zahl tippen + Enter = Radius bzw. Seitenlänge',
   ellipse: 'Mittelpunkt klicken, nochmal klicken = fertig (oder ziehen) · Zahl tippen + Enter = Halbachsen „a x b“',
   arc:    'Anfang, Ende, dann Punkt auf dem Bogen klicken · weiter mit Bogen oder L (Linie) · Klick auf den ersten Punkt = schließen · Esc = abbrechen',
   slot:   'Klicken, nochmal klicken (oder aufziehen) = Langloch mit runden Enden · Zahl tippen + Enter = Länge x Breite',
@@ -1088,6 +1088,7 @@ function planeFor(h: Hit | null): Frame {
 // Skizze des aufgezogenen Werkzeugs zwischen a und b
 let sides = 6, typed = ''; // Ecken des n-Ecks; eingetippte Maße
 let rectMode: 'diag' | 'center' | '3pt' = 'diag'; // Art des Rechtecks (Aufklappmenü)
+let ngonMode: 'c' | 'e' = 'c'; // Vieleck aus der Mitte bzw. über eine Seite (T2)
 let measureMode: 'obj' | 'p2p' | 'ang' = 'p2p', measurePtsCache: { p: THREE.Vector3; mid: boolean }[] | null = null;
 let measAt: THREE.Vector3 | null = null; // Lage des Messwerts im Modell (Beschriftung folgt der Kamera)
 const measLabel = $('measLabel');
@@ -1095,7 +1096,7 @@ let rect3: { pl: Frame; a: number[]; b: number[]; onFace: boolean; body?: number
 function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extrude | null {
   if (tool === 'rect' && rectMode === 'center') { const f = sketchFeature('rect', pl, [2 * a[0] - b[0], 2 * a[1] - b[1]], b, nextId, onFace); return f && { ...f, mid: true }; }
   if (tool === 'rect' && rectMode === '3pt') return null; // erst die Kante; Vorschau als Linie in onMove
-  if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonPts(a, b, sides), nextId, onFace);
+  if (tool === 'ngon') return Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5 ? null : polyFeature(pl, ngonMode === 'e' ? ngonSidePts(a, b, sides) : ngonPts(a, b, sides), nextId, onFace);
   if (tool === 'slot') {
     const f = Math.min(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) < 0.5 ? null : polyFeature(pl, slotPts(a, b), nextId, onFace);
     return f && { ...f, slot: true };
@@ -1106,7 +1107,7 @@ function toolFeature(pl: Frame, a: number[], b: number[], onFace: boolean): Extr
 }
 function hudText(f: Extrude) {
   return f.type === 'rect' ? `${fmt(f.p.w)} × ${len(f.p.h)}` : f.p.ry ? `${fmt(f.p.r)} × ${len(f.p.ry)}` : f.type === 'circle' ? `R ${len(f.p.r)}`
-    : tool === 'ngon' ? `${sides}-Eck R ${len(Math.hypot(f.pts![0][0] - drag.a[0], f.pts![0][1] - drag.a[1]))}` : 'Langloch';
+    : tool === 'ngon' ? `${sides}-Eck ${ngonMode === 'e' ? 'Seite' : 'R'} ${len(Math.hypot(drag.b[0] - drag.a[0], drag.b[1] - drag.a[1]))}` : 'Langloch';
 }
 // false = keine Fläche (eine Seite nach dem Einrasten 0, z. B. bei schräger Sicht auf den Boden): Form bleibt an der Maus statt still zu verschwinden
 function finishSketch(b?: number[]) {
@@ -1730,22 +1731,22 @@ let lastTool: Tool = 'rect'; // Leertaste wählt es wieder
 const rect3W = (q: number[]) => { const { a, b } = rect3!, L = Math.hypot(b[0] - a[0], b[1] - a[1]); return ((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / L; };
 const rect3Feature = (q: number[]) => polyFeature(rect3!.pl, rect3Pts(rect3!.a, rect3!.b, rect3W(q)), nextId, rect3!.onFace);
 // Aufklappmenüs der Werkzeugleiste: Art des Rechtecks, Ecken des Vielecks
-const MENUS: Record<string, [string, string][]> = { xf: [['move', 'Verschieben / Drehen (Griffe)'], ['values', 'Verschieben, Drehen, Skalieren um Werte'], ['axis', 'Drehen um Achse (Kante anklicken)'], ['align', 'Ausrichten (Fläche auf Fläche)'], ['pattern', 'Muster'], ['mirror', 'Spiegeln']], measure: [['obj', 'Objekt'], ['p2p', 'Punkt zu Punkt'], ['ang', 'Winkel (3 Punkte)']], rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
+const MENUS: Record<string, [string, string][]> = { xf: [['move', 'Verschieben / Drehen (Griffe)'], ['values', 'Verschieben, Drehen, Skalieren um Werte'], ['axis', 'Drehen um Achse (Kante anklicken)'], ['align', 'Ausrichten (Fläche auf Fläche)'], ['pattern', 'Muster'], ['mirror', 'Spiegeln']], measure: [['obj', 'Objekt'], ['p2p', 'Punkt zu Punkt'], ['ang', 'Winkel (3 Punkte)']], rect: [['diag', 'Diagonal'], ['center', 'Mitte'], ['3pt', '3 Punkte']], ngon: [['c', 'Aus der Mitte'], ['e', 'Über eine Seite'], ['p', 'Punkte einzeln (Linie)'], ['3', 'Dreieck'], ['5', 'Fünfeck'], ['6', 'Sechseck'], ['8', 'Achteck']] };
 const flyout = $('flyout');
 function modeLabels() {
   document.querySelector('#toolbar [data-tool="rect"] .mode')!.textContent = MENUS.rect.find(m => m[0] === rectMode)![1];
-  document.querySelector('#toolbar [data-tool="ngon"] .mode')!.textContent = `${sides} Ecken`;
+  document.querySelector('#toolbar [data-tool="ngon"] .mode')!.textContent = `${sides} Ecken${ngonMode === 'e' ? ', Seite' : ''}`;
   document.querySelector('#toolbar [data-tool="measure"] .mode')!.textContent = MENUS.measure.find(m => m[0] === measureMode)![1];
 }
 // Rechtsklick auf ein Werkzeug mit Untermenü öffnet es ebenfalls (großes Ziel statt nur des ▾-Knopfs)
-document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.parentElement!.oncontextmenu = e => { e.preventDefault(); d.click(); });
-document.querySelectorAll<HTMLElement>('#toolbar .dd').forEach(d => d.onclick = e => {
+document.querySelectorAll<HTMLElement>('#toolbar .dd[data-menu]').forEach(d => d.parentElement!.oncontextmenu = e => { e.preventDefault(); d.click(); });
+document.querySelectorAll<HTMLElement>('#toolbar .dd[data-menu]').forEach(d => d.onclick = e => {
   e.stopPropagation();
   const m = d.dataset.menu!, r = d.parentElement!.getBoundingClientRect(), cur = m === 'rect' ? rectMode : m === 'measure' ? measureMode : m === 'xf' ? '' : String(sides);
   flyout.replaceChildren(...MENUS[m].map(([v, label]) => {
     const b = document.createElement('button');
-    b.textContent = label; b.classList.toggle('on', v === cur);
-    b.onclick = () => { if (m === 'xf') { flyout.style.display = 'none'; return transformAct(v); } if (m === 'rect') rectMode = v as typeof rectMode; else if (m === 'measure') { measureMode = v as typeof measureMode; measure = []; disposeGroup(preview); setMeasureLabel(null); } else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
+    b.textContent = label; b.classList.toggle('on', v === cur || m === 'ngon' && v === ngonMode);
+    b.onclick = () => { if (m === 'xf') { flyout.style.display = 'none'; return transformAct(v); } if (m === 'rect') rectMode = v as typeof rectMode; else if (m === 'measure') { measureMode = v as typeof measureMode; measure = []; disposeGroup(preview); setMeasureLabel(null); } else if (v === 'p') { flyout.style.display = 'none'; return setTool('line'); } else if (v === 'c' || v === 'e') ngonMode = v; else sides = +v; flyout.style.display = 'none'; setTool(m as Tool); modeLabels(); };
     return b;
   }));
   Object.assign(flyout.style, { display: 'block', left: `${r.right + 6}px`, top: `${r.top}px` });
@@ -1775,6 +1776,10 @@ function transformAct(act: string) {
   const f = getSel();
   if (selBody === null && !f) return showHint('Erst einen Körper (im Baum oder per Doppelklick) oder eine Skizze auswählen');
   setTool('select');
+  if (act === 'move' && selBody === null && f && isExtrude(f) && isFlat(f)) { // Skizze: Griffe verschieben sie in ihrer Ebene (T1)
+    if (movesAfter(features, features.indexOf(f)).length) return showHint('Der Körper dieser Skizze wurde danach bewegt: Skizze vor dem Verschieben-Schritt ändern');
+    gizmoSketch = f; return attachGizmo('translate');
+  }
   if (selBody !== null || !isExtrude(f!) || !['pattern', 'mirror'].includes(act)) { // Körper: Griffe, Werte, Achse, Ausrichten, Muster
     const bb = selBody ?? (f && f.type !== 'combine' && f.type !== 'plane' ? f.type === 'move' ? f.body : bodyOf(f) : null);
     if (bb === null || !bodyIds.includes(bb)) return showHint('Dieser Schritt gehört zu keinem Körper');
@@ -2888,21 +2893,32 @@ function styleGizmo() {
 }
 styleGizmo();
 const bodyMeshOf = (b: number) => bodyGroup.children.find(m => m.userData.body === b);
+let gizmoSketch: Extrude | null = null; // Griffe an einer flachen Skizze statt an einem Körper
 function attachGizmo(mode: 'translate' | 'rotate') {
-  const m = selBody !== null && bodyMeshOf(selBody);
-  if (!m) return detachGizmo();
-  new THREE.Box3().setFromObject(m).getCenter(gizmoStart);
+  const s = gizmoSketch && selId === gizmoSketch.id && getById(gizmoSketch.id) === gizmoSketch ? gizmoSketch : null, m = !s && selBody !== null && bodyMeshOf(selBody);
+  if (!s && !m) return detachGizmo();
+  if (s) { gizmoStart.fromArray(bounds(s).map(([lo, hi]) => (lo + hi) / 2)); mode = 'translate'; }
+  else { gizmoSketch = null; new THREE.Box3().setFromObject(m as THREE.Object3D).getCenter(gizmoStart); }
+  gizmo.showX = !s || Math.abs(s.n[0]) < 0.99; gizmo.showY = !s || Math.abs(s.n[1]) < 0.99; gizmo.showZ = !s || Math.abs(s.n[2]) < 0.99; // quer zur Skizze: kein Pfeil
   pivot.position.copy(gizmoStart); pivot.quaternion.identity();
   gizmo.setMode(mode); gizmo.attach(pivot);
 }
-function detachGizmo() { gizmo.detach(); }
+function detachGizmo() { gizmo.detach(); gizmoSketch = null; }
 function addMove(q: THREE.Quaternion, t: THREE.Vector3, s = 1) {
   if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9 && s === 1) return;
   pushHistory();
   add({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
   refresh();
 }
-function commitGizmo() { addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart)); }
+function commitGizmo() {
+  if (gizmoSketch) { // nur der Anteil in der Skizzenebene zählt, sonst verlöre sie ihre Fläche
+    const f = gizmoSketch, n = V(f.n), t = pivot.position.clone().sub(gizmoStart);
+    t.addScaledVector(n, -t.dot(n));
+    if (t.length() < 1e-6) return;
+    pushHistory(); f.o = V(f.o).add(t).toArray() as Vec; return refresh();
+  }
+  addMove(pivot.quaternion.clone(), pivot.position.clone().sub(gizmoStart));
+}
 // Muster und Spiegeln: eigene Ansicht im Seitenfeld, geöffnet über die Leiste links; zeigt nur die Felder der gewählten Art
 type PatMode = 'lin' | 'rot' | 'mir';
 let patView: { mode: PatMode; key: string } | null = null;

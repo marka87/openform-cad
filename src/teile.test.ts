@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { parseModel, roundCorners, THREAD_SPECS, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { parseModel, ngonSidePts, roundCorners, THREAD_SPECS, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -784,4 +784,12 @@ test('Rippe als Knotenblech: Linie auf dem Boden von der Wand weg gibt ein Dreie
   // ohne Wand am Ende: weiter Fehler mit Anleitung
   const frei = buildBody([boden, wand, linie([[15, 0], [30, 0]])]);
   expect(frei.errors.get(3)).toMatch(/quer durch das Teil/);
+});
+
+test('Vieleck über eine Seite (T2): Ecken a, b, gleich lange Seiten, links davon', () => {
+  const p = ngonSidePts([0, 0], [7, 0], 3);
+  expect(p[0][0]).toBeCloseTo(0, 9); expect(p[1][0]).toBeCloseTo(7, 9); expect(p[1][1]).toBeCloseTo(0, 9);
+  expect(p[2][0]).toBeCloseTo(3.5, 9); expect(p[2][1]).toBeCloseTo(7 * Math.sqrt(3) / 2, 9); // Spitze oben
+  const s = ngonSidePts([1, 2], [1, 12], 6), L = s.map((q, i) => Math.hypot(...[0, 1].map(k => s[(i + 1) % 6][k] - q[k])));
+  L.forEach(l => expect(l).toBeCloseTo(10, 9));
 });

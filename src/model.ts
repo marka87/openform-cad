@@ -233,6 +233,12 @@ export function ngonPts(a: number[], b: number[], n: number): number[][] {
   return Array.from({ length: n }, (_, i) => [a[0] + r * Math.cos(t0 + 2 * Math.PI * i / n), a[1] + r * Math.sin(t0 + 2 * Math.PI * i / n)]);
 }
 
+// Regelmäßiges n-Eck über die Seite a–b (Ecken a, b, …), liegt links davon, also gegen den Uhrzeigersinn
+export function ngonSidePts(a: number[], b: number[], n: number): number[][] {
+  const dx = b[0] - a[0], dy = b[1] - a[1], k = 1 / (2 * Math.tan(Math.PI / n)); // Abstand Seitenmitte–Mitte je Seitenlänge
+  return ngonPts([(a[0] + b[0]) / 2 - dy * k, (a[1] + b[1]) / 2 + dx * k], a, n);
+}
+
 // Rechteck aus drei Punkten: Kante a–b, Breite w quer dazu (Vorzeichen = Seite), immer gegen den Uhrzeigersinn
 export function rect3Pts(a: number[], b: number[], w: number): number[][] {
   const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, n = [-(b[1] - a[1]) / L * w, (b[0] - a[0]) / L * w];

@@ -112,9 +112,9 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [ ] DOING Teil 4: Gehäuse für einen Stecker mit Dioden (Nutzer, begonnen 2026-11-12)
 
 ### 3e. Feldnotizen Teil 4 (Gehäuse Stecker mit Dioden, 2026-11-12) — Claude
-- [ ] TODO T1 (Fehler, zuerst) Gezeichnetes Dreieck (Vieleck, 3 Ecken, Seiten mit Maß 7,0) lässt sich nicht verschieben.
-- [ ] TODO T2 Vieleck wie Rechteck mit Untermenü für die Art: aus der Mitte (heute), über eine Ecke/Seite, Punkte einzeln setzen.
-- [ ] TODO T3 Werkzeugliste: bei „Alle Funktionen“ klappt nur der Text auf, bei den anderen nur das ▾. Einheitlich: ▾ klappt
+- [x] DONE T1 (0.27.0; Fehler, zuerst) Gezeichnetes Dreieck (Vieleck, 3 Ecken, Seiten mit Maß 7,0) lässt sich nicht verschieben.
+- [x] DONE T2 (0.27.0) Vieleck wie Rechteck mit Untermenü für die Art: aus der Mitte (heute), über eine Ecke/Seite, Punkte einzeln setzen.
+- [x] DONE T3 (0.27.0) Werkzeugliste: bei „Alle Funktionen“ klappt nur der Text auf, bei den anderen nur das ▾. Einheitlich: ▾ klappt
       überall auf (und der Text bei „Alle Funktionen“ weiterhin).
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
@@ -269,6 +269,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.27.0** Skizzen mit „Verschieben / Drehen“ in ihrer Ebene verschieben (T1), Vieleck über eine Seite und „Punkte einzeln“ (T2), ▾ bei „Alle Funktionen“ (T3)
 - **0.26.0** Bereiche folgen ihren Skizzen: frühere Skizze ändern ändert die daraus gezogenen Bereiche mit (V1)
 - **0.25.4** Schräge und Fläche löschen melden, wenn der Punkt keine Fläche trifft, statt still nichts zu tun
 - **0.25.3** Schräge: Winkel mit Komma, Test Zylinder→Kegel mit STEP; Etikett Tiefe, toter Kommentar weg (P3)
@@ -328,6 +329,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-12 0.27.0 (MINOR) Teil 4, Feldnotizen T1–T3. T1: „Verschieben / Drehen“ wirkte nur auf Körper, flache Skizze meldete „gehört zu keinem Körper“, Vieleck hat keine X/Y-Felder → Griffe jetzt auch an flacher Skizze, nur in ihrer Ebene (Pfeil quer dazu ausgeblendet, Anteil quer wird verworfen), verschiebt f.o; gesperrt, wenn der Körper danach bewegt wurde. Kein Drehen von Skizzen (nicht verlangt). T2: Vieleck-Menü „Aus der Mitte / Über eine Seite / Punkte einzeln (Linie)“, `ngonSidePts` mit Test; „Punkte einzeln“ schaltet auf das Linien-Werkzeug. T3: das ▾ von „Alle Funktionen“ hatte kein data-menu, der Menü-Handler fing den Klick ab und stürzte ab → Handler nur an ▾ mit data-menu. Im Browser geprüft (Dreieck über Seite, verschieben, Strg+Z, ▾); Exe nicht gebaut.
 - 2026-11-11 Installer 0.26.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.
 - 2026-11-11 V1 Bereiche folgen ihren Skizzen (0.26.0, MINOR): Nutzer änderte eine frühere Skizze auf 25,4, das Teil blieb gleich. Grund: ein Bereich (`regionFeature`) speichert beim Ziehen Kopien der Skizzen (`and`/`not` und die eigene Form). Neu `rs` {f, and, not, k} = Nummern der Quell-Skizzen und deren zuletzt übernommener Stand; `syncRegions` (vor jedem `rebuild`) übernimmt Form, Lage und Nachbar-Skizzen nur, wenn sich eine Quelle seit dem letzten Abgleich geändert hat, so bleiben direkt am Bereich geänderte Maße stehen. Alte Dateien: Quellen über gleiche Form erkannt (Flächenbezug ausgenommen); war die Skizze schon vorher geändert, wird nicht geraten (dann Strg+Z bis vor die Änderung oder Bereich neu ziehen). Gelöschte Quelle: Bereich rechnet mit der Kopie weiter. Kern-Test: breiter, Nachbar kleiner, alte Datei, geänderte Quelle, direkte Änderung, gelöschte Quelle. Browser: Wanne aus 2 Skizzen + 2 Bereichen als „alte Datei“, Breite 25 → 25,4: 2,07 → 2,13 cm³, Strg+Z zurück. Grenze: Skizzen, die auf einer Fläche gezeichnet wurden (z. B. oben), wandern mit der Fläche, werden aber nicht breiter; Maße zwischen Skizzen (verknüpfte Skizzen) gibt es nicht.
 - 2026-11-10 Nutzer meldet Teil 2, Teil 3 und Installer durchklicken als erledigt (nur Doku). Feldnotizen zu Teil 3 fehlen;
