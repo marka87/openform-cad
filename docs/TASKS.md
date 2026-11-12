@@ -109,6 +109,13 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [x] DONE (laut Nutzer 2026-11-10) Installer durchklicken: Öffnen, Speichern, Doppelklick auf `.ofc`, STEP,
       STL, 3MF, Zeichnung; Rückfrage beim Schließen (0.16.2); CSP: App startet und rechnet (A1, bestätigt 2026-11-02) (0.18.2 gebaut am 2026-11-09, 9,9 MB; Ideen I1–I8, Kante mit Vorzeichen (E2), Kugel abziehen (K1), KI über Google Agent Platform, liegt nur auf dem Arbeitsrechner unter src-tauri/target/release/bundle/nsis/; noch nicht installiert)
 - [ ] TODO Messen bestätigen (in 0.4.2 behoben, Fehlerbild des Nutzers war nie genannt)
+- [ ] DOING Teil 4: Gehäuse für einen Stecker mit Dioden (Nutzer, begonnen 2026-11-12)
+
+### 3e. Feldnotizen Teil 4 (Gehäuse Stecker mit Dioden, 2026-11-12) — Claude
+- [ ] TODO T1 (Fehler, zuerst) Gezeichnetes Dreieck (Vieleck, 3 Ecken, Seiten mit Maß 7,0) lässt sich nicht verschieben.
+- [ ] TODO T2 Vieleck wie Rechteck mit Untermenü für die Art: aus der Mitte (heute), über eine Ecke/Seite, Punkte einzeln setzen.
+- [ ] TODO T3 Werkzeugliste: bei „Alle Funktionen“ klappt nur der Text auf, bei den anderen nur das ▾. Einheitlich: ▾ klappt
+      überall auf (und der Text bei „Alle Funktionen“ weiterhin).
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
 - [x] DONE M1 (Fehler, zuerst; 0.17.0) Klick auf ein beliebiges Exemplar eines Musters markiert alle, Ziehen schiebt alle
@@ -251,6 +258,11 @@ Datenverlust = sofort ein Paket.
 - [Vergleich] Wollte: markierte Kanten sehen | Passiert: nur die unter der Maus war erkennbar | Umweg: - (0.11.0)
 
 ### Teil 3: (Name, Datum, wofür)
+
+### Teil 4: Gehäuse für einen Stecker mit Dioden (2026-11-12)
+- [Stecker] Wollte: Dreieck (Vieleck, 3 Ecken) verschieben | Passiert: ging nicht | Umweg: - (T1)
+- [Stecker] Wollte: Vieleck über Ecke oder Punkte zeichnen wie beim Rechteck | Passiert: nur aus der Mitte | Umweg: - (T2)
+- [Stecker] Wollte: „Alle Funktionen“ über ▾ aufklappen | Passiert: nur Klick auf den Text klappt auf | Umweg: Text (T3)
 
 ## Versionen
 Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `src-tauri/Cargo.lock`. Jedes Paket mit
