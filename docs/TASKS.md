@@ -116,6 +116,11 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [x] DONE T2 (0.27.0) Vieleck wie Rechteck mit Untermenü für die Art: aus der Mitte (heute), über eine Ecke/Seite, Punkte einzeln setzen.
 - [x] DONE T3 (0.27.0) Werkzeugliste: bei „Alle Funktionen“ klappt nur der Text auf, bei den anderen nur das ▾. Einheitlich: ▾ klappt
       überall auf (und der Text bei „Alle Funktionen“ weiterhin).
+- [x] DONE T4 (0.28.0; Fehler aus 0.27.0) Alles markiert und verschoben, nur die Skizze ging mit, Rundungen wurden rot. Skizze mit Körper
+      verschiebt wieder den Körper, mehrere markierte Körper gehen zusammen (je ein Verschieben-Schritt, gemeinsame Mitte).
+- [x] DONE T5 (0.28.0) Messen: Fadenkreuz statt Hand; zweiter Punkt rastet auf die Achse durch den ersten ein (waagrecht X/Y, senkrecht Z).
+- [x] DONE T6 (0.28.0) Leertaste auf eine von unten gesehene Skizze schaute von oben; jetzt von der Seite, auf der die Kamera steht.
+- Frage STEP zusätzlich importieren: geht schon über „Öffnen“ → .step/.stp (kommt als eigener Körper dazu), nichts gebaut.
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
 - [x] DONE M1 (Fehler, zuerst; 0.17.0) Klick auf ein beliebiges Exemplar eines Musters markiert alle, Ziehen schiebt alle
@@ -263,12 +268,16 @@ Datenverlust = sofort ein Paket.
 - [Stecker] Wollte: Dreieck (Vieleck, 3 Ecken) verschieben | Passiert: ging nicht | Umweg: - (T1)
 - [Stecker] Wollte: Vieleck über Ecke oder Punkte zeichnen wie beim Rechteck | Passiert: nur aus der Mitte | Umweg: - (T2)
 - [Stecker] Wollte: „Alle Funktionen“ über ▾ aufklappen | Passiert: nur Klick auf den Text klappt auf | Umweg: Text (T3)
+- [Stecker] Wollte: alles markieren und verschieben | Passiert: nur Skizze #101 ging mit, Rundungen rot | Umweg: - (T4)
+- [Stecker] Wollte: genauer messen, Hilfe für waagrecht/parallel | Passiert: Hand als Zeiger, kein Achsfang | Umweg: - (T5)
+- [Stecker] Wollte: Skizze von unten bearbeiten | Passiert: Leertaste sprang nach oben | Umweg: - (T6)
 
 ## Versionen
 Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `src-tauri/Cargo.lock`. Jedes Paket mit
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.28.0** Mehrere Körper zusammen verschieben, Skizze mit Körper verschiebt wieder den Körper (T4); Messen mit Fadenkreuz und Achsfang (T5); Leertaste von unten (T6)
 - **0.27.0** Skizzen mit „Verschieben / Drehen“ in ihrer Ebene verschieben (T1), Vieleck über eine Seite und „Punkte einzeln“ (T2), ▾ bei „Alle Funktionen“ (T3)
 - **0.26.0** Bereiche folgen ihren Skizzen: frühere Skizze ändern ändert die daraus gezogenen Bereiche mit (V1)
 - **0.25.4** Schräge und Fläche löschen melden, wenn der Punkt keine Fläche trifft, statt still nichts zu tun
@@ -329,6 +338,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-12 0.28.0 (MINOR) Feldnotizen Teil 4 (Bilder DiodeHaus.ofc). T4: 0.27.0 hatte jede flache Skizze nur selbst verschoben, auch Skizze #101, aus der Körper #101 gezogen ist → Skizzen-Griffe nur noch für Skizzen ohne Körper und ohne Mehrfachauswahl; mehrere markierte Schritte → alle ihre Körper (gizmoMore, ein Rückgängig-Schritt). Geprüft im Browser über „Genau verschieben“ (zwei move-Schritte, t gleich); Ziehen der Griffe per Testmaus traf den Pfeil nicht zuverlässig. T5: Achsfang in measurePoint (8 px am Bildschirm, nur freie Punkte werden gezogen, eingerastete Ecken bekommen nur den Hinweis), nicht per Maus im Browser geprüft. T6: lookAtWork dreht die Blickrichtung zur Kameraseite, nicht im Browser geprüft. Alles nur main.ts, kein Kern-Test (reine Bedienung).
 - 2026-11-12 Installer 0.27.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.
 - 2026-11-12 0.27.0 (MINOR) Teil 4, Feldnotizen T1–T3. T1: „Verschieben / Drehen“ wirkte nur auf Körper, flache Skizze meldete „gehört zu keinem Körper“, Vieleck hat keine X/Y-Felder → Griffe jetzt auch an flacher Skizze, nur in ihrer Ebene (Pfeil quer dazu ausgeblendet, Anteil quer wird verworfen), verschiebt f.o; gesperrt, wenn der Körper danach bewegt wurde. Kein Drehen von Skizzen (nicht verlangt). T2: Vieleck-Menü „Aus der Mitte / Über eine Seite / Punkte einzeln (Linie)“, `ngonSidePts` mit Test; „Punkte einzeln“ schaltet auf das Linien-Werkzeug. T3: das ▾ von „Alle Funktionen“ hatte kein data-menu, der Menü-Handler fing den Klick ab und stürzte ab → Handler nur an ▾ mit data-menu. Im Browser geprüft (Dreieck über Seite, verschieben, Strg+Z, ▾); Exe nicht gebaut.
 - 2026-11-11 Installer 0.26.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.

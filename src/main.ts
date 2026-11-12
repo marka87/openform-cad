@@ -1556,10 +1556,10 @@ function onMove(e: PointerEvent) {
     const h = ['select', 'shell', 'measure'].includes(tool) && pick();
     setHover(!!h && (tool !== 'shell' || !!h.face));
     if (h && tool === 'select') hoverHint(h);
-    el.style.cursor = !h ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default';
+    el.style.cursor = !h || tool === 'measure' ? 'crosshair' : h.edge || h.face?.grip ? 'grab' : 'default'; // Messen: Fadenkreuz trifft genauer als die Hand
     if (tool === 'measure' && measureMode !== 'obj') { // Einrastpunkt fürs Messen schon vor dem Klick zeigen
       const s = measurePoint();
-      if (s) { markSnap(s.p, s.kind === 'Mitte' || s.kind === 'Endpunkt' ? 0xff9a3c : 0x4da3ff, 4); snapMark.visible = true; showSnapTip(s.p, s.kind); }
+      if (s) { markSnap(s.p, /^(Mitte|Endpunkt)/.test(s.kind) ? 0xff9a3c : 0x4da3ff, 4); snapMark.visible = true; showSnapTip(s.p, s.kind); }
     }
     return;
   }
@@ -1776,15 +1776,18 @@ function transformAct(act: string) {
   const f = getSel();
   if (selBody === null && !f) return showHint('Erst einen Körper (im Baum oder per Doppelklick) oder eine Skizze auswählen');
   setTool('select');
-  if (act === 'move' && selBody === null && f && isExtrude(f) && isFlat(f)) { // Skizze: Griffe verschieben sie in ihrer Ebene (T1)
+  const bodyOfSel = (g: Feature) => g.type === 'combine' || g.type === 'plane' ? null : g.type === 'move' ? g.body : bodyOf(g);
+  if (act === 'move' && selBody === null && !multi.size && f && isExtrude(f) && isFlat(f) && !bodyIds.includes(bodyOf(f))) { // reine Skizze ohne Körper: Griffe verschieben sie in ihrer Ebene (T1)
     if (movesAfter(features, features.indexOf(f)).length) return showHint('Der Körper dieser Skizze wurde danach bewegt: Skizze vor dem Verschieben-Schritt ändern');
     gizmoSketch = f; return attachGizmo('translate');
   }
   if (selBody !== null || !isExtrude(f!) || !['pattern', 'mirror'].includes(act)) { // Körper: Griffe, Werte, Achse, Ausrichten, Muster
-    const bb = selBody ?? (f && f.type !== 'combine' && f.type !== 'plane' ? f.type === 'move' ? f.body : bodyOf(f) : null);
+    const bb = selBody ?? (f ? bodyOfSel(f) : null);
+    // mehrere markiert (Strg+A): alle ihre Körper gehen mit
+    const more = act === 'move' && selBody === null ? [...new Set([...multi].map(id => getById(id)).filter((g): g is Feature => !!g).map(bodyOfSel))].filter((b): b is number => b !== null && b !== bb && bodyIds.includes(b)) : [];
     if (bb === null || !bodyIds.includes(bb)) return showHint('Dieser Schritt gehört zu keinem Körper');
     clearSel(); selBody = bb; refresh();
-    if (act === 'move') return attachGizmo('translate');
+    if (act === 'move') { attachGizmo('translate'); gizmoMore = more; if (more.length) { attachGizmo('translate'); showNotice(`${more.length + 1} Körper werden zusammen verschoben`); } return; }
     if (act === 'axis') { xfPick = { b: bb, kind: 'axis' }; return showNotice('Drehachse: gerade Kante anklicken (Winkel aus „Genau verschieben / drehen“) · Esc = abbrechen'); }
     if (act === 'align') { xfPick = { b: bb, kind: 'from' }; return showNotice('Ausrichten: erst eine ebene Fläche dieses Körpers anklicken · Esc = abbrechen'); }
   }
@@ -2894,20 +2897,21 @@ function styleGizmo() {
 styleGizmo();
 const bodyMeshOf = (b: number) => bodyGroup.children.find(m => m.userData.body === b);
 let gizmoSketch: Extrude | null = null; // Griffe an einer flachen Skizze statt an einem Körper
+let gizmoMore: number[] = []; // weitere Körper, die mit selBody verschoben werden
 function attachGizmo(mode: 'translate' | 'rotate') {
   const s = gizmoSketch && selId === gizmoSketch.id && getById(gizmoSketch.id) === gizmoSketch ? gizmoSketch : null, m = !s && selBody !== null && bodyMeshOf(selBody);
   if (!s && !m) return detachGizmo();
   if (s) { gizmoStart.fromArray(bounds(s).map(([lo, hi]) => (lo + hi) / 2)); mode = 'translate'; }
-  else { gizmoSketch = null; new THREE.Box3().setFromObject(m as THREE.Object3D).getCenter(gizmoStart); }
+  else { gizmoSketch = null; const box = new THREE.Box3().setFromObject(m as THREE.Object3D); for (const b of gizmoMore) { const o = bodyMeshOf(b); if (o) box.expandByObject(o); } box.getCenter(gizmoStart); }
   gizmo.showX = !s || Math.abs(s.n[0]) < 0.99; gizmo.showY = !s || Math.abs(s.n[1]) < 0.99; gizmo.showZ = !s || Math.abs(s.n[2]) < 0.99; // quer zur Skizze: kein Pfeil
   pivot.position.copy(gizmoStart); pivot.quaternion.identity();
   gizmo.setMode(mode); gizmo.attach(pivot);
 }
-function detachGizmo() { gizmo.detach(); gizmoSketch = null; }
+function detachGizmo() { gizmo.detach(); gizmoSketch = null; gizmoMore = []; }
 function addMove(q: THREE.Quaternion, t: THREE.Vector3, s = 1) {
   if (selBody === null || t.length() < 1e-6 && Math.abs(q.w) > 1 - 1e-9 && s === 1) return;
   pushHistory();
-  add({ id: nextId++, type: 'move', body: selBody, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
+  for (const b of [selBody, ...gizmoMore]) add({ id: nextId++, type: 'move', body: b, c: gizmoStart.toArray() as Vec, q: q.toArray(), t: t.toArray() as Vec, ...s !== 1 && { s } });
   refresh();
 }
 function commitGizmo() {
@@ -3084,7 +3088,17 @@ function measurePoint(): { p: THREE.Vector3; kind: string } | null {
     const q = c.p.clone().project(camera), x = Math.hypot((q.x - ndc.x) * w, (q.y - ndc.y) * hh);
     if (x < d) { d = x; best = c; }
   }
-  return best ? { p: best.p.clone(), kind: best.mid ? 'Mitte' : 'Endpunkt' } : { p: P.clone(), kind: edge ? 'auf Kante' : 'auf Fläche' };
+  const r = best ? { p: best.p.clone(), kind: best.mid ? 'Mitte' : 'Endpunkt' } : { p: P.clone(), kind: edge ? 'auf Kante' : 'auf Fläche' };
+  // Achsfang: liegt der Punkt (auf dem Bildschirm) höchstens 8 px neben der Achse durch den vorigen Punkt, wird er darauf gezogen;
+  // eingerastete Ecken bleiben, wo sie sind, und bekommen den Hinweis nur, wenn sie genau auf der Achse liegen
+  const a = measure.length && measure.length < (measureMode === 'ang' ? 3 : 2) ? measure.at(-1)! : null;
+  if (a) for (const [ax, name] of [[V([1, 0, 0]), 'waagrecht X'], [V([0, 0, 1]), 'waagrecht Y'], [V([0, 1, 0]), 'senkrecht Z']] as [THREE.Vector3, string][]) {
+    const q = a.clone().addScaledVector(ax, r.p.clone().sub(a).dot(ax)), s1 = q.clone().project(camera), s2 = r.p.clone().project(camera);
+    if (q.distanceTo(a) < 1e-6 || Math.hypot((s1.x - s2.x) * w, (s1.y - s2.y) * hh) > 8) continue;
+    if (!best) return { p: q, kind: name };
+    if (q.distanceTo(r.p) < 1e-3) return { p: r.p, kind: `${r.kind}, ${name}` };
+  }
+  return r;
 }
 // Objekt messen: Kante = Länge, Kreis/Bogen = ⌀/R, Fläche = Flächeninhalt
 // shortcut: Länge gekrümmter Kanten und Flächeninhalt aus dem Anzeige-Netz (etwa 0,1 % zu klein bei Rundungen) → exakt über den Kern (measureArea/measureLength)
@@ -3181,7 +3195,9 @@ function lookAtWork() {
   if (!workHit || !workView) return;
   if (lookBack) { flyTo(lookBack.p, lookBack.t); lookBack = null; return showHint('Zurück zur vorigen Ansicht · Leertaste = wieder draufschauen'); }
   lookBack = { p: camera.position.clone(), t: controls.target.clone() };
-  const n = workHit.n.clone(), dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 1e-4).normalize() : n;
+  const n = workHit.n.clone();
+  if (camera.position.clone().sub(workView.c).dot(n) < 0) n.negate(); // Skizze von unten gesehen: von unten draufschauen
+  const dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 1e-4).normalize() : n;
   flyTo(workView.c.clone().addScaledVector(dir, workView.r / Math.sin(camera.fov * Math.PI / 360) * 1.05), workView.c.clone());
   showHint('Senkrecht auf die Fläche · Leertaste = zurück zur vorigen Ansicht');
 }
