@@ -51,7 +51,9 @@ document.body.prepend(renderer.domElement);
 const el = renderer.domElement;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1e2126);
-const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+// Öffnungswinkel: normal 45°; „flach“ 2° aus großem Abstand wirkt orthografisch (Wände senkrecht zur Fläche verschwinden), ohne zweite Kamera
+const FOV = 45, FLAT = 2, tanH = (f: number) => Math.tan(f * Math.PI / 360);
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 5000);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 0.9));
 const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(80, 150, 60); scene.add(sun);
 // weiche Schatten auf einen unsichtbaren Boden, der nur den Schatten zeigt
@@ -1016,7 +1018,7 @@ function setWorkPlane(h: Hit | null) {
   workFrame = null;
   workHit = h && !round && h.grip?.part !== 'plane' ? h : null;
   workMarks.visible = !!workHit && gridAllowed() && display.snap.showPts && display.snap.body;
-  lookBack = null;
+  lookBack = null; unflat();
   if (round) showNotice('Raster und Skizzen gehen nur auf ebenen Flächen · an einer runden Fläche erst mit E eine Ebene anlegen');
   if (!workHit) { workView = null; workPts = []; workMarks.visible = false; return; }
   const pl = workFrame = planeFor(workHit), m = workHit.body !== undefined ? bodyMeshOf(workHit.body) : undefined;
@@ -3152,10 +3154,16 @@ function showMeasure() {
 // ---------- Ansichten ----------
 const VIEWS: Record<string, Vec> = { iso: [1, 0.8, 1], top: [0, 1, 1e-4], bottom: [0, -1, 1e-4], front: [0, 0, 1], back: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0] };
 // Kamera weich zu neuer Lage fahren, statt zu springen: auf einem Bogen ums Ziel, damit der Abstand unterwegs nicht einbricht
-let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; start: number; spin?: number } | null = null;
-function flyTo(pos: THREE.Vector3, target: THREE.Vector3) {
+let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; f0: number; f1: number; start: number; spin?: number } | null = null;
+function flyTo(pos: THREE.Vector3, target: THREE.Vector3, fov = camera.fov) {
   if (![...pos.toArray(), ...target.toArray()].every(Number.isFinite)) return; // NaN in der Kamera ließe das Bild dauerhaft leer
-  fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now() };
+  fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, f0: camera.fov, f1: fov, start: performance.now() };
+}
+// Aus der flachen Ansicht zurück zu 45°, gleicher Bildausschnitt
+function unflat() {
+  if (camera.fov === FOV) return;
+  const d = camera.position.clone().sub(controls.target);
+  flyTo(controls.target.clone().addScaledVector(d, tanH(camera.fov) / tanH(FOV)), controls.target.clone(), FOV);
 }
 function stepFly() {
   if (!fly) return;
@@ -3165,10 +3173,16 @@ function stepFly() {
   if (fly.spin) camera.position.copy(a).applyAxisAngle(new THREE.Vector3(0, 1, 0), fly.spin * s).add(controls.target);
   else if (!la || !lb) camera.position.lerpVectors(fly.p0, fly.p1, s);
   else {
+    // sichtbare Bildhöhe statt Abstand überblenden: beim Wechsel des Öffnungswinkels bleibt das Bild gleich groß
+    const f = fly.f0 + (fly.f1 - fly.f0) * s, h = la * tanH(fly.f0) + (lb * tanH(fly.f1) - la * tanH(fly.f0)) * s;
     const q = new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
-    camera.position.copy(a).normalize().applyQuaternion(new THREE.Quaternion().slerp(q, s)).multiplyScalar(la + (lb - la) * s).add(controls.target);
+    camera.position.copy(a).normalize().applyQuaternion(new THREE.Quaternion().slerp(q, s)).multiplyScalar(h / tanH(f)).add(controls.target);
+    if (fly.f0 !== fly.f1) {
+      const k = tanH(FOV) / tanH(f); // near/far mitwachsen lassen: gleiche Tiefenauflösung, nichts wird abgeschnitten
+      Object.assign(camera, { fov: f, near: 0.1 * k, far: 5000 * k }); camera.updateProjectionMatrix();
+    }
   }
-  if (t === 1) fly = null;
+  if (t === 1) { fly = null; if (sun.castShadow !== (camera.fov === FOV)) { sun.castShadow = camera.fov === FOV; sun.shadow.needsUpdate = true; } } // flach wie Shapr3D: ohne Schatten
 }
 // Ansicht um die Hochachse drehen; in der Draufsicht dreht das den Grundriss im Bild
 function turnView(dir: number) {
@@ -3202,12 +3216,12 @@ function snapView() {
 // ist „oben“ daher −z wie in der Draufsicht, nicht die y-Achse der Skizze
 function lookAtWork() {
   if (!workHit || !workView) return;
-  if (lookBack) { flyTo(lookBack.p, lookBack.t); lookBack = null; return showHint('Zurück zur vorigen Ansicht · Leertaste = wieder draufschauen'); }
+  if (lookBack) { flyTo(lookBack.p, lookBack.t, FOV); lookBack = null; return showHint('Zurück zur vorigen Ansicht · Leertaste = wieder draufschauen'); }
   lookBack = { p: camera.position.clone(), t: controls.target.clone() };
   const n = workHit.n.clone();
   if (camera.position.clone().sub(workView.c).dot(n) < 0) n.negate(); // Skizze von unten gesehen: von unten draufschauen
   const dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 1e-4).normalize() : n;
-  flyTo(workView.c.clone().addScaledVector(dir, workView.r / Math.sin(camera.fov * Math.PI / 360) * 1.05), workView.c.clone());
+  flyTo(workView.c.clone().addScaledVector(dir, workView.r / Math.sin(FLAT * Math.PI / 360) * 1.05), workView.c.clone(), FLAT);
   showHint('Senkrecht auf die Fläche · Leertaste = zurück zur vorigen Ansicht');
 }
 const samePlane = (a: Hit, b: Hit) => a.n.dot(b.n) > 0.9999 && Math.abs(a.n.dot(a.point.clone().sub(b.point))) < 1e-3;
