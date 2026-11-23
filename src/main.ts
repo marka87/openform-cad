@@ -601,12 +601,12 @@ function fatLine(pos: ArrayLike<number>, opts: ConstructorParameters<typeof Line
   return l;
 }
 const pairsOf = (pts: THREE.Vector3[]) => pts.slice(1).flatMap((p, i) => [...pts[i].toArray(), ...p.toArray()]);
-// Hilfslinie gestrichelt in Magenta (hebt sich von hellen Flächen und dunklem Grund ab), offene Skizzenlinie durchgezogen.
+// Hilfslinie gestrichelt in Neongrün, auch ausgewählt (nie Orange/Blau wie Skizzen; hebt sich von hellen Flächen und dunklem Grund ab), offene Skizzenlinie durchgezogen.
 // Sichtbar ist die dicke Linie; die unsichtbare dünne bleibt zum Anklicken, userData.aux = ID
 function auxLine(f: Extrude) {
   const pts = outline(f.pts!, !f.open).map(([x, y]) => V(f.o).addScaledVector(V(f.u), x).addScaledVector(V(f.v), y));
   if (!f.open) pts.push(pts[0]);
-  const color = f.id === selId ? 0xffa64d : f.aux ? 0xd63bd9 : 0x4da3ff, r = pxSize();
+  const color = f.aux ? 0x7dff2e : f.id === selId ? 0xffa64d : 0x4da3ff, r = pxSize();
   const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
   const fat = fatLine(pairsOf(pts), { color, dashed: !!f.aux, dashSize: 9 * r, gapSize: 6 * r });
   if (f.aux) fat.computeLineDistances();
