@@ -36,6 +36,9 @@ Werkzeugsuche, Schatten, Schnittansicht, Messen (Länge, Winkel, Masse).
 Zeichnung: Blatt mit 3 Ansichten + Iso, Gesamtmaße, Schriftfeld;
 SVG, PDF, DXF.
 
+## Arbeitsstil
+Bei jeder Aufgabe den Skill `ponytail` verwenden (Stufe full): kleinste Änderung, die die Aufgabe ganz löst.
+
 ## Plan
 Ziel, Plan, Feldnotizen, Versionen und Log stehen ausschließlich in docs/TASKS.md.
 KI wird derzeit nicht weiter ausgebaut.
