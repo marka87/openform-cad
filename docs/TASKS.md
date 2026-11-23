@@ -277,6 +277,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.28.2** Endpunkte offener Hilfslinien immer sichtbar
 - **0.28.1** Hilfslinie in Neongrün, auch ausgewählt (Feldnotiz: war schlecht zu sehen)
 - **0.28.0** Mehrere Körper zusammen verschieben, Skizze mit Körper verschiebt wieder den Körper (T4); Messen mit Fadenkreuz und Achsfang (T5); Leertaste von unten (T6)
 - **0.27.0** Skizzen mit „Verschieben / Drehen“ in ihrer Ebene verschieben (T1), Vieleck über eine Seite und „Punkte einzeln“ (T2), ▾ bei „Alle Funktionen“ (T3)
@@ -339,6 +340,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-23 0.28.2 (PATCH) Offene Hilfslinien zeigen ihre Endpunkte immer als Punkt (nicht anklickbar, in auxLine), im Browser geprüft; kein Kern-Test (reine Darstellung).
 - 2026-11-23 0.28.1 (PATCH) Hilfslinie neongrün (0x7dff2e) statt Magenta/Orange, damit sie sich von Skizzen (blau, ausgewählt orange) abhebt. Nur Farbe in auxLine, kein Kern-Test. Offen: Fehler „Hilfslinie nach Abwählen nicht mehr anklickbar“ ließ sich in leerer Szene nicht nachstellen, wartet auf .ofc/Schritte vom Nutzer.
 - 2026-11-12 Installer 0.28.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.
 - 2026-11-12 0.28.0 (MINOR) Feldnotizen Teil 4 (Bilder DiodeHaus.ofc). T4: 0.27.0 hatte jede flache Skizze nur selbst verschoben, auch Skizze #101, aus der Körper #101 gezogen ist → Skizzen-Griffe nur noch für Skizzen ohne Körper und ohne Mehrfachauswahl; mehrere markierte Schritte → alle ihre Körper (gizmoMore, ein Rückgängig-Schritt). Geprüft im Browser über „Genau verschieben“ (zwei move-Schritte, t gleich); Ziehen der Griffe per Testmaus traf den Pfeil nicht zuverlässig. T5: Achsfang in measurePoint (8 px am Bildschirm, nur freie Punkte werden gezogen, eingerastete Ecken bekommen nur den Hinweis), nicht per Maus im Browser geprüft. T6: lookAtWork dreht die Blickrichtung zur Kameraseite, nicht im Browser geprüft. Alles nur main.ts, kein Kern-Test (reine Bedienung).

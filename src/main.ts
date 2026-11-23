@@ -611,6 +611,13 @@ function auxLine(f: Extrude) {
   const fat = fatLine(pairsOf(pts), { color, dashed: !!f.aux, dashSize: 9 * r, gapSize: 6 * r });
   if (f.aux) fat.computeLineDistances();
   l.add(fat);
+  if (f.aux && f.open) for (const p of [pts[0], pts[pts.length - 1]]) { // Endpunkte immer sichtbar, nicht anklickbar
+    const m = new THREE.Mesh(new THREE.SphereGeometry(5 * r, 12, 6), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+    m.position.copy(p);
+    m.renderOrder = 2;
+    m.raycast = () => {};
+    l.add(m);
+  }
   l.renderOrder = 1;
   l.userData.aux = f.id;
   return l;
