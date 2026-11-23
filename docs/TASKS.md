@@ -120,6 +120,8 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
       verschiebt wieder den Körper, mehrere markierte Körper gehen zusammen (je ein Verschieben-Schritt, gemeinsame Mitte).
 - [x] DONE T5 (0.28.0) Messen: Fadenkreuz statt Hand; zweiter Punkt rastet auf die Achse durch den ersten ein (waagrecht X/Y, senkrecht Z).
 - [x] DONE T6 (0.28.0) Leertaste auf eine von unten gesehene Skizze schaute von oben; jetzt von der Seite, auf der die Kamera steht.
+- [x] DONE T7 (0.28.4) Leertaste auf eine Fläche schaut flach (fast orthografisch, ohne Schatten) wie Shapr3D.
+- [x] DONE T8 (0.28.5) In dieser flachen Ansicht reicht das Raster bis zum Bildrand (grau außerhalb des Körpers, blau auf der Fläche).
 - Frage STEP zusätzlich importieren: geht schon über „Öffnen“ → .step/.stp (kommt als eigener Körper dazu), nichts gebaut.
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
@@ -279,6 +281,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 - **0.28.3** Skizzen, aus denen schon eine Form wurde (Bereich, Übergang, Zug), sind ausgeblendet; sichtbar, wenn sie oder die Form angeklickt ist
 - **0.28.4** Leertaste auf eine Fläche: flache, fast orthografische Ansicht ohne Schatten wie in Shapr3D
+- **0.28.5** Flache Ansicht: Raster bis zum Bildrand
 - **0.28.2** Endpunkte offener Hilfslinien immer sichtbar
 - **0.28.1** Hilfslinie in Neongrün, auch ausgewählt (Feldnotiz: war schlecht zu sehen)
 - **0.28.0** Mehrere Körper zusammen verschieben, Skizze mit Körper verschiebt wieder den Körper (T4); Messen mit Fadenkreuz und Achsfang (T5); Leertaste von unten (T6)
@@ -343,7 +346,8 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
 - 2026-11-23 0.28.3 (PATCH) Wunsch Nutzer (Screenshot Teil 4): verbrauchte flache Skizzen nicht mehr dauernd blau zeigen. `sketchUsers` (model.ts) sammelt Quellen von Bereichen (rs), Übergängen (a/b) und Zügen (profile); rebuild zeigt sie nur, wenn die Skizze oder ein Nutzer-Schritt markiert ist (Baum, Klick auf Körper). Flacher oder ausgeblendeter Bereich zählt nicht. Kern-Test in teile.test.ts, im Browser geprüft. Folge: einen zweiten Bereich aus denselben Skizzen ziehen geht jetzt über Klick auf die Skizze im Baum.
-- 2026-11-23 0.28.4 (PATCH) Wunsch Nutzer (Vergleich mit Shapr3D): Leertaste auf die Fläche schaut jetzt flach drauf. Statt einer zweiten (orthografischen) Kamera geht der Öffnungswinkel auf 2° bei entsprechend großem Abstand; flyTo blendet Öffnungswinkel und sichtbare Bildhöhe über, near/far wachsen mit. Schatten in der flachen Ansicht aus. Zurück (Leertaste, andere Fläche, Esc) stellt 45° bei gleichem Ausschnitt her. Nur Kamera, kein Kern-Test; im Browser geprüft. Offen: Raster in der flachen Ansicht reicht nicht bis zum Bildrand wie in Shapr3D.
+- 2026-11-23 0.28.4 (PATCH) Wunsch Nutzer (Vergleich mit Shapr3D): Leertaste auf die Fläche schaut jetzt flach drauf. Statt einer zweiten (orthografischen) Kamera geht der Öffnungswinkel auf 2° bei entsprechend großem Abstand; flyTo blendet Öffnungswinkel und sichtbare Bildhöhe über, near/far wachsen mit. Schatten in der flachen Ansicht aus. Zurück (Leertaste, andere Fläche, Esc) stellt 45° bei gleichem Ausschnitt her. Nur Kamera, kein Kern-Test; im Browser geprüft. Raster bis zum Bildrand folgt in 0.28.5.
+- 2026-11-23 0.28.5 (PATCH) Wunsch Nutzer: Raster in der flachen Ansicht bis zum Bildrand. placeGrid legt dann zusätzlich ein graues Raster (Bodengröße, auf der Flächenmitte ausgerichtet) 0,5 mm hinter die Fläche: so ist es nur außerhalb des Körpers zu sehen; 0,05 mm ging in der Tiefenauflösung unter (Kamera steht in der flachen Ansicht ~60× weiter weg). gridKey enthält jetzt „flach ja/nein“. Im Browser geprüft, in der normalen Ansicht wieder nur das blaue Raster.
 - 2026-11-23 0.28.2 (PATCH) Offene Hilfslinien zeigen ihre Endpunkte immer als Punkt (nicht anklickbar, in auxLine), im Browser geprüft; kein Kern-Test (reine Darstellung).
 - 2026-11-23 0.28.1 (PATCH) Hilfslinie neongrün (0x7dff2e) statt Magenta/Orange, damit sie sich von Skizzen (blau, ausgewählt orange) abhebt. Nur Farbe in auxLine, kein Kern-Test. Offen: Fehler „Hilfslinie nach Abwählen nicht mehr anklickbar“ ließ sich in leerer Szene nicht nachstellen, wartet auf .ofc/Schritte vom Nutzer.
 - 2026-11-12 Installer 0.28.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.

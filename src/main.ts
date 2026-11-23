@@ -979,6 +979,12 @@ function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
   if (b) {
     const c = [0, 1].map(k => (b[0][k] + b[1][k]) / 2), wide = b.map(q => [0, 1].map(k => c[k] + (q[k] - c[k]) * 1.75));
     faceGrid.add(faceLines(wide, 10, 0x4da3ff, 0.9), faceLines(wide, fine, 0x4da3ff, 0.3));
+    if (camera.fov !== FOV) { // flache Ansicht wie Shapr3D: graues Raster bis zum Bildrand, auf dem blauen ausgerichtet
+      const h = (grid.userData.size ?? 400) / 2, all = [[c[0] - h, c[1] - h], [c[0] + h, c[1] + h]];
+      const grey = [faceLines(all, 10, sk().g2, 1), faceLines(all, fine, sk().fine, 1)];
+      grey.forEach(l => { l.renderOrder = -1; l.position.y = -0.5; }); // hinter der Fläche: nur außerhalb des Körpers zu sehen (weniger geht bei großem Kameraabstand in der Tiefenauflösung unter)
+      faceGrid.add(...grey);
+    }
   }
   else { // ohne Mittellinien: dort liegen die farbigen Achsen
     const h = (grid.userData.size ?? 400) / 2, all = [[-h, -h], [h, h]];
@@ -997,7 +1003,7 @@ function updateGrid() {
   const ground = !!pl && Math.abs(pl.n[1]) > 0.999 && Math.abs(pl.o[1]) < 1e-6, flat = pl && !ground ? faceBounds(pl) : null;
   const other = !!pl && !ground && (!!flat || pl !== sk || !sk.onFace); // Skizze, deren Fläche es nicht mehr gibt: kein Raster
   const step = flat ? Math.max(gridStep(), 1, Math.max(flat[1][0] - flat[0][0], flat[1][1] - flat[0][1]) / 300) : 0;
-  const key = other ? [...pl!.o, ...pl!.n, ...(flat?.flat() ?? []), step, grid.userData.size].join() : '';
+  const key = other ? [...pl!.o, ...pl!.n, ...(flat?.flat() ?? []), step, grid.userData.size, camera.fov === FOV].join() : '';
   if (key !== gridKey) {
     gridKey = key;
     if (other) placeGrid(pl!, flat, step);
