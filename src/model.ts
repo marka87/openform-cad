@@ -184,6 +184,17 @@ export function revSpan(f: Extrude) {
   return [Math.min(...s), Math.max(...s)];
 }
 export const isFlat = (f: Extrude) => Math.abs(f.d) < 1e-6 && !f.rev;
+// Flache Skizzen, aus denen schon eine Form wurde (Bereich, Übergang, Zug): Skizze → Nummern der Schritte, die sie nutzen
+export function sketchUsers(features: Feature[]) {
+  const m = new Map<number, number[]>(), add = (ids: number[], by: number) => ids.forEach(id => m.set(id, [...m.get(id) ?? [], by]));
+  for (const f of features) {
+    if (f.hidden) continue;
+    if (isExtrude(f) && f.rs && !isFlat(f)) add([f.rs.f, ...f.rs.and, ...f.rs.not], f.id);
+    else if (f.type === 'loft') add([f.a, f.b], f.id);
+    else if (f.type === 'sweep') add([f.profile], f.id);
+  }
+  return m;
+}
 // Welcher Teil eines Features angefasst wurde; k = Richtung der Flächennormale relativ zur Parameterachse (±1)
 export type Part = 'start' | 'end' | 'x0' | 'x1' | 'y0' | 'y1' | 'r' | 'seg' | 'arc';
 // i = Segment des Vielecks bei 'seg' und 'arc'

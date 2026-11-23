@@ -5,7 +5,7 @@ import opencascade from 'replicad-opencascadejs';
 import { cast, getOC, makeCompound, makeCylinder, makeLine, measureVolume, setOC, type Shape3D } from 'replicad';
 import { shownEdges, newCache, buildBody, forExport, invalidBodies, loadStep, sheetSVG, to3MF } from './kernel';
 import { pieceAt, trimFeatures } from './trim';
-import { parseModel, ngonSidePts, roundCorners, THREAD_SPECS, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
+import { parseModel, ngonSidePts, roundCorners, THREAD_SPECS, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, ownerOf, coplanarBounds, applyPush, arcPoints, GROUND, isExtrude, linePlane, mirroredCopy, pullTogether, pushTo, rectSize, sameEdge, sketchArea, sketchFeature, sketchUsers, slotPts, type EdgeOp, type Extrude, type Feature, type Frame, type Loft, type Pattern, type Shell, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
 const valid = (sh: any) => { const c = new (getOC() as any).BRepCheck_Analyzer(sh.wrapped, true, false), ok = c.IsValid(); c.delete(); return ok; };
@@ -792,4 +792,13 @@ test('Vieleck über eine Seite (T2): Ecken a, b, gleich lange Seiten, links davo
   expect(p[2][0]).toBeCloseTo(3.5, 9); expect(p[2][1]).toBeCloseTo(7 * Math.sqrt(3) / 2, 9); // Spitze oben
   const s = ngonSidePts([1, 2], [1, 12], 6), L = s.map((q, i) => Math.hypot(...[0, 1].map(k => s[(i + 1) % 6][k] - q[k])));
   L.forEach(l => expect(l).toBeCloseTo(10, 9));
+});
+
+test('Verbrauchte Skizzen: Bereich, Übergang, Zug nennen ihre Quellen; flacher oder ausgeblendeter Bereich nicht', () => {
+  const r = { ...rect(GROUND, [0, 0], [10, 5], 3, 5), rs: { f: 1, and: [2], not: [] } } as Extrude;
+  const fs: Feature[] = [rect(GROUND, [0, 0], [10, 5], 1, 0), rect(GROUND, [5, 0], [15, 5], 2, 0), r,
+    { id: 4, type: 'loft', a: 1, b: 5 } as Loft, { id: 7, type: 'sweep', profile: 6 } as unknown as Sweep];
+  expect([...sketchUsers(fs)].sort((a, b) => a[0] - b[0])).toEqual([[1, [3, 4]], [2, [3]], [5, [4]], [6, [7]]]);
+  r.d = 0; expect(sketchUsers(fs).get(2)).toBeUndefined();
+  r.d = 5; r.hidden = true; expect(sketchUsers(fs).get(2)).toBeUndefined();
 });

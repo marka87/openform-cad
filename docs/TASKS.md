@@ -277,6 +277,7 @@ Steht in `package.json`, `package-lock.json` (2×), `src-tauri/Cargo.toml` und `
 Code-Änderung zählt hoch (Wunsch des Nutzers 2026-11-09), keine Nummer wird geteilt: klein/Fehlerbehebung = PATCH,
 groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als stabil gilt.
 
+- **0.28.3** Skizzen, aus denen schon eine Form wurde (Bereich, Übergang, Zug), sind ausgeblendet; sichtbar, wenn sie oder die Form angeklickt ist
 - **0.28.2** Endpunkte offener Hilfslinien immer sichtbar
 - **0.28.1** Hilfslinie in Neongrün, auch ausgewählt (Feldnotiz: war schlecht zu sehen)
 - **0.28.0** Mehrere Körper zusammen verschieben, Skizze mit Körper verschiebt wieder den Körper (T4); Messen mit Fadenkreuz und Achsfang (T5); Leertaste von unten (T6)
@@ -340,6 +341,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 
 ## Log
 Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
+- 2026-11-23 0.28.3 (PATCH) Wunsch Nutzer (Screenshot Teil 4): verbrauchte flache Skizzen nicht mehr dauernd blau zeigen. `sketchUsers` (model.ts) sammelt Quellen von Bereichen (rs), Übergängen (a/b) und Zügen (profile); rebuild zeigt sie nur, wenn die Skizze oder ein Nutzer-Schritt markiert ist (Baum, Klick auf Körper). Flacher oder ausgeblendeter Bereich zählt nicht. Kern-Test in teile.test.ts, im Browser geprüft. Folge: einen zweiten Bereich aus denselben Skizzen ziehen geht jetzt über Klick auf die Skizze im Baum.
 - 2026-11-23 0.28.2 (PATCH) Offene Hilfslinien zeigen ihre Endpunkte immer als Punkt (nicht anklickbar, in auxLine), im Browser geprüft; kein Kern-Test (reine Darstellung).
 - 2026-11-23 0.28.1 (PATCH) Hilfslinie neongrün (0x7dff2e) statt Magenta/Orange, damit sie sich von Skizzen (blau, ausgewählt orange) abhebt. Nur Farbe in auxLine, kein Kern-Test. Offen: Fehler „Hilfslinie nach Abwählen nicht mehr anklickbar“ ließ sich in leerer Szene nicht nachstellen, wartet auf .ofc/Schritte vom Nutzer.
 - 2026-11-12 Installer 0.28.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.
