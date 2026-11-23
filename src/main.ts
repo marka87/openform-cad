@@ -769,6 +769,10 @@ function setRay(e: PointerEvent) {
   const r = el.getBoundingClientRect();
   ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   ray.setFromCamera(ndc, camera);
+  if (isOrtho()) { // parallele Strahlen wie bei einer orthografischen Kamera (setFromCamera kennt nur die Perspektive dieses Objekts)
+    ray.ray.origin.set(ndc.x, ndc.y, -1).unproject(camera);
+    ray.ray.direction.set(0, 0, -1).transformDirection(camera.matrixWorld);
+  }
 }
 // Treffer auf Fläche (Körper oder Skizze) und auf Körperkante. Flache Skizzen liegen auf Flächen und haben Vorrang;
 // eine Kante zählt, wenn sie höchstens ein paar Pixel neben dem Mauszeiger und nicht hinter der Fläche liegt.
@@ -977,14 +981,10 @@ function faceLines(b: number[][], step: number, color: number, opacity: number, 
 function placeGrid(pl: Frame, b: number[][] | null, fine: number) {
   disposeGroup(faceGrid);
   if (b) {
-    const c = [0, 1].map(k => (b[0][k] + b[1][k]) / 2), wide = b.map(q => [0, 1].map(k => c[k] + (q[k] - c[k]) * 1.75));
+    const c = [0, 1].map(k => (b[0][k] + b[1][k]) / 2), h = (grid.userData.size ?? 400) / 2;
+    const wide = camera.fov !== FOV ? [[c[0] - h, c[1] - h], [c[0] + h, c[1] + h]] // flache Ansicht wie Shapr3D: bis zum Bildrand
+      : b.map(q => [0, 1].map(k => c[k] + (q[k] - c[k]) * 1.75));
     faceGrid.add(faceLines(wide, 10, 0x4da3ff, 0.9), faceLines(wide, fine, 0x4da3ff, 0.3));
-    if (camera.fov !== FOV) { // flache Ansicht wie Shapr3D: graues Raster bis zum Bildrand, auf dem blauen ausgerichtet
-      const h = (grid.userData.size ?? 400) / 2, all = [[c[0] - h, c[1] - h], [c[0] + h, c[1] + h]];
-      const grey = [faceLines(all, 10, sk().g2, 1), faceLines(all, fine, sk().fine, 1)];
-      grey.forEach(l => { l.renderOrder = -1; l.position.y = -0.5; }); // hinter der Fläche: nur außerhalb des Körpers zu sehen (weniger geht bei großem Kameraabstand in der Tiefenauflösung unter)
-      faceGrid.add(...grey);
-    }
   }
   else { // ohne Mittellinien: dort liegen die farbigen Achsen
     const h = (grid.userData.size ?? 400) / 2, all = [[-h, -h], [h, h]];
@@ -3164,12 +3164,30 @@ let fly: { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Ve
 function flyTo(pos: THREE.Vector3, target: THREE.Vector3, fov = camera.fov) {
   if (![...pos.toArray(), ...target.toArray()].every(Number.isFinite)) return; // NaN in der Kamera ließe das Bild dauerhaft leer
   fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, f0: camera.fov, f1: fov, start: performance.now() };
+  // Nachlauf eines früheren Drehens/Verschiebens verwerfen, sonst kippt er die Ansicht nach dem Flug (z. B. aus „senkrecht“).
+  // shortcut: interne Felder von OrbitControls (three 0.186); bei einem three-Update prüfen
+  (controls as unknown as { _sphericalDelta: THREE.Spherical })._sphericalDelta.set(0, 0, 0);
+  (controls as unknown as { _panOffset: THREE.Vector3 })._panOffset.set(0, 0, 0);
 }
-// Aus der flachen Ansicht zurück zu 45°, gleicher Bildausschnitt
-function unflat() {
+// Aus der flachen Ansicht zurück zu 45°, gleicher Bildausschnitt; sofort (beim Drehen) oder als Flug
+function unflat(now = false) {
   if (camera.fov === FOV) return;
-  const d = camera.position.clone().sub(controls.target);
-  flyTo(controls.target.clone().addScaledVector(d, tanH(camera.fov) / tanH(FOV)), controls.target.clone(), FOV);
+  const d = camera.position.clone().sub(controls.target), p = controls.target.clone().addScaledVector(d, tanH(camera.fov) / tanH(FOV));
+  if (!now) return flyTo(p, controls.target.clone(), FOV);
+  camera.position.copy(p); setFov(FOV);
+}
+function setFov(f: number) {
+  const k = tanH(FOV) / tanH(f); // near/far mitwachsen lassen: gleiche Tiefenauflösung, nichts wird abgeschnitten
+  Object.assign(camera, { fov: f, near: 0.1 * k, far: 5000 * k }); camera.updateProjectionMatrix();
+  if (sun.castShadow !== (f === FOV)) { sun.castShadow = f === FOV; sun.shadow.needsUpdate = true; } // flach wie Shapr3D: ohne Schatten
+}
+// Flache Ansicht echt orthografisch: gleiche Bildhöhe am Ziel wie der 2°-Kegel, so stimmen pxSize, Zoom und Verschieben weiter
+const isOrtho = () => camera.fov === FLAT && !fly;
+function orthoProjection() {
+  if (!isOrtho()) return;
+  const h = camera.position.distanceTo(controls.target) * tanH(FLAT), w = h * camera.aspect;
+  camera.projectionMatrix.makeOrthographic(-w, w, h, -h, camera.near, camera.far);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
 function stepFly() {
   if (!fly) return;
@@ -3183,12 +3201,9 @@ function stepFly() {
     const f = fly.f0 + (fly.f1 - fly.f0) * s, h = la * tanH(fly.f0) + (lb * tanH(fly.f1) - la * tanH(fly.f0)) * s;
     const q = new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
     camera.position.copy(a).normalize().applyQuaternion(new THREE.Quaternion().slerp(q, s)).multiplyScalar(h / tanH(f)).add(controls.target);
-    if (fly.f0 !== fly.f1) {
-      const k = tanH(FOV) / tanH(f); // near/far mitwachsen lassen: gleiche Tiefenauflösung, nichts wird abgeschnitten
-      Object.assign(camera, { fov: f, near: 0.1 * k, far: 5000 * k }); camera.updateProjectionMatrix();
-    }
+    if (fly.f0 !== fly.f1) setFov(t === 1 ? fly.f1 : f);
   }
-  if (t === 1) { fly = null; if (sun.castShadow !== (camera.fov === FOV)) { sun.castShadow = camera.fov === FOV; sun.shadow.needsUpdate = true; } } // flach wie Shapr3D: ohne Schatten
+  if (t === 1) fly = null;
 }
 // Ansicht um die Hochachse drehen; in der Draufsicht dreht das den Grundriss im Bild
 function turnView(dir: number) {
@@ -3217,16 +3232,20 @@ function snapView() {
   showHint('Flach auf die nächste Seite · Leertaste = zurück zur vorigen Ansicht');
   return true;
 }
-// Senkrecht auf das Flächenraster schauen, so dass es das Bild füllt; nochmal = zurück zur Ansicht davor.
-// shortcut: Kamera-oben bleibt die Welt-Hochachse (OrbitControls verträgt kein anderes up); bei liegenden Flächen
-// ist „oben“ daher −z wie in der Draufsicht, nicht die y-Achse der Skizze
+// Senkrecht auf das Flächenraster schauen, so dass es das Bild füllt; nochmal = zurück zur Ansicht davor; Drehen = zurück zu 45°.
+// Kamera-oben bleibt die Welt-Hochachse (OrbitControls verträgt kein anderes up); bei liegenden Flächen legt der winzige
+// waagrechte Versatz fest, was im Bild oben ist
+let flatDir: THREE.Vector3 | null = null;
 function lookAtWork() {
   if (!workHit || !workView) return;
   if (lookBack) { flyTo(lookBack.p, lookBack.t, FOV); lookBack = null; return showHint('Zurück zur vorigen Ansicht · Leertaste = wieder draufschauen'); }
   lookBack = { p: camera.position.clone(), t: controls.target.clone() };
   const n = workHit.n.clone();
   if (camera.position.clone().sub(workView.c).dot(n) < 0) n.negate(); // Skizze von unten gesehen: von unten draufschauen
-  const dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 1e-4).normalize() : n;
+  // Versatz auf der Seite, von der man kommt, eingerastet auf ±x/±z: kleinste Drehung im Bild, Achsen bleiben gerade (Gleichstand = von vorne)
+  const o = camera.position.clone().sub(controls.target), h = Math.abs(o.z) >= Math.abs(o.x) ? new THREE.Vector3(0, 0, Math.sign(o.z) || 1) : new THREE.Vector3(Math.sign(o.x), 0, 0);
+  const dir = Math.abs(n.y) > 0.999 ? new THREE.Vector3(0, Math.sign(n.y), 0).addScaledVector(h, 1e-4).normalize() : n;
+  flatDir = dir;
   flyTo(workView.c.clone().addScaledVector(dir, workView.r / Math.sin(FLAT * Math.PI / 360) * 1.05), workView.c.clone(), FLAT);
   showHint('Senkrecht auf die Fläche · Leertaste = zurück zur vorigen Ansicht');
 }
@@ -3522,6 +3541,13 @@ for (const t of ['pointerdown', 'pointerup', 'click', 'keydown', 'keyup', 'input
 worker.addEventListener('message', wakeShadow);
 gizmo.addEventListener('objectChange', wakeShadow);
 controls.addEventListener('change', wake);
+let orbiting = false; // nur echtes Drehen zählt, nicht der Nachlauf (Damping) eines früheren Drehens nach einem Kameraflug
+controls.addEventListener('start', () => orbiting = true);
+controls.addEventListener('end', () => orbiting = false);
+controls.addEventListener('change', () => { // gedreht statt nur verschoben/gezoomt: flache Ansicht verlassen wie Shapr3D
+  if (!orbiting || fly || camera.fov === FOV || !flatDir || camera.position.clone().sub(controls.target).normalize().dot(flatDir) > 0.99999) return;
+  unflat(true); lookBack = null; flatDir = null;
+});
 wakeShadow();
 renderer.setAnimationLoop(now => {
   stepFly();
@@ -3530,6 +3556,7 @@ renderer.setAnimationLoop(now => {
   if (!fly && !wheel.left && now > awake && now - lastDraw < 1000) return;
   lastDraw = now;
   scaleHandles();
+  orthoProjection();
   renderer.render(scene, camera);
   renderCube();
   updateScale();
