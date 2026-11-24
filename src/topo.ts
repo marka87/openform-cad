@@ -315,7 +315,7 @@ function carry(b: any, named: Named, extra: [any, Origin][] = []): [Shape3D, Nam
 
 // Rundung/Fase an den Kanten (wie replicad, aber mit Historie);
 // die neue Fläche heißt nach dem Feature, die Nachbarflächen behalten ihren Namen
-export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra: Partial<Origin> = {}): [Shape3D, Named] {
+export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra: Partial<Origin> | Partial<Origin>[] = {}): [Shape3D, Named] { // extra je Kante: Muster-Kopien in einem Aufruf
   const oc = getOC() as any;
   const b = type === 'fillet' ? new oc.BRepFilletAPI_MakeFillet(A.wrapped, oc.ChFi3d_FilletShape.ChFi3d_Rational) : new oc.BRepFilletAPI_MakeChamfer(A.wrapped);
   try {
@@ -323,7 +323,7 @@ export function edgeOp(type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: N
     b.Build(new oc.Message_ProgressRange());
     if (!b.IsDone()) throw new Error(type === 'fillet' ? 'Rundung fehlgeschlagen' : 'Fase fehlgeschlagen');
     if (!isValid(b.Shape())) throw new Error(`${type === 'fillet' ? 'Rundung' : 'Fase'} ergibt keinen gültigen Körper (Maß zu groß oder an einer Bohrung?)`); // sonst Netz mit Löchern, STL und 3MF unbrauchbar
-    const gen = edges.flatMap(e => list(b.Generated(e.wrapped))).map(t => [t, { f: id, tag: type, ...extra }] as [any, Origin]);
+    const gen = edges.flatMap((e, i) => list(b.Generated(e.wrapped)).map(t => [t, { f: id, tag: type, ...Array.isArray(extra) ? extra[i] : extra }] as [any, Origin]));
     const out = carry(b, nA, gen);
     gen.forEach(([t]) => t.delete());
     return out;

@@ -329,6 +329,28 @@ test('Gescheiterte Rundung lässt den Körper davor unversehrt; Schale mit unend
   expect(measureVolume(shell.body!)).toBeLessThan(40000);
 });
 
+test('Viele gescheiterte Rundungen: Rechenzeit verdoppelt sich nicht je Rundung, Körper bleibt heil (Audit 1)', () => {
+  const fs: Feature[] = [rect(GROUND, [0, 0], [60, 40], 1, 15, false), circle(top(15), [0, 26], 8, 2, 8)];
+  for (let i = 0; i < 8; i++) fs.push(edge('fillet', 3 + i, [0, 15, -20], [0, 0, 1], 5));
+  const t = performance.now(), r = buildBody(fs);
+  expect(performance.now() - t).toBeLessThan(2000);                     // vorher 7,6 s (2⁸ Neurechnungen)
+  expect(r.errors.size).toBe(8);
+  expect(invalidBodies(r.bodies)).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(36000 + Math.PI * 64 * 8, 1);
+});
+
+test('Sieb: Kreis-Muster gerundeter Bohrungen in einem Schnitt, jede Kopie gerundet (Audit 5)', () => {
+  const plate = rect(GROUND, [0, 0], [60, 40], 1, 6, false), hole = { ...circle(top(6), [18, 20], 3, 2, -6), thru: true };
+  const fil0 = edge('fillet', 3, [21, 6, -20], [0, 0, 1], 0.5), fil = { ...fil0, ...buildBody([plate, hole, fil0]).fixes.get(3) } as EdgeOp; // Kantenbezug, ohne den geht die Rundung nicht mit
+  const one = settle([plate, hole, fil]).r, loss = 60 * 40 * 6 - measureVolume(one.body!);
+  const p: Pattern = { id: 4, type: 'pattern', src: [2], a: { ax: [0, 1, 0], n: 6, d: 0 }, rot: { ax: [0, 1, 0], c: [30, 6, -20] } };
+  const r = buildBody([plate, hole, fil, p]);
+  expect([...r.errors]).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(60 * 40 * 6 - 6 * loss, 1);
+  expect(new Set(r.names.get(1)!.filter(x => x.o.f === 3 && x.o.at).map(x => x.o.at)).size).toBe(5); // Rundung je Kopie, eindeutig benannt
+  expect(invalidBodies(r.bodies)).toEqual([]);
+});
+
 test('Bohrung durch alles bleibt durchgehend, wenn das Teil dicker wird; Muster-Kopien auch', () => {
   const plate = (d: number) => rect(GROUND, [0, 0], [60, 40], 1, d, false), hole = (thru: boolean) => ({ ...circle(top(6), [10, 20], 3, 2, -6), thru });
   const p: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 20 } };

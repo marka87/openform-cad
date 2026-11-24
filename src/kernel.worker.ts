@@ -17,7 +17,7 @@ export type ToWorker =
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
-  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null; invalid?: number[] }
+  | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null; invalid?: number[]; error?: string }
   | { type: 'error'; message: string }
   | { type: 'checked'; errors: [number, string][] }
   | { type: 'maxEdge'; id: number; r: number | null }
@@ -52,14 +52,15 @@ const free = (r: { body: Shape3D | null; bodies: Map<number, Shape3D> }) => {
   for (const s of r.bodies.values()) s.delete();
 };
 
-let buildCache = newCache();
+let buildCache = newCache(), lastBuild: ToWorker | null = null;
 // Jeder Auftrag bekommt eine Antwort, auch wenn er scheitert: sonst wartet main.ts ewig (busy) und rechnet nie mehr neu (A2)
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
   try { await handle(data); } catch (e) {
     let why = e instanceof Error ? e.message : String(e);
     if (ocDead(why)) { // einmal mit frischem Kern wiederholen; stürzt er wieder ab, gilt der normale Fehlerweg
-      try { await restart(); return await handle(data); } catch (e2) { e = e2; why = e2 instanceof Error ? e2.message : String(e2); }
+      // erst den letzten Stand neu bauen: Export, Blatt und Projektion brauchen die Körper, die mit dem alten Kern weg sind
+      try { await restart(); if (data.type !== 'build' && lastBuild) await handle(lastBuild); return await handle(data); } catch (e2) { e = e2; why = e2 instanceof Error ? e2.message : String(e2); }
     }
     console.warn('Auftrag fehlgeschlagen', data.type, e);
     if (data.type === 'build') {
@@ -70,11 +71,12 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
     } else if (data.type === 'check') post({ type: 'checked', errors: [] });
     else if (data.type === 'project') post({ type: 'projected', lines: [] });
     else if (data.type === 'maxEdge') post({ type: 'maxEdge', id: data.id, r: null });
-    else post({ type: 'export', format: data.type === 'sheet' ? 'svg' : data.format, blob: null });
+    else post({ type: 'export', format: data.type === 'sheet' ? 'svg' : data.format, blob: null, error: why }); // Grund mitschicken, sonst meldet main.ts „noch kein Körper“
   }
 };
 async function handle(data: ToWorker) {
   if (data.type === 'build') {
+    lastBuild = data;
     for (const f of data.features) {
       if (f.type !== 'import') continue;
       if (imports.has(f.id) && importText.get(f.id) === f.step) continue;

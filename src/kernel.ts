@@ -296,14 +296,16 @@ export function maxEdgeSize(features: Feature[], id: number, imports = new Map<n
   } finally { dropCache(c); }
   return lo >= 0.1 ? Math.floor(lo * 10) / 10 : Math.floor(lo * 100) / 100;
 }
-export function buildBody(features: Feature[], imports = new Map<number, Shape3D>(), cache?: BuildCache) {
+export function buildBody(features: Feature[], imports = new Map<number, Shape3D>(), cache?: BuildCache, known = new Set<number>()) {
   const bodies = new Map<number, Shape3D>(), names = new Map<number, Named>(), alias = new Map<number, number>(), failed: number[] = [];
   const errors = new Map<number, string>(), fixes = new Map<number, Record<string, unknown>>(), unsure: number[] = [], confirm = new Map<number, Record<string, unknown>>(), moved = new Map<number, Extrude>(); // moved: mitgewanderte Skizzen
-  // Eine gescheiterte Rundung/Fase kann den Ausgangskörper in OCCT beschädigen (Flächen fehlen danach): dann den Stand davor neu rechnen
-  const safeEdgeOp = (owner: Feature, k: number, type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra?: Partial<Origin>) => {
+  // Eine gescheiterte Rundung/Fase kann den Ausgangskörper in OCCT beschädigen (Flächen fehlen danach): dann den Stand davor neu rechnen.
+  // Dabei die schon gescheiterten Schritte nicht noch einmal versuchen (known): sonst rechnet jede davon ihrerseits neu, je eine Verdopplung
+  const safeEdgeOp = (owner: Feature, k: number, type: 'fillet' | 'chamfer', id: number, A: Shape3D, nA: Named, edges: Edge[], r: number, extra?: Partial<Origin> | Partial<Origin>[]) => {
+    if (known.has(owner.id)) throw new Error('scheitert schon im vollen Lauf');
     try { return edgeOp(type, id, A, nA, edges, r, extra); }
     catch (e) {
-      const prev = buildBody(features.slice(0, features.indexOf(owner)), imports), kept = prev.bodies.get(k);
+      const prev = buildBody(features.slice(0, features.indexOf(owner)), imports, undefined, new Set([...known, ...failed])), kept = prev.bodies.get(k);
       if (prev.body && prev.bodies.size > 1) prev.body.delete();
       for (const [n, b] of prev.bodies) if (n !== k) b.delete();
       A.delete();
@@ -433,12 +435,17 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           // Rundungen/Fasen an der Quelle (vor dem Muster, gelungen) gehen mit: ihr Kantenbezug auf die Kopie umgeschrieben
           const ops = features.slice(0, here).filter((e): e is EdgeOp => (e.type === 'fillet' || e.type === 'chamfer') && !e.hidden && !!e.edge
             && !failed.includes(e.id) && (e.edge.a.f === id || e.edge.b.f === id));
-          // Ohne mitkopierte Rundungen und ohne Überlappung: alle Kopien in einem Schnitt, sonst wächst die Rechenzeit quadratisch (und 300 Löcher sprengen den Speicher)
+          // Kante der Quell-Rundung auf der Kopie P (Bezug auf die Kopie umgeschrieben, Lage mitbewegt)
+          const copyEdge = (e: EdgeOp, P: ReturnType<typeof patternCopies>[number], at: string, nm: Named) => {
+            const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o, fp = e.edge!.fp;
+            return anchorEdges({ at: P.pt(e.at), edge: { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } } }, b!, nm).edges;
+          };
+          // Ohne Überlappung: alle Kopien in einem Schnitt und jede Rundung in einem Aufruf über alle Kopien, sonst wächst die Rechenzeit quadratisch (und 300 Löcher sprengen den Speicher)
           const all = patternCopies(f);
-          if (b && !ops.length && all.length > 1) {
+          if (b && all.length > 1) {
             const parts = all.map(P => {
               const at = `${id}:${P.key}`, c = P.copy(S, f.id), cd = c.thru && isCut(c) ? thruDepth(c, b!) : 0, s = solidOf(cd ? { ...c, d: -cd - 1 } : c);
-              return { at, c, s, box: s.boundingBox.bounds, nS: nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } })) };
+              return { P, at, c, s, box: s.boundingBox.bounds, nS: nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } })) };
             });
             const apart = parts.every((p, i) => parts.slice(i + 1).every(q => [0, 1, 2].some(k => p.box[1][k] < q.box[0][k] - 1e-6 || q.box[1][k] < p.box[0][k] - 1e-6)));
             if (apart) {
@@ -446,7 +453,12 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
               put(...boolean(cut ? 'cut' : 'fuse', b, names.get(kk) ?? [], tool, parts.flatMap(p => p.nS)));
               tool.delete();
               total += parts.length;
-              if (cut) missed += parts.filter(p => !(names.get(kk) ?? []).some(n => n.o.f === f.id && n.o.at === p.at)).length;
+              const hit = parts.filter(p => (names.get(kk) ?? []).some(n => n.o.f === f.id && n.o.at === p.at));
+              if (cut) missed += parts.length - hit.length;
+              for (const e of hit.length ? ops : []) { // Kopien ohne Treffer haben keine Kante
+                const nm = names.get(kk) ?? [], got = hit.map(p => copyEdge(e, p.P, p.at, nm));
+                put(...safeEdgeOp(f, kk, e.type, e.id, b!, nm, got.flat(), e.r, got.flatMap((es, i) => es.map(() => ({ at: hit[i].at })))));
+              }
               continue;
             }
             parts.forEach(p => p.s.delete());
@@ -463,11 +475,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
               s.delete();
               if (isCut(c) && !(names.get(kk) ?? []).some(n => n.o.f === f.id && n.o.at === at)) missed++;
             }
-            const re = (o: Origin): Origin => o.f === id ? { ...o, f: f.id, at } : o;
-            for (const e of ops) {
-              const fp = e.edge!.fp, nm = names.get(kk) ?? [], edge = { a: re(e.edge!.a), b: re(e.edge!.b), fp: { ...fp, c: P.pt(fp.c), ...fp.n && { n: P.dir(fp.n) } } };
-              put(...safeEdgeOp(f, kk, e.type, e.id, b!, nm, anchorEdges({ at: P.pt(e.at), edge }, b!, nm).edges, e.r, { at }));
-            }
+            for (const e of ops) { const nm = names.get(kk) ?? []; put(...safeEdgeOp(f, kk, e.type, e.id, b!, nm, copyEdge(e, P, at, nm), e.r, { at })); }
           }
         }
         // Kopien neben dem Körper schneiden nichts: nie still; die treffenden bleiben, deshalb nur Meldung, kein Abbruch

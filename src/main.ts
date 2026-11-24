@@ -209,7 +209,8 @@ function add(...fs: Feature[]) { if (roll === null) features.push(...fs); else {
 let sheetDims: Dim[] = []; // Maße der Zeichnung (Maß-Editor), gehören zum Modell
 let sheetX: SheetExtra = {}; // Schnitt und Einzelheit der Zeichnung (F8), gehören zum Modell
 const snapshot = () => JSON.stringify({ features, nextId, meta, roll, dims: sheetDims, ...Object.keys(params).length && { params }, ...Object.keys(sheetX).length && { sheet: sheetX } });
-function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); redoStack.length = 0; }
+// Höchstens 100 Schritte zurück: jeder Eintrag ist das ganze Modell (mit eingebetteter STEP-Datei schnell über 0,5 MB)
+function pushHistory() { undoStack.push({ s: snapshot(), path: filePath }); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
 function load(s: string) { const d = parseModel(s); features = d.features; nextId = d.nextId; meta = d.meta; roll = d.roll; sheetDims = d.dims; sheetX = d.sheet; params = d.params; renderParams(); }
 function restore(s: string) { load(s); selId = null; refresh(); }
 function undo() { if (undoStack.length) { redoStack.push({ s: snapshot(), path: filePath }); step(undoStack.pop()!); } }
@@ -415,7 +416,7 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   else if (data.blob && data.format === 'dxf') data.blob.text().then(t => download('zeichnung.dxf', new Blob([svgToDXF(t)], { type: 'application/dxf' })));
   else if (data.blob && data.format === 'svg' && printNext) { printNext = false; data.blob.text().then(printSVG); }
   else if (data.blob) download(data.format === 'svg' ? 'zeichnung.svg' : `modell.${data.format}`, data.blob);
-  else alert('Noch kein Körper vorhanden.');
+  else alert(data.error ? `Export fehlgeschlagen: ${data.error}` : 'Noch kein Körper vorhanden.');
 };
 
 function rebuild() {
