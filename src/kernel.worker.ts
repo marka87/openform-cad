@@ -27,7 +27,8 @@ export type FromWorker =
 // faces/edges: je Fläche bzw. Kante [Start, Anzahl] in Dreiecks-Indizes bzw. Linienpunkten, zum Hervorheben
 export type BodyMesh = { body: number; volume: number; vertices: Float32Array; normals: Float32Array; triangles: Uint32Array; lines: Float32Array; faces: Int32Array; edges: Int32Array };
 const post = (m: FromWorker, transfer: Transferable[] = []) => postMessage(m, { transfer });
-const MESH = { tolerance: 0.05, angularTolerance: 0.2 };
+// Anzeige-Netz (Export hat eigene Toleranz): 0,3 rad statt 0,2 halbiert die Dreiecke an kleinen Rundungen und Bohrungen (Sieb: 100k → 52k, Netz 0,67 → 0,27 s)
+const MESH = { tolerance: 0.05, angularTolerance: 0.3 };
 let body: Shape3D | null = null, bodies = new Map<number, Shape3D>(), names = new Map<number, Named>();
 const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit sie nicht bei jedem Ziehen neu geparst werden
 const importText = new Map<number, string>(); // STEP-Text je Import: gleiche Nummer, anderer Text (andere Datei geöffnet) = neu einlesen (A6)

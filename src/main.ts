@@ -364,16 +364,21 @@ function exportNow(m: ToWorker) {
 const hiddenBodies = () => bodyIds.filter(b => meta[b]?.hidden); // ausgeblendete Körper: nicht in Export und Zeichnung
 let busy = false, pending = false;
 let pathPreview: Sweep | null = null; // Zug, dessen Pfad gerade gezeichnet wird: wird zur Vorschau mitberechnet
+let sentKey = ''; // zuletzt gerechnete Schritte: Auswahl, Ansicht, Baum ändern nichts am Körper
 function requestBuild() {
   if (!ready || busy) { pending = true; return; }
-  busy = true; pending = false;
-  send({ type: 'build', features: pathPreview ? [...live(), pathPreview] : live() });
+  pending = false;
+  const fs = pathPreview ? [...live(), pathPreview] : live(), key = JSON.stringify(fs);
+  if (key === sentKey) return applyDisplay(); // sonst vernetzt der Kern bei jedem Klick den ganzen Körper neu (Sieb: ~1 s); Hervorhebung trotzdem nachziehen
+  busy = true; sentKey = key;
+  send({ type: 'build', features: fs });
 }
 worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
   if (data.type === 'ready') { ready = true; setTool(tool); requestBuild(); }
   else if (data.type === 'error') $('hint').textContent = 'CAD-Kern konnte nicht geladen werden: ' + data.message;
   else if (data.type === 'built') {
     measurePtsCache = null;
+    if (!data.meshes.length) sentKey = ''; // gescheitert oder leer: nächster Anlass rechnet wieder
     disposeGroup(bodyGroup);
     for (const m of data.meshes) bodyGroup.add(bodyMesh(m));
     bodyGroup.updateMatrixWorld(true);
