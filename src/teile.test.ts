@@ -367,6 +367,19 @@ test('Sieb mit 101 gerundeten Löchern in 6 Kreis-Mustern rechnet zügig (T15)',
   expect(measureVolume(r.body!)).toBeCloseTo(20453.937, 2);               // gleiches Ergebnis wie vorher
 });
 
+test('Rundung am Nahtpunkt eines Lochs angeklickt: bekommt Bezug, Platte dicker machen geht (T14)', () => {
+  const make = (at: Vec, dir: Vec) => {
+    const plate = { ...circle(GROUND, [0, 0], 50, 1, 3), onFace: false }, hole = { ...circle(top(3), [16, 0], 1.8, 2, -3), thru: true };
+    const p: Pattern = { id: 4, type: 'pattern', src: [2], a: { ax: [0, 1, 0], n: 6, d: 0 }, rot: { ax: [0, 1, 0], c: [0, 3, 0] } };
+    const fs = settle([plate, hole, edge('fillet', 3, at, dir, 0.5)]).fs;
+    expect((fs[2] as EdgeOp).edge).toBeDefined();                         // vorher: Naht mitgefunden → kein Bezug, Naht mitgerundet
+    return settle([...fs, p].map(f => f.id === 1 ? { ...f, d: 4 } as Feature : f)).r;
+  };
+  const naht = make([17.8, 3, 0], [0, 0, 1]), daneben = make([16 + 1.8 * Math.SQRT1_2, 3, -1.8 * Math.SQRT1_2], [Math.SQRT1_2, 0, Math.SQRT1_2]);
+  expect([...naht.errors]).toEqual([]);
+  expect(measureVolume(naht.body!)).toBeCloseTo(measureVolume(daneben.body!), 3);
+});
+
 test('Bohrung durch alles bleibt durchgehend, wenn das Teil dicker wird; Muster-Kopien auch', () => {
   const plate = (d: number) => rect(GROUND, [0, 0], [60, 40], 1, d, false), hole = (thru: boolean) => ({ ...circle(top(6), [10, 20], 3, 2, -6), thru });
   const p: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 20 } };
