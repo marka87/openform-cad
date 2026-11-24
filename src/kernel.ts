@@ -260,9 +260,10 @@ export function projectBody(s: Shape3D, named: Named, pl: Frame) {
   return out;
 }
 
-// Tiefe von der Skizzenebene bis zum entferntesten Punkt der Körperhülle gegen die Normale
-function thruDepth(f: Extrude, b: Shape3D) {
-  const [lo, hi] = b.boundingBox.bounds, dot = (x: number, y: number, z: number) => x * f.n[0] + y * f.n[1] + z * f.n[2];
+// Tiefe von der Skizzenebene bis zum entferntesten Punkt der Körperhülle (bounds = b.boundingBox.bounds) gegen die Normale.
+// Hülle beim Aufrufer holen: bei gerundeten Körpern teuer, ein Muster braucht sie nur einmal (Sieb: 3,2 s für 101 Kopien)
+function thruDepth(f: Extrude, [lo, hi]: number[][]) {
+  const dot = (x: number, y: number, z: number) => x * f.n[0] + y * f.n[1] + z * f.n[2];
   const min = Math.min(...[lo[0], hi[0]].flatMap(x => [lo[1], hi[1]].flatMap(y => [lo[2], hi[2]].map(z => dot(x, y, z)))));
   return Math.round(Math.max(0, dot(f.o[0], f.o[1], f.o[2]) - min) * 1e6) / 1e6;
 }
@@ -443,8 +444,9 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
           // Ohne Überlappung: alle Kopien in einem Schnitt und jede Rundung in einem Aufruf über alle Kopien, sonst wächst die Rechenzeit quadratisch (und 300 Löcher sprengen den Speicher)
           const all = patternCopies(f);
           if (b && all.length > 1) {
+            const bb = b.boundingBox.bounds; // Körper ändert sich erst beim Schnitt unten: Hülle einmal für alle Kopien
             const parts = all.map(P => {
-              const at = `${id}:${P.key}`, c = P.copy(S, f.id), cd = c.thru && isCut(c) ? thruDepth(c, b!) : 0, s = solidOf(cd ? { ...c, d: -cd - 1 } : c);
+              const at = `${id}:${P.key}`, c = P.copy(S, f.id), cd = c.thru && isCut(c) ? thruDepth(c, bb) : 0, s = solidOf(cd ? { ...c, d: -cd - 1 } : c);
               return { P, at, c, s, box: s.boundingBox.bounds, nS: nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } })) };
             });
             const apart = parts.every((p, i) => parts.slice(i + 1).every(q => [0, 1, 2].some(k => p.box[1][k] < q.box[0][k] - 1e-6 || q.box[1][k] < p.box[0][k] - 1e-6)));
@@ -467,7 +469,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
             const at = `${id}:${P.key}`, c = P.copy(S, f.id);
             total++;
             if (isCut(c) && !b) { missed++; continue; }
-            const cd = c.thru && b && isCut(c) ? thruDepth(c, b) : 0;
+            const cd = c.thru && b && isCut(c) ? thruDepth(c, b.boundingBox.bounds) : 0;
             const s = solidOf(cd ? { ...c, d: -cd - 1 } : c), nS = nameSolid(c, s).map(x => ({ face: x.face, o: { ...x.o, at } }));
             if (!b) { b = s; bodies.set(kk, s); names.set(kk, nS); }
             else {
@@ -529,7 +531,7 @@ export function buildBody(features: Feature[], imports = new Map<number, Shape3D
         if (g.type === 'line' && g.rib && body) { s = ribSolid(g, body); nS = s.faces.map((face, i) => ({ face, o: { f: f.id, tag: 'seg' as const, i } })); }
         else if (isFlat(g) || (isCut(g) && !body)) continue;
         else {
-        const depth = g.thru && body && isCut(g) ? thruDepth(g, body) : 0;
+        const depth = g.thru && body && isCut(g) ? thruDepth(g, body.boundingBox.bounds) : 0;
         if (depth && Math.abs(depth + g.d) > 1e-6) anchor(f.id, { sure: true, patch: { d: -depth } });
         s = solidOf(depth ? { ...g, d: -depth - 1 } : g); // 1 mm überstehen, sonst bleibt am Boden eine Haut
         nS = nameSolid(g, s);

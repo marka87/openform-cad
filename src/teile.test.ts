@@ -351,6 +351,22 @@ test('Sieb: Kreis-Muster gerundeter Bohrungen in einem Schnitt, jede Kopie gerun
   expect(invalidBodies(r.bodies)).toEqual([]);
 });
 
+test('Sieb mit 101 gerundeten Löchern in 6 Kreis-Mustern rechnet zügig (T15)', () => {
+  let fs: Feature[] = [{ ...circle(GROUND, [0, 0], 50, 1, 3), onFace: false }], id = 2;
+  for (const [R, n] of [[0, 1], [8, 8], [16, 14], [24, 20], [32, 26], [42, 32]]) {
+    const hole = { ...circle(top(3), [R, 0], 1.8, id, -3), thru: true }, fil0 = edge('fillet', id + 1, [R + 1.8, 3, 0], [0, 0, 1], 0.5);
+    const fx = buildBody([...fs, hole, fil0]).fixes;
+    fs = [...fs, { ...hole, ...fx.get(id) } as Extrude, { ...fil0, ...fx.get(id + 1) } as EdgeOp];
+    if (n > 1) fs.push({ id: id + 2, type: 'pattern', src: [id], a: { ax: [0, 1, 0], n, d: 0 }, rot: { ax: [0, 1, 0], c: [0, 3, 0] } } as Pattern);
+    id += 3;
+  }
+  buildBody(fs);                                                          // Aufwärmen
+  const t = performance.now(), r = buildBody(fs);
+  expect(performance.now() - t).toBeLessThan(2000);                       // vorher 2,9 s: Körperhülle je Kopie neu berechnet
+  expect([...r.errors]).toEqual([]);
+  expect(measureVolume(r.body!)).toBeCloseTo(20453.937, 2);               // gleiches Ergebnis wie vorher
+});
+
 test('Bohrung durch alles bleibt durchgehend, wenn das Teil dicker wird; Muster-Kopien auch', () => {
   const plate = (d: number) => rect(GROUND, [0, 0], [60, 40], 1, d, false), hole = (thru: boolean) => ({ ...circle(top(6), [10, 20], 3, 2, -6), thru });
   const p: Pattern = { id: 3, type: 'pattern', src: [2], a: { ax: [1, 0, 0], n: 3, d: 20 } };
