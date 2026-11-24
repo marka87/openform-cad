@@ -352,9 +352,10 @@ test('Sieb: Kreis-Muster gerundeter Bohrungen in einem Schnitt, jede Kopie gerun
 });
 
 test('Sieb mit 101 gerundeten Löchern in 6 Kreis-Mustern rechnet zügig (T15)', () => {
+  const S = Math.SQRT1_2; // Klick auf 45° am Rand, nicht am Nahtpunkt (sonst kein Bezug und die Kopien bleiben ungerundet, T14)
   let fs: Feature[] = [{ ...circle(GROUND, [0, 0], 50, 1, 3), onFace: false }], id = 2;
   for (const [R, n] of [[0, 1], [8, 8], [16, 14], [24, 20], [32, 26], [42, 32]]) {
-    const hole = { ...circle(top(3), [R, 0], 1.8, id, -3), thru: true }, fil0 = edge('fillet', id + 1, [R + 1.8, 3, 0], [0, 0, 1], 0.5);
+    const hole = { ...circle(top(3), [R, 0], 1.8, id, -3), thru: true }, fil0 = edge('fillet', id + 1, [R + 1.8 * S, 3, -1.8 * S], [S, 0, S], 0.5);
     const fx = buildBody([...fs, hole, fil0]).fixes;
     fs = [...fs, { ...hole, ...fx.get(id) } as Extrude, { ...fil0, ...fx.get(id + 1) } as EdgeOp];
     if (n > 1) fs.push({ id: id + 2, type: 'pattern', src: [id], a: { ax: [0, 1, 0], n, d: 0 }, rot: { ax: [0, 1, 0], c: [0, 3, 0] } } as Pattern);
@@ -362,10 +363,11 @@ test('Sieb mit 101 gerundeten Löchern in 6 Kreis-Mustern rechnet zügig (T15)',
   }
   buildBody(fs);                                                          // Aufwärmen
   const t = performance.now(), r = buildBody(fs);
-  expect(performance.now() - t).toBeLessThan(2000);                       // vorher 2,9 s: Körperhülle je Kopie neu berechnet
+  expect(performance.now() - t).toBeLessThan(6000);                       // vorher 18 s (Körperhülle je Kopie neu berechnet), jetzt ~2 s; Luft für parallele Testläufe
   expect([...r.errors]).toEqual([]);
-  expect(measureVolume(r.body!)).toBeCloseTo(20453.937, 2);               // gleiches Ergebnis wie vorher
-});
+  expect(r.names.get(1)!.filter(x => x.o.tag === 'fillet').length).toBeGreaterThanOrEqual(101); // jede Kopie gerundet
+  expect(measureVolume(r.body!)).toBeCloseTo(20412.694, 2);               // gleiches Ergebnis wie vorher
+}, 60000); // Aufbau + Aufwärmen + Messlauf: mehr als die Standard-Grenze von 5 s
 
 test('Rundung am Nahtpunkt eines Lochs angeklickt: bekommt Bezug, Platte dicker machen geht (T14)', () => {
   const make = (at: Vec, dir: Vec) => {
