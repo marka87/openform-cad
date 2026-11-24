@@ -3,7 +3,7 @@ import opencascade from 'replicad-opencascadejs';
 import wasmUrl from 'replicad-opencascadejs/wasm?url';
 import { loadFont, makeCompound, measureArea, measureVolume, setOC, type Shape3D } from 'replicad';
 import fontUrl from '../vendor/fonts/DejaVuSans.ttf?url';
-import { shownEdges, newCache, dropCache, buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo, type SheetLayout , invalidBodies } from './kernel';
+import { shownEdges, newCache, dropCache, buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, to3MF, resolveDims, sheetCands, sheetSVG, type Cands, type SheetInfo, type SheetLayout , invalidBodies, ocDead } from './kernel';
 import type { Dim, Feature, Frame } from './model';
 import type { EdgeRef, Named } from './topo';
 
@@ -35,11 +35,17 @@ const imports = new Map<number, Shape3D>(); // eingelesene STEP-Dateien, damit s
 const importText = new Map<number, string>(); // STEP-Text je Import: gleiche Nummer, anderer Text (andere Datei geöffnet) = neu einlesen (A6)
 
 // Schrift für Text-Features gleich mitladen; fehlt sie, schlagen nur Texte sichtbar fehl
-const ready = opencascade({ locateFile: () => wasmUrl }).then(async oc => {
-  setOC(oc);
+const boot = () => opencascade({ locateFile: () => wasmUrl }).then(oc => setOC(oc));
+const ready = boot().then(async () => {
   await loadFont(fontUrl).catch(e => console.warn('Schrift nicht geladen', e));
   post({ type: 'ready' });
 }, e => post({ type: 'error', message: String(e) }));
+// Neuer Kern statt des abgestürzten; alte Formen nicht mehr anfassen (gehören zur toten Instanz), nur loslassen
+async function restart() {
+  post({ type: 'notice', text: 'CAD-Kern war abgestürzt und wurde neu gestartet · Modell wird neu gerechnet' });
+  body = null; bodies = new Map(); names = new Map(); buildCache = newCache(); imports.clear(); importText.clear();
+  await boot();
+}
 
 const free = (r: { body: Shape3D | null; bodies: Map<number, Shape3D> }) => {
   if (r.body && r.bodies.size > 1) r.body.delete();
@@ -51,10 +57,13 @@ let buildCache = newCache();
 onmessage = async ({ data }: MessageEvent<ToWorker>) => {
   await ready;
   try { await handle(data); } catch (e) {
+    let why = e instanceof Error ? e.message : String(e);
+    if (ocDead(why)) { // einmal mit frischem Kern wiederholen; stürzt er wieder ab, gilt der normale Fehlerweg
+      try { await restart(); return await handle(data); } catch (e2) { e = e2; why = e2 instanceof Error ? e2.message : String(e2); }
+    }
     console.warn('Auftrag fehlgeschlagen', data.type, e);
-    const why = e instanceof Error ? e.message : String(e);
     if (data.type === 'build') {
-      try { free({ body, bodies }); dropCache(buildCache); } catch {} // Körper und Zwischenstände freigeben, sonst wächst der WASM-Speicher bei jedem Fehlschlag
+      if (!ocDead(why)) try { free({ body, bodies }); dropCache(buildCache); } catch {} // Körper und Zwischenstände freigeben, sonst wächst der WASM-Speicher bei jedem Fehlschlag
       body = null; bodies = new Map(); names = new Map(); buildCache = newCache(); // Stand unklar: nächster Lauf rechnet alles neu
       post({ type: 'notice', text: `Neurechnen fehlgeschlagen: ${why}` });
       post({ type: 'built', failed: [], errors: [], unsure: [], fixes: [], confirm: [], volume: 0, area: 0, meshes: [] });
@@ -78,6 +87,8 @@ async function handle(data: ToWorker) {
     for (const s of bodies.values()) s.delete();
     body = null; bodies = new Map(); // gelöscht: scheitert der Lauf unten, darf nichts mehr darauf zugreifen
     const r = buildBody(data.features, imports, buildCache);
+    const dead = [...r.errors].find(([, m]) => ocDead(m)); // Schritte fangen ihre Fehler selbst: Absturz hier erkennen, sonst wird nie neu gestartet
+    if (dead) throw new Error(dead[1]);
     body = r.body; bodies = r.bodies; names = r.names;
     const meshes: BodyMesh[] = [...bodies].map(([id, s]) => {
       const m = s.mesh(MESH), e = shownEdges(s, MESH);

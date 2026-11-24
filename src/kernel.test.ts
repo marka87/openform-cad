@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
-import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF, type SheetLayout } from './kernel';
+import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF, type SheetLayout, ocDead } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
 import { applyCalls } from './aiTools';
 import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, syncRegions, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
@@ -1224,4 +1224,12 @@ test('Datei öffnen (A5): alte Dateien gehen auf, fremde und präparierte werden
   expect(() => parseModel(JSON.stringify({ features: [{ ...rect, id: '<img src=x>' }] }))).toThrow('Schritt 1: ohne Nummer');
   expect(() => parseModel(JSON.stringify({ features: [rect, { id: 4, type: 'pattern', src: ['<b>'] }] }))).toThrow('Schritt 2: Quelle');
   expect(() => parseModel(JSON.stringify({ features: [{ ...rect, body: '"><script>' }] }))).toThrow('Bezug body');
+});
+
+test('Absturz des Kerns erkennen (Neustart), normale Schrittfehler nicht', () => {
+  expect(ocDead('parameter 0 has unknown type')).toBe(true); // Meldung des Nutzers nach dem Absturz (2026-11-24)
+  expect(ocDead('RuntimeError: memory access out of bounds')).toBe(true);
+  expect(ocDead('Aborted(OOM)')).toBe(true);
+  expect(ocDead('Keine Kopie trifft den Körper – schneidet nichts')).toBe(false);
+  expect(ocDead('Rundung zu groß für diese Kante')).toBe(false);
 });

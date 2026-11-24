@@ -276,6 +276,8 @@ function snapshotOf(bodies: Map<number, Shape3D>, names: Map<number, Named>, ali
 }
 const dropCache = (c: BuildCache) => { c.st?.bodies.forEach(s => s.delete()); c.end?.bodies.forEach(s => s.delete()); c.st = c.end = null; };
 export { newCache, dropCache };
+// OpenCascade (WASM) ist abgestürzt: danach scheitert jeder Aufruf, auch der einfachste, mit solchen Meldungen → Kern neu starten
+export const ocDead = (why: string) => /unknown type|out of bounds|unreachable|Aborted|RuntimeError|out of memory|OutOfMemory/i.test(why);
 // Größtes Maß, bei dem Rundung/Fase id noch gelingt (I2): Halbierungssuche zwischen 0,05 mm und dem gescheiterten Maß.
 // Nur die Schritte bis zur Rundung; der Stand davor bleibt im eigenen Zwischenspeicher, jeder Versuch rechnet nur den einen Schritt. null = nicht einmal 0,05 mm
 export function maxEdgeSize(features: Feature[], id: number, imports = new Map<number, Shape3D>()): number | null {
