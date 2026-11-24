@@ -41,7 +41,7 @@ Bei jeder Aufgabe den Skill `ponytail` verwenden (Stufe full): kleinste Änderun
 
 ## Plan
 Ziel, Plan, Feldnotizen, Versionen und Log stehen ausschließlich in docs/TASKS.md.
-KI wird derzeit nicht weiter ausgebaut.
+Keine KI in der App (entfernt in 0.30.0).
 
 ## Nicht-Ziele
 FEM, CAM, Baugruppen mit Gelenken, Rendering, Kollaboration,

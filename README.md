@@ -1,6 +1,6 @@
 # OpenForm CAD
 
-Ein 3D-CAD-Programm, so intuitiv wie Shapr3D und so frei wie FreeCAD — mit optionaler KI-Unterstützung.
+Ein 3D-CAD-Programm, so intuitiv wie Shapr3D und so frei wie FreeCAD.
 
 **Status:** Echte Volumenkörper (OpenCascade), Skizzen mit Abhängigkeiten, benannte Maße, Zeichnungen mit Schnitt und Einzelheit, Desktop-App für Windows; läuft auch im Browser. Kein Konto, kein Abo, keine Cloud. Plan, Stand und Änderungen: [docs/TASKS.md](docs/TASKS.md).
 
@@ -57,7 +57,6 @@ startet die App mit Live-Neuladen. `npm run desktop:build` baut den Installer na
 | Bohrung / Tasche | Skizze auf einer Fläche in den Körper hineindrücken |
 | Rundung / Fase | Kante anfassen: vom Körper wegziehen = Rundung, in den Körper hineinschieben = Fase; Maß im Seitenfeld |
 | Export | STL (3D-Druck) oder STEP (CAD, Fertigung); 3MF unter „Zeichnung / mehr“ |
-| KI-Assistent | Standardmäßig aus. „Zeichnung / mehr“ → „KI-Assistent einrichten …“ (z. B. lokal: Ollama installieren, `ollama pull qwen2.5:7b`, Voreinstellung „Lokal (Ollama)“), dann „KI fragen …“: z. B. „Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken“ → normale Schritte, Übernehmen / Verwerfen |
 | STEP-Import | „Öffnen“ und eine .step/.stp-Datei wählen |
 | Drehen / Verschieben / Zoomen | Links ins Leere / Rechts / Mausrad |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` |

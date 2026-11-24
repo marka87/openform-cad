@@ -9,8 +9,6 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { openSheetEditor, showSheet } from './sheetEditor';
-import { aiStatus, chat, loadSettings, openAiPrompt, openAiSettings } from './ai';
-import { explainMsgs, runRequest, TOOLS } from './aiTools';
 import { askSave, baseName, initialFile, isDesktop, onCloseRequested, openFile, readFile, saveAs, setTitle, writeFile } from './desktop';
 import { evalExpr, varsIn, applyParams, dropStale, changedNumbers, usesNames, PARAM_NAME, parseModel, roundCorners, THREAD_SPECS, esc, isSlot, slotLength, slotMoveEnd, slotPull, slotRadius, coplanarBounds, THREADS, cutParam, extendOpen, bulge3, ellipseFeature, type Dim, type BodyMeta, MATERIALS, type RefPlane, bodyOf, pushTo, movesAfter, type Move, type Combine, isFlat, alignTo, applyPush, movedCopy, ngonPts, ngonSidePts, rect3Pts, slotPts, contour, endTangent, keyPoints, movePoint, snapTo, bodyCopy, dirSnap, autoStep, noFace, linePlane, offsetFeature, regionFeature, syncRegions, sketchUsers, GROUND, isCut, isExtrude, outline, ownerOf, polyFeature, sketchFeature, tangentBulge, type EdgeOp, type Shell, type Extrude, type Con, type Feature, type Frame, type Grip, type RefMesh, type RefImage, ORIGIN, type Import, type Offset, type Remove, type Draft, type Sweep, type Vec, type Pattern, type PatternDir, patternCopies, fillGrid, spanOf, PRINT_HOLES, NUTS, nutTrap, rectSize, sketchArea, pullTogether, sameEdge, bounds } from './model';
 import { fromBase64, isImageFile, isMeshFile, meshPositions, toBase64 } from './refmesh';
@@ -404,7 +402,6 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     } else if (pending) requestBuild();
     if (!busy && !pending && waitExport) { const m = waitExport; waitExport = null; exportNow(m); }
   } else if (data.type === 'notice') showNotice(data.text);
-  else if (data.type === 'checked') { checked?.(data.errors); checked = null; }
   else if (data.type === 'sheet') showSheet(data);
   else if (data.type === 'projected') projected(data.lines);
   else if (data.type === 'maxEdge') { // größtes machbares Maß übernehmen (I2), Strg+Z holt das alte zurück
@@ -714,13 +711,11 @@ function nameOf(f: Feature) {
   return isCut(f) ? (f.type === 'circle' ? 'Bohrung' : 'Tasche') : f.and ? 'Bereich' : f.smooth ? 'Spline' : { rect: 'Rechteck', circle: 'Kreis', poly: 'Profil' }[f.type];
 }
 function renderTree() {
-  const aiOn = loadSettings().on;
   tree.innerHTML = '<button id="treeTgl" title="Baum ein-/ausklappen">▾</button>' + (bodyIds.length ? '<h3>Körper</h3>' + bodyIds.map(b =>
     `<div class="row${b === selBody ? ' on' : ''}${meta[b]?.hidden ? ' off' : ''}" data-b="${b}"><span></span>` +
     `<button data-a="eye" title="ein-/ausblenden">${meta[b]?.hidden ? '○' : '●'}</button></div>`).join('') : '') +
     `<h3>Schritte${bodyTotal ? ` · ${volText(bodyTotal.v)} · ${display.unit === 'in' ? areaText(bodyTotal.a) : `${(bodyTotal.a / 100).toFixed(1)} cm²`}` : ''}</h3>` + (roll !== null ? `<button class="rollEnd">⏭ zurückgespult – alle Schritte berechnen</button>` : '') + (features.map((f, i) =>
     `<div draggable="true" class="row${f.id === selId || multi.has(f.id) ? ' on' : ''}${f.hidden ? ' off' : ''}${roll !== null && i >= roll ? ' later' : ''}${problems.has(f.id) ? problems.get(f.id)!.bad ? ' bad' : ' unsure' : ''}" data-i="${i}" title="Doppelklick = umbenennen · ziehen = Reihenfolge ändern"><span></span>` +
-    (problems.get(f.id)?.bad && aiOn ? '<button data-a="why" title="KI erklärt, warum der Schritt scheitert">?</button>' : '') +
     `<button data-a="roll" title="bis hier zurückspulen">⏮</button><button data-a="eye" title="ein-/ausschalten">${f.hidden ? '○' : '●'}</button></div>`).join('')
     || '<em>Noch keine Schritte</em>');
   tree.append(paramsEl);
@@ -755,7 +750,6 @@ function renderTree() {
   tree.querySelectorAll<HTMLElement>('.row[data-i]').forEach(row => row.onclick = ev => {
     const i = +row.dataset.i!, f = features[i], a = (ev.target as HTMLElement).dataset.a;
     if ((ev.target as HTMLElement).isContentEditable) return;
-    if (a === 'why') return askAi(f.id);
     if (a === 'eye') { pushHistory(); f.hidden = !f.hidden; }
     else if (a === 'roll') { pushHistory(); roll = i + 1 >= features.length ? null : i + 1; }
     else if (ev.shiftKey || ev.ctrlKey) toggleSel(f.id);
@@ -2726,7 +2720,7 @@ $('bSvg').onclick = e => {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   showMenu(r.left, r.bottom + 4, [['Zeichnung bemaßen …', editSheet], null, ['Blatt A4 als SVG', () => sheet('A4', false)], ['Blatt A3 als SVG', () => sheet('A3', false)],
     ['A4 drucken / als PDF speichern', () => sheet('A4', true)], ['A3 drucken / als PDF speichern', () => sheet('A3', true)], null,
-    ['Ansichten als DXF (1:1)', () => sendExport({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => sendExport({ type: 'export', format: '3mf' })], null, ['KI fragen …', () => askAi()], ['KI-Assistent einrichten …', openAiSettings]]);
+    ['Ansichten als DXF (1:1)', () => sendExport({ type: 'export', format: 'dxf' })], ['Körper als OBJ', exportOBJ], ['Körper als 3MF (3D-Druck, ein Objekt je Körper)', () => sendExport({ type: 'export', format: '3mf' })]]);
 };
 // Drucken über einen unsichtbaren Rahmen; „Als PDF speichern“ im Druckdialog ergibt die PDF-Datei
 function printSVG(svg: string) {
@@ -2763,31 +2757,6 @@ function svgToDXF(svg: string) {
   return [...out, '0', 'ENDSEC', '0', 'EOF'].join('\n');
 }
 // Sichtbare Körper als OBJ, Z oben wie STEP/STL
-// KI (T8.3, ADR 0002): Werkzeugaufrufe prüfen und als ein Rückgängig-Schritt einfügen; Ablauf und Korrekturrunden in runRequest
-// Fehler des Kerns gehen über kernelCheck zurück an die KI (T8.6); es läuft immer nur eine KI-Anfrage, daher ein einzelner Rückruf
-let checked: ((e: [number, string][]) => void) | null = null;
-const kernelCheck = (fs: Feature[]) => new Promise<[number, string][]>(ok => { checked = ok; send({ type: 'check', features: fs }); });
-// explain: Schritt-ID eines roten Schritts → die KI erklärt nur (T8.5), die Eingabezeile steht danach für einen Auftrag bereit
-function askAi(explain?: number) {
-  const s0 = loadSettings();
-  if (!s0.on) return openAiSettings();
-  openAiPrompt(async text => {
-    if (roll !== null) return aiStatus('Erst das Zurückspulen aufheben');
-    const s = loadSettings(), sel = selId === null ? [] : [selId, ...multi];
-    let r: Awaited<ReturnType<typeof runRequest>>;
-    try { r = await runRequest(m => chat(s, m, TOOLS, undefined, undefined, sec => aiStatus(`Anbieter bremst (429) – warte ${sec} s …`)), features, nextId, display.unit, text, aiStatus, kernelCheck, sel); }
-    catch (e) { return aiStatus(`✗ ${e instanceof Error ? e.message : e}`); }
-    const left = r.problems.length ? ` (nicht umgesetzt: ${r.problems.join(' · ')})` : '';
-    if (!r.made) return aiStatus(`Nichts angelegt${left || (r.reply ? `: ${r.reply}` : '')}`);
-    const n = r.fs.length - features.length; // neue Schritte im Baum (Extrudieren ändert nur)
-    pushHistory(); features = r.fs; nextId = r.nextId; clearSel(); refresh();
-    aiStatus(`${n ? `${n} Schritt${n > 1 ? 'e' : ''} angelegt` : 'Geändert'}${left}`, undo);
-  });
-  if (explain === undefined) return;
-  aiStatus('KI erklärt …');
-  chat(s0, explainMsgs(features, explain, problems.get(explain)?.why ?? '', display.unit))
-    .then(r => aiStatus(r.content?.trim() || 'Keine Antwort'), e => aiStatus(`✗ ${e instanceof Error ? e.message : e}`));
-}
 function exportOBJ() {
   const g = new THREE.Group();
   g.rotation.x = Math.PI / 2; // Szene Y-oben → Z-oben
@@ -2806,6 +2775,7 @@ function toggleBare() {
 }
 $('bBare').onclick = $('bareBtn').onclick = () => toggleBare();
 try { if (localStorage.getItem('openform-bare')) document.body.classList.add('bare'); if (localStorage.getItem('openform-treeMini')) tree.classList.add('mini'); } catch {}
+try { localStorage.removeItem('openform-ai'); } catch {} // KI entfernt (0.30.0): früher gespeicherten API-Schlüssel nicht liegen lassen
 addEventListener('keydown', e => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   const k = e.key.toLowerCase();

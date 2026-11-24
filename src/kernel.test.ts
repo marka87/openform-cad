@@ -3,7 +3,6 @@ import opencascade from 'replicad-opencascadejs';
 import { drawProjection, measureVolume, ProjectionCamera, setOC } from 'replicad';
 import { buildBody, maxEdgeSize, drawingSVG, forExport, loadStep, projectBody, PROJ, resolveDims, sheetSVG, to3MF, type SheetLayout, ocDead } from './kernel';
 import { edgeRef, faceRef, pointRef, resolveEdge, resolveFace } from './topo';
-import { applyCalls } from './aiTools';
 import { parseModel, fillGrid, nutTrap, bodyCopy, rect3Pts, dirSnap, linePlane, autoStep, mirrorDir, mirrorPt, cutParam, extendOpen, bulge3, ellipseFeature, alignTo, applyPush, pushTo, mirroredCopy, qrot, movedCopy, ngonPts, slotPts, arcPoints, contour, endTangent, keyPoints, movePoint, snapTo, GROUND, outline, offsetFeature, ownerOf, polyFeature, regionFeature, syncRegions, sketchFeature, tangentBulge, type Pattern, type Dim, type EdgeOp, type Extrude, type Feature, type Offset, type Sweep, type Vec } from './model';
 
 beforeAll(async () => { setOC(await (opencascade as any)()); });
@@ -760,61 +759,11 @@ test('3MF-Export: ZIP mit geschlossenem, einheitlich ausgerichtetem Netz je Kör
   expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(10, 6);       // Z oben: Quader 10 hoch
 });
 
-test('KI: Platte 100×60×5 mit 4 Bohrungen M5 in den Ecken aus Werkzeugaufrufen (T8.3)', async () => {
-  const hole = (id: string, x: number, y: number) => ({ id, name: 'bohrung', raw: '', args: { schritt: 1, x, y, gewinde: 'M5', tiefe: 'durch' } });
-  const calls = [
-    { id: 'p', name: 'skizze_rechteck', raw: '', args: { x: 0, y: 0, breite: 100, tiefe: 60, hoehe: 5 } },
-    hole('a', 8, 8), hole('b', 92, 8), hole('c', 8, 52), hole('d', 92, 52),
-    { id: 'x', name: 'bohrung', raw: '', args: { schritt: 99, x: 0, y: 0, durchmesser: 3, tiefe: 2 } }, // gibt es nicht
-    { id: 'y', name: 'extrudieren', raw: '{kaputt', args: null },
-  ];
-  const r = applyCalls([], calls, 1);
-  expect(r.results.map(x => x.ok)).toEqual([true, true, true, true, true, false, false]);
-  expect(r.results[5].text).toContain('Schritt 99 gibt es nicht');
-  expect([r.fs.length, r.nextId]).toEqual([5, 6]);                         // fünf Schritte wie von Hand
-  expect(r.fs.slice(1).every(f => f.name === 'Gewinde M5')).toBe(true);
-  const b = buildBody(r.fs);
-  expect(b.failed).toEqual([]);
-  expect(measureVolume(b.body!)).toBeCloseTo(100 * 60 * 5 - 4 * Math.PI * 2.1 ** 2 * 5, 1);
-  const back = await loadStep(await forExport(b.body!).blobSTEP().text());   // STEP hin und zurück
-  expect(measureVolume(back)).toBeCloseTo(measureVolume(b.body!), 1);
-  expect(applyCalls([], [{ id: 'z', name: 'skizze_kreis', raw: '', args: { x: 0, y: 0, radius: 5, hoehe: -3 } }], 1).results[0].text)
-    .toContain('nur nach oben');                                             // Wertebereich geprüft, nicht geraten
-});
-
-test('KI: Bohrungen in die Seitenwände eines Gehäuses, „durch“ nur durch die Wand (T8.8)', () => {
-  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { x: 10, y: 20, breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
-  const fs = [...box, { id: 2, type: 'shell', at: [50, 30, -45], t: 2 } as Feature];
-  const hole = (seite: string, x: number) => ({ id: seite, name: 'bohrung', raw: '', args: { schritt: 1, seite, x, y: 15, durchmesser: 6, tiefe: 'durch' } });
-  const r = applyCalls(fs, [hole('vorne', 40), hole('hinten', 40), hole('links', 25), hole('rechts', 25), hole('vorne', 85)], 3);
-  expect(r.results.map(x => x.ok)).toEqual([true, true, true, true, false]);           // x 85 liegt neben der 80 mm breiten Vorderseite
-  const mid = r.fs.slice(2).map(f => (f as Extrude).o.map((o, i) => o + (f as Extrude).u[i] * (f as Extrude).p.cx + (f as Extrude).v[i] * (f as Extrude).p.cy).map(Math.round));
-  expect(mid).toEqual([[50, 15, -20], [50, 15, -70], [10, 15, -45], [90, 15, -45]]);    // Mitte jeder Seite, 15 mm hoch (Welt: Y oben, Skizzen-y = −Z)
-  const b = buildBody(r.fs), shell = buildBody(fs);
-  expect(b.failed).toEqual([]);
-  expect(measureVolume(shell.body!) - measureVolume(b.body!)).toBeCloseTo(4 * Math.PI * 9 * 2, 0); // je ein Loch durch eine 2-mm-Wand
-});
-
 test('Skizze auf einer Fläche, die es nicht mehr gibt, wird rot statt still nichts zu schneiden', () => {
-  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
-  const fs = [...box, { id: 2, type: 'shell', at: [40, 15, 0], t: 2 } as Feature];   // Schale öffnet die Vorderseite
-  const r = applyCalls(fs, [{ id: 'h', name: 'bohrung', raw: '', args: { schritt: 1, seite: 'vorne', x: 40, y: 15, durchmesser: 6, tiefe: 'durch' } }], 3);
-  expect(buildBody(r.fs).errors.get(3)).toBe('Trifft den Körper nicht – schneidet nichts'); // Rand der Öffnung liegt noch in der Ebene
-});
-
-test('KI: lochmuster – Lagen rechnet die App, Reihe/Raster/Lochkreis als Muster-Schritt (T8.7, T6.7)', () => {
-  const box = applyCalls([], [{ id: 'p', name: 'skizze_rechteck', raw: '', args: { breite: 80, tiefe: 50, hoehe: 30 } }], 1).fs;
-  const fs = [...box, { id: 2, type: 'shell', at: [40, 30, -25], t: 2 } as Feature];
-  const lm = (args: Record<string, unknown>) => ({ id: String(Math.random()), name: 'lochmuster', raw: '', args: { schritt: 1, durchmesser: 5, tiefe: 'durch', ...args } });
-  const r = applyCalls(fs, [lm({ seite: 'vorne', anzahl: 3 }), lm({ seite: 'hinten', anzahl: 4, reihen: 2, abstand: 12, abstand_reihen: 10 }),
-    lm({ seite: 'links', anzahl: 6, lochkreis_radius: 8 }), lm({ seite: 'rechts', anzahl: 5, abstand: 20 })], 3);
-  expect(r.results.map(x => x.text)).toEqual(['ok, Bohrung Schritt 3 und Muster Schritt 4: 3, Abstand 20 mm', 'ok, Bohrung Schritt 5 und Muster Schritt 6: 4 × 2, Abstand 12 / 10 mm',
-    'ok, Bohrung Schritt 7 und Kreis-Muster Schritt 8: 6 Löcher auf R 8', 'Mitte -15, 15 liegt nicht auf der Fläche (x 0–50, y 0–30)']); // 5 × 20 mm passt nicht auf 50 mm
-  expect(r.fs.map(f => f.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);        // abgelehntes Muster hinterlässt nichts
-  expect([(r.fs[2] as Extrude).p.cx, (r.fs[2] as Extrude).p.cy]).toEqual([20, 15]);     // 80 mm, 3 Löcher: gleiche Lücken von 20 mm, halbe Höhe
-  const b = buildBody(r.fs), v0 = measureVolume(buildBody(fs).body!);
-  expect(b.failed).toEqual([]);
-  expect(v0 - measureVolume(b.body!)).toBeCloseTo((3 + 8 + 6) * Math.PI * 6.25 * 2, 0); // 17 Löcher durch je eine 2-mm-Wand
+  const fs = [{ ...sketchFeature('rect', GROUND, [0, 0], [80, 50], 1, false)!, d: 30 },
+    { id: 2, type: 'shell', at: [40, 15, 0], t: 2 } as Feature,                         // Schale öffnet die Vorderseite
+    { ...sketchFeature('circle', { o: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] }, [40, 15], [43, 15], 3, true)!, d: -2 }]; // Bohrung auf der Vorderseite
+  expect(buildBody(fs).errors.get(3)).toBe('Trifft den Körper nicht – schneidet nichts'); // Rand der Öffnung liegt noch in der Ebene
 });
 
 test('Hilfslinien: offen, keine Fläche, kein Bereich, eigene Rastpunkte (T5.1)', () => {

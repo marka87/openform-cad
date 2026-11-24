@@ -56,9 +56,9 @@ oder ohnehin dort gearbeitet wird:
 - [ ] SPÄTER A10 Muster/Übergang/Zug/Teilen suchen die Quelle in der ganzen Liste; Schritt vor seine
       Quelle gezogen → Teil-Neurechnen ≠ volles Neurechnen (kernel.ts:266 u. a.). Fix: nur frühere Schritte.
 - [ ] SPÄTER A11 Drucken und SVG kurz nacheinander: beide folgen dem letzten Wunsch (`printNext`, main.ts:2138).
-- [ ] SPÄTER A12 KI: Gewinde „constructor“ → Radius NaN (aiTools.ts:112). Fix: `Object.hasOwn`.
-- [ ] SPÄTER A13 KI: zweimal Enter → zwei Anfragen, Modell überschrieben (ai.ts:128). Fix: Merker „läuft“.
-- [ ] SPÄTER A14 KI: Zeitgrenze endet vor dem Lesen der Antwort → kann ewig hängen (ai.ts:47/62).
+- [x] ENTFÄLLT (KI entfernt, 0.30.0) A12 KI: Gewinde „constructor“ → Radius NaN (aiTools.ts:112). Fix: `Object.hasOwn`.
+- [x] ENTFÄLLT (KI entfernt, 0.30.0) A13 KI: zweimal Enter → zwei Anfragen, Modell überschrieben (ai.ts:128). Fix: Merker „läuft“.
+- [x] ENTFÄLLT (KI entfernt, 0.30.0) A14 KI: Zeitgrenze endet vor dem Lesen der Antwort → kann ewig hängen (ai.ts:47/62).
 - [ ] SPÄTER A16 `dot` doppelt (model.ts:147, topo.ts:113), `at` doppelt (aiTools.ts:100/116).
 - [ ] SPÄTER A23 STEP ohne UTF-8 (z. B. Umlaute) lässt sich in der Desktop-App nicht öffnen (`read_text`, src-tauri/src/main.rs:8).
 - [ ] SPÄTER A24 Tests laufen nicht automatisch: der einzige GitHub-Workflow baut von Hand OpenCascade.
@@ -125,6 +125,7 @@ Körperkopie mit Zug entlang Kanten/Projektion (model.ts:438), Muster nach Versc
 - [x] DONE T9 (0.29.0) Flache Ansicht: echt orthografisch, ein durchgehendes blaues Raster statt blau+grau, Drehen führt zurück zu 45°, liegende Flächen von der Seite her, von der man kommt (auf ±x/±z eingerastet).
 - [x] DONE T10 (0.29.1; Fehler) Sieb mit vielen Kreis-Mustern und Rundungen: Kern stürzte ab, danach scheiterte jeder Schritt („parameter 0 has unknown type“). Kern startet jetzt selbst neu und rechnet noch einmal.
 - [x] DONE T11 (0.29.2) Audit-Funde 1–5: gescheiterte Rundungen ohne Verdopplung, Rückgängig auf 100 begrenzt, Exportfehler mit Grund, Neustart baut vor Export neu, Muster mit Quell-Rundung in einem Schnitt.
+- [x] DONE T12 (0.30.0) KI-Assistent entfernt (Audit 6): Code, Oberfläche, Tests, HTTP-Plugin und Netzwerk-Rechte.
 - Frage STEP zusätzlich importieren: geht schon über „Öffnen“ → .step/.stp (kommt als eigener Körper dazu), nichts gebaut.
 
 ### 3a. Ziehen und Muster wie Shapr3D — Claude, Wunsch des Nutzers 2026-11-09 (mit Bildern aus Shapr3D)
@@ -213,14 +214,14 @@ Nur anfassen, wenn ein echtes Teil es verlangt.
 - [x] Export und Import: STEP rein und raus, STL, 3MF
 - [x] Messen, Schnittansicht, Hinweis passend zur Maus
 - [x] mm und Zoll, Desktop-App mit Installer
-- [x] KI-Assistent ist eingebaut, standardmäßig aus, wird nicht weiter ausgebaut
+- [x] KI-Assistent entfernt (0.30.0, Wunsch des Nutzers nach Audit)
 
 ## Entscheidungen, die weiter gelten
 - Flächenbezug = Herkunft aus der Feature-Historie (OCCT Modified/Generated/IsDeleted),
   verankert an Feature-IDs. Der Fingerabdruck prüft nur und entscheidet bei
   Mehrdeutigkeit. Nie still auf eine falsche Fläche rasten: rot = verloren, gelb = unsicher.
 - OCCT-Builder direkt über opencascade.js, weil replicad die Historie wegwirft.
-- KI: nur feste Werkzeuge, die normale Features erzeugen; eigener Schlüssel, abschaltbar.
+- Keine KI in der App (entfernt 0.30.0): kein HTTP-Plugin, keine Netzwerk-Rechte.
 - Fläche löschen braucht den eigenen OpenCascade-Build (vendor/).
 - Installer ohne Admin: Toolchain gnullvm, `rustup set default-host x86_64-pc-windows-gnullvm`.
 - DXF bleibt reine Geometrie ohne Maße.
@@ -288,6 +289,7 @@ groß/neue Funktion = MINOR, der Agent entscheidet. 1.0.0 erst, wenn `.ofc` als 
 - **0.29.0** Flache Ansicht echt orthografisch; Drehen verlässt sie; ein Raster; Ausrichtung nach Blickrichtung
 - **0.29.1** CAD-Kern startet nach einem Absturz selbst neu und rechnet das Modell noch einmal
 - **0.29.2** Viele rote Rundungen bremsen nicht mehr exponentiell; Rückgängig höchstens 100 Schritte; Exportfehler nennen den Grund; Sieb mit gerundeten Löchern rechnet in einem Schnitt
+- **0.30.0** KI-Assistent entfernt: kein HTTP-Plugin, keine Netzwerk-Rechte mehr; ein früher gespeicherter API-Schlüssel wird beim Start gelöscht
 - **0.28.2** Endpunkte offener Hilfslinien immer sichtbar
 - **0.28.1** Hilfslinie in Neongrün, auch ausgewählt (Feldnotiz: war schlecht zu sehen)
 - **0.28.0** Mehrere Körper zusammen verschieben, Skizze mit Körper verschiebt wieder den Körper (T4); Messen mit Fadenkreuz und Achsfang (T5); Leertaste von unten (T6)
@@ -357,6 +359,7 @@ Eine Zeile je Paket, neueste oben. Was geändert, was gelernt.
 - 2026-11-23 0.29.0 (MINOR) Wunsch Nutzer, alle drei Verbesserungen der flachen Ansicht: (1) Orthografisch: im Bildschleifen-Schritt wird bei Öffnungswinkel 2° und ohne Flug die Projektionsmatrix durch eine orthografische gleicher Bildhöhe am Ziel ersetzt (pxSize, Zoom, Verschieben rechnen unverändert); setRay schießt dann parallele Strahlen. Lineare Tiefe, daher kein Versatz-Trick mehr nötig. (2) Rechts ziehen (Drehen) verlässt die Ansicht sofort zu 45° mit gleichem Ausschnitt; zählt nur zwischen OrbitControls start/end. Gelernt: der Nachlauf (Damping) eines früheren Drehens kippte die Ansicht nach dem Flug, flyTo verwirft ihn jetzt (internes _sphericalDelta/_panOffset, shortcut-Kommentar). (3) „Skizze richtig herum“ anders als angekündigt: planeFor legt die Skizzen-y einer liegenden Fläche auf Welt-x, danach ausgerichtet stünde das Teil gegenüber „Oben“ um 90° verdreht. Stattdessen: Bild-oben folgt der Seite, von der man kommt, eingerastet auf ±x/±z (von vorne = wie „Oben“). Graues Zweit-Raster aus 0.28.5 entfernt: in der flachen Ansicht reicht das blaue bis zum Bildrand. Im Browser geprüft (Ober- und Vorderseite, Drehen raus, wieder rein, von der Seite).
 - 2026-11-24 0.29.1 (PATCH) Fehler Nutzer (Sieb, ~6 Bohrungen mit Kreis-Mustern und vielen Rundungen): alle Schritte rot, schon Kreis #168 mit „parameter 0 has unknown type“. Das ist kein Modellfehler, sondern die abgestürzte OCCT-WASM-Instanz (Embind-Typen weg), danach scheitert jeder Aufruf. `ocDead` (kernel.ts) erkennt solche Meldungen; der Worker startet dann OpenCascade neu (setOC mit frischer Instanz, Importe/Zwischenstände der toten Instanz nur losgelassen) und wiederholt den Auftrag einmal. Bei build fangen die Schritte ihre Fehler selbst, daher Prüfung der Schrittfehler nach buildBody. Kern-Test für die Erkennung. Echter Absturz im Browser nicht nachgestellt, nur normales Rechnen geprüft. Ursache des Absturzes (vermutlich Speicher nach langer Sitzung) unbekannt ohne die Datei. Neu nötig: Datei des Nutzers nachrechnen, falls er erneut abstürzt.
 - 2026-11-24 0.29.2 (PATCH) Audit (ponytail-audit) Punkte 1–5, bewusst ein Commit, weil sich die Punkte kernel.ts/main.ts teilen. (1) safeEdgeOp: beim Neurechnen des Stands vor einer gescheiterten Rundung wurden frühere gescheiterte Rundungen erneut versucht und rechneten ihrerseits neu: je Rundung eine Verdopplung (gemessen 8 → 7,6 s). buildBody bekommt known = schon gescheiterte Schritte, die im Neurechnen nicht mehr versucht werden; jetzt linear. Versuch „Körper heil? dann kein Neurechnen“ verworfen: im Testfall beschädigt OCCT den Körper wirklich. Vermutlich Ursache des Absturzes aus 0.29.1. (2) undoStack höchstens 100 Einträge (je Eintrag ganzes Modell, DiodeHaus2 632 KB). (3) Worker schickt bei gescheitertem Export/Blatt den Grund mit, main.ts zeigt „Export fehlgeschlagen: …“ statt „Noch kein Körper“. (4) Neustart nach Absturz baut vor Export/Blatt/Projektion erst den letzten Stand neu (lastBuild). (5) Muster mit Rundung/Fase an der Quelle: alle Kopien in einem Schnitt, jede Rundung in einem Aufruf über alle Kopien (edgeOp nimmt Herkunft je Kante); vorher je Kopie ein Schnitt und eine Rundung. Kern-Tests: 8 rote Rundungen < 2 s, Sieb aus 6 gerundeten Löchern (Volumen, Benennung je Kopie). Gelernt: settle() verbraucht die nachgetragenen Bezüge, Kantenbezug für Tests aus buildBody().fixes holen. Offen aus dem Audit: Punkt 6 (KI entfernen) wartet auf Entscheidung des Nutzers.
+- 2026-11-24 0.30.0 (MINOR) Audit Punkt 6, Entscheidung des Nutzers: KI-Assistent entfernt. Weg: src/ai.ts, src/aiTools.ts, src/ai.test.ts, KI-Menüeinträge, ?-Knopf an roten Schritten, Prüf-Auftrag check/checked im Worker (nur für die KI-Korrekturrunde), KI-CSS in index.html, @tauri-apps/plugin-http (npm), tauri-plugin-http (Cargo, 576 Zeilen weniger im Cargo.lock), http-Rechte (https://*, localhost) in capabilities. Der Test „Skizze auf verschwundener Fläche wird rot“ baute sein Modell über applyCalls: Schritte jetzt direkt im Test. main.ts löscht beim Start einmalig localStorage openform-ai (dort lag der API-Schlüssel im Klartext). cargo check grün, 123 Tests grün (11 KI-Tests weg), im Browser: Menü ohne KI, Schlüssel gelöscht, keine Konsolenfehler. Die CSP erlaubt ohnehin nur ipc: als Ziel, nichts zu ändern. Alte Log-Einträge zur KI bleiben als Geschichte.
 - 2026-11-23 0.28.2 (PATCH) Offene Hilfslinien zeigen ihre Endpunkte immer als Punkt (nicht anklickbar, in auxLine), im Browser geprüft; kein Kern-Test (reine Darstellung).
 - 2026-11-23 0.28.1 (PATCH) Hilfslinie neongrün (0x7dff2e) statt Magenta/Orange, damit sie sich von Skizzen (blau, ausgewählt orange) abhebt. Nur Farbe in auxLine, kein Kern-Test. Offen: Fehler „Hilfslinie nach Abwählen nicht mehr anklickbar“ ließ sich in leerer Szene nicht nachstellen, wartet auf .ofc/Schritte vom Nutzer.
 - 2026-11-12 Installer 0.28.0 gebaut (9,5 MB, Arbeitsrechner, src-tauri/target/release/bundle/nsis/), noch nicht installiert.

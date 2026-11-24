@@ -12,14 +12,12 @@ export type ToWorker =
   | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; info?: SheetInfo; dims?: Dim[]; force?: boolean; skip?: number[] } // skip: ausgeblendete Körper
   | { type: 'sheet'; info: SheetInfo; dims: Dim[]; skip?: number[] } // Blatt für den Maß-Editor
   | { type: 'project'; body: number; pl: Frame } // Kanten eines Körpers in eine Ebene projizieren (P)
-  | { type: 'check'; features: Feature[] } // nur rechnen, Fehler zurück, Anzeige bleibt (KI-Korrekturrunde, T8.6)
   | { type: 'maxEdge'; features: Feature[]; id: number }; // größtes Maß, bei dem Rundung/Fase id noch gelingt (I2)
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'built'; failed: number[]; errors: [number, string][]; unsure: number[]; fixes: [number, Record<string, unknown>][]; confirm: [number, Record<string, unknown>][]; volume: number; area: number; meshes: BodyMesh[] }
   | { type: 'export'; format: 'step' | 'stl' | '3mf' | 'svg' | 'dxf'; blob: Blob | null; invalid?: number[]; error?: string }
   | { type: 'error'; message: string }
-  | { type: 'checked'; errors: [number, string][] }
   | { type: 'maxEdge'; id: number; r: number | null }
   | { type: 'notice'; text: string }
   | { type: 'projected'; lines: { pts: number[][]; closed: boolean; src: EdgeRef | null }[] }
@@ -68,8 +66,7 @@ onmessage = async ({ data }: MessageEvent<ToWorker>) => {
       body = null; bodies = new Map(); names = new Map(); buildCache = newCache(); // Stand unklar: nächster Lauf rechnet alles neu
       post({ type: 'notice', text: `Neurechnen fehlgeschlagen: ${why}` });
       post({ type: 'built', failed: [], errors: [], unsure: [], fixes: [], confirm: [], volume: 0, area: 0, meshes: [] });
-    } else if (data.type === 'check') post({ type: 'checked', errors: [] });
-    else if (data.type === 'project') post({ type: 'projected', lines: [] });
+    } else if (data.type === 'project') post({ type: 'projected', lines: [] });
     else if (data.type === 'maxEdge') post({ type: 'maxEdge', id: data.id, r: null });
     else post({ type: 'export', format: data.type === 'sheet' ? 'svg' : data.format, blob: null, error: why }); // Grund mitschicken, sonst meldet main.ts „noch kein Körper“
   }
@@ -102,21 +99,6 @@ async function handle(data: ToWorker) {
     let area = 0;
     for (const s of bodies.values()) area += measureArea(s);
     post({ type: 'built', failed: r.failed, errors: [...r.errors], unsure: r.unsure, fixes: [...r.fixes], confirm: [...r.confirm], volume, area, meshes }, meshes.flatMap(m => [m.vertices.buffer, m.normals.buffer, m.triangles.buffer, m.lines.buffer, m.faces.buffer, m.edges.buffer]));
-  } else if (data.type === 'check') {
-    // wie in main.ts: nachgetragene Bezüge übernehmen und ein zweites Mal rechnen, erst dann zählen die Fehler
-    // Antwort kommt immer, sonst hängt die KI-Anfrage bei „CAD-Kern prüft …“; der normale Lauf zeigt den Fehler danach ohnehin
-    try {
-      let fs = data.features, r = buildBody(fs, imports);
-      if (r.fixes.size) {
-        fs = fs.map(f => r.fixes.has(f.id) ? { ...f, ...r.fixes.get(f.id) } as Feature : f);
-        free(r); r = buildBody(fs, imports);
-      }
-      free(r);
-      post({ type: 'checked', errors: [...r.errors] });
-    } catch (e) {
-      console.warn('Prüflauf fehlgeschlagen', e);
-      post({ type: 'checked', errors: [] });
-    }
   } else if (data.type === 'maxEdge') {
     post({ type: 'maxEdge', id: data.id, r: maxEdgeSize(data.features, data.id, imports) });
   } else if (data.type === 'project') {
